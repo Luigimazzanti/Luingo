@@ -41,6 +41,7 @@ export interface Assignment {
 // pero intentaremos usar Assignment explícitamente.
 export type Submission = Assignment; 
 export type Task = TaskTemplate; // En el frontend a veces las mezclamos visualmente, pero en DB están separadas.
+export type TaskContent = any;
 
 // --- END CORE ARCHITECTURE ---
 
@@ -129,18 +130,6 @@ export interface Material {
   likes_count: number;
   comments_count: number;
   view_count: number;
-}
-
-export interface Submission {
-  id: string;
-  task_id: string;
-  student_id: string;
-  status: 'assigned' | 'in_progress' | 'submitted' | 'graded';
-  content?: any;
-  grade?: number;
-  feedback?: string;
-  submitted_at?: string;
-  graded_at?: string;
 }
 
 export type SubmissionStatus = Submission['status'];

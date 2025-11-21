@@ -60,4 +60,40 @@ app.post("/make-server-ebbb5c67/signup", async (c) => {
   }
 });
 
+// Moodle Proxy
+app.post("/make-server-ebbb5c67/moodle-proxy", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { functionName, params, settings } = body;
+
+    // Prefer settings passed from client, fallback to internal defaults/env if needed
+    // This allows the frontend to control which Moodle instance to connect to
+    const MOODLE_URL = settings?.url;
+    const MOODLE_TOKEN = settings?.token;
+
+    if (!MOODLE_URL || !MOODLE_TOKEN) {
+        return c.json({ error: "Missing Moodle URL or Token in request settings" }, 400);
+    }
+
+    const url = new URL(MOODLE_URL);
+    url.searchParams.append("wstoken", MOODLE_TOKEN);
+    url.searchParams.append("wsfunction", functionName);
+    url.searchParams.append("moodlewsrestformat", "json");
+
+    if (params) {
+      Object.keys(params).forEach((key) => {
+        url.searchParams.append(key, String(params[key]));
+      });
+    }
+
+    const response = await fetch(url.toString());
+    const data = await response.json();
+    
+    return c.json(data);
+  } catch (e) {
+    console.error("Moodle proxy error:", e);
+    return c.json({ error: "Failed to fetch from Moodle", details: String(e) }, 500);
+  }
+});
+
 Deno.serve(app.fetch);
