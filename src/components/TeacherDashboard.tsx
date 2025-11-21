@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Task, Classroom } from '../types';
 import { StudentCard } from './StudentCard';
-import { Plus, Users, BookOpen, Target, QrCode, Link2, Sparkles, Music, Briefcase, Plane } from 'lucide-react';
+import { Plus, Users, BookOpen, Target, QrCode, Link2, Sparkles, Music, Briefcase, Plane, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from './ui/dialog';
 import { Input } from './ui/input';
@@ -13,6 +13,7 @@ interface TeacherDashboardProps {
   tasks: Task[];
   onSelectStudent: (studentId: string) => void;
   onGenerateTask: (topic: string, level: string) => void;
+  onDeleteTask: (id: string) => void;
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
@@ -21,6 +22,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   tasks,
   onSelectStudent,
   onGenerateTask,
+  onDeleteTask,
 }) => {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [showAITaskDialog, setShowAITaskDialog] = useState(false);
@@ -30,6 +32,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   
   // State for "Smart Assignment" highlighting
   const [highlightedLevel, setHighlightedLevel] = useState<string | null>(null);
+  
+  // State for view mode (students or tasks)
+  const [viewMode, setViewMode] = useState<'students' | 'tasks'>('students');
 
   // Estadísticas generales
   const totalStudents = students.length;
@@ -305,10 +310,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
           <div className="flex items-center gap-4">
               <div className="w-3 h-12 bg-amber-400 rounded-full"></div>
-              <h2 className="text-3xl font-black text-slate-800">Tu Clase</h2>
-              <span className="bg-slate-200 text-slate-600 px-3 py-1 rounded-xl text-sm font-bold">{students.length}</span>
+              <h2 className="text-3xl font-black text-slate-800">
+                {viewMode === 'students' ? 'Tu Clase' : 'Repositorio de Tareas'}
+              </h2>
+              <span className="bg-slate-200 text-slate-600 px-3 py-1 rounded-xl text-sm font-bold">
+                {viewMode === 'students' ? students.length : tasks.length}
+              </span>
           </div>
-          {highlightedLevel && (
+          {highlightedLevel && viewMode === 'students' && (
               <div className="bg-amber-100 text-amber-900 px-6 py-3 rounded-2xl text-lg font-bold animate-pulse flex items-center gap-3 border-2 border-amber-200 shadow-[0_4px_0_rgba(251,191,36,0.5)]">
                   <span className="text-2xl">✨</span>
                   Alumnos ideales para Nivel {highlightedLevel}
@@ -316,14 +325,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           )}
           <Button
             variant="outline"
+            onClick={() => setViewMode(viewMode === 'students' ? 'tasks' : 'students')}
             className="bg-white border-2 border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 w-full sm:w-auto font-bold h-12 rounded-xl"
           >
-            <Plus className="w-5 h-5 mr-2" />
-            Ver Misiones
+            {viewMode === 'students' ? (
+              <>
+                <BookOpen className="w-5 h-5 mr-2" />
+                Ver Misiones
+              </>
+            ) : (
+              <>
+                <Users className="w-5 h-5 mr-2" />
+                Ver Estudiantes
+              </>
+            )}
           </Button>
         </div>
 
-        {students.length === 0 ? (
+        {viewMode === 'students' && students.length === 0 ? (
           <div className="text-center py-24 bg-white rounded-[3rem] border-4 border-dashed border-slate-200 mx-auto max-w-2xl">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
                 😴
@@ -340,7 +359,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               Invitar Estudiantes
             </Button>
           </div>
-        ) : (
+        ) : null}
+
+        {viewMode === 'students' && students.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {students.map((student) => {
               // Logic to dim cards if level doesn't match
@@ -361,6 +382,41 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {viewMode === 'tasks' && (
+          <div className="space-y-4 max-w-4xl mx-auto">
+            {tasks.length === 0 ? (
+              <div className="text-center py-24 bg-white rounded-[3rem] border-4 border-dashed border-slate-200">
+                <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
+                    📚
+                </div>
+                <h3 className="text-2xl font-black text-slate-800 mb-2">Sin tareas aún</h3>
+                <p className="text-slate-500 text-lg font-medium">
+                  Crea tu primera tarea con el botón "CREAR TAREA IA"
+                </p>
+              </div>
+            ) : (
+              tasks.map(task => (
+                <div key={task.id} className="bg-white p-6 rounded-2xl border-2 border-slate-100 flex justify-between items-center shadow-sm hover:border-indigo-200 transition-all">
+                  <div>
+                    <h3 className="font-bold text-lg text-slate-800">{task.title}</h3>
+                    <p className="text-sm text-slate-500 line-clamp-1">{task.description}</p>
+                    <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded mt-2 inline-block">
+                      {new Date(task.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => onDeleteTask(task.id)}
+                    className="text-rose-400 hover:text-rose-600 hover:bg-rose-50"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </Button>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>

@@ -10,7 +10,7 @@ import { StudentDashboard } from './components/StudentDashboard';
 import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
-import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername } from './lib/moodle';
+import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask } from './lib/moodle';
 import {
   mockClassroom,
   mockStudents,
@@ -277,6 +277,27 @@ export default function App() {
       setShowTaskBuilder(true); 
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm("¿Estás seguro de borrar esta tarea de Moodle?")) return;
+
+    toast.loading("Borrando tarea...");
+    try {
+      const success = await deleteMoodleTask(taskId);
+      if (success) {
+        // Recargar la lista desde el servidor para asegurar sincronización
+        const updatedTasks = await getMoodleTasks();
+        setTasks(updatedTasks);
+        toast.dismiss();
+        toast.success("Tarea eliminada correctamente");
+      } else {
+        throw new Error("No se pudo borrar");
+      }
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Error al borrar. Verifica permisos de API.");
+    }
+  };
+
   const handleAddComment = async (content: string, parentId?: string) => {
     if (!currentUser) return;
     const newComment: Comment = {
@@ -465,6 +486,7 @@ export default function App() {
                 tasks={tasks}
                 onSelectStudent={handleSelectStudent}
                 onGenerateTask={handleGenerateTask}
+                onDeleteTask={handleDeleteTask}
             />
 
             <Sheet 
