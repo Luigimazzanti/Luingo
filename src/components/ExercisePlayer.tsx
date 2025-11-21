@@ -72,8 +72,9 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
       isCorrect = JSON.stringify(sentenceOrder) === JSON.stringify(currentQuestion.correct_order);
       answerValue = sentenceOrder.join(' ');
     } else if (currentQuestion.type === 'open') {
-      isCorrect = true; // Siempre correcto, requiere corrección manual
-      answerValue = textInput || "[Audio Response]";
+      // Para preguntas abiertas, siempre es correcto (requiere corrección manual del profesor)
+      isCorrect = true;
+      answerValue = textInput;
     }
 
     // Guardar respuesta
@@ -265,6 +266,30 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
     </div>
   );
 
+  // Render para preguntas abiertas (Open)
+  const renderOpen = () => (
+    <div className="mt-6 space-y-4">
+      <p className="text-slate-600 font-medium">Escribe tu respuesta:</p>
+      <textarea
+        value={textInput}
+        onChange={(e) => setTextInput(e.target.value)}
+        disabled={feedbackState !== 'idle'}
+        className="w-full min-h-[150px] p-4 rounded-2xl border-2 border-slate-200 text-lg focus:border-indigo-500 outline-none resize-none bg-white shadow-inner"
+        placeholder="Tu respuesta aquí..."
+      />
+      {currentQuestion.allow_audio && (
+        <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-200 flex items-center gap-3">
+          <div className="p-2 bg-indigo-100 rounded-lg">
+            <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <span className="text-sm text-indigo-700 font-bold">Audio habilitado (opcional)</span>
+        </div>
+      )}
+    </div>
+  );
+
   // --- Pantalla Final ---
   if (isFinished) {
     const totalQuestions = exercise.questions.length;
@@ -376,6 +401,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
         {currentQuestion.type === 'true_false' && renderTrueFalse()}
         {currentQuestion.type === 'fill_blank' && renderFillBlank()}
         {currentQuestion.type === 'order_sentence' && renderOrderSentence()}
+        {currentQuestion.type === 'open' && renderOpen()}
 
         {/* Feedback Message */}
         {feedbackState !== 'idle' && (
@@ -404,7 +430,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
             onClick={handleCheckAnswer} 
             disabled={
               (currentQuestion.type === 'choice' || currentQuestion.type === 'true_false') && !selectedOption ||
-              currentQuestion.type === 'fill_blank' && !textInput ||
+              (currentQuestion.type === 'fill_blank' || currentQuestion.type === 'open') && !textInput ||
               currentQuestion.type === 'order_sentence' && sentenceOrder.length === 0
             }
             className="w-full h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xl border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:active:translate-y-0"

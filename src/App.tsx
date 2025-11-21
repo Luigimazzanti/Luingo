@@ -41,6 +41,10 @@ export default function App() {
   const [targetStudentForTask, setTargetStudentForTask] = useState<string | undefined>(undefined); 
   const [mockSubmissions, setMockSubmissions] = useState<Submission[]>([]); 
 
+  // Estados para modo edición
+  const [taskBuilderMode, setTaskBuilderMode] = useState<'create' | 'edit'>('create');
+  const [taskToEdit, setTaskToEdit] = useState<Task | null>(null); 
+
   const [classroom, setClassroom] = useState(mockClassroom);
   const [students, setStudents] = useState<Student[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
@@ -298,6 +302,43 @@ export default function App() {
     }
   };
 
+  const handleEditTask = (task: Task) => {
+    setTaskToEdit(task);
+    setTaskBuilderMode('edit');
+    setShowTaskBuilder(true);
+  };
+
+  const handleUpdateTask = async (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => {
+    if (!taskToEdit) return;
+
+    toast.loading("Actualizando tarea...");
+    try {
+      // Llamar a la API de actualización
+      await updateMoodleTask(
+        taskToEdit.postId || taskToEdit.id, 
+        taskData.title, 
+        taskData.description, 
+        taskData.content_data
+      );
+      
+      toast.dismiss();
+      toast.success("Tarea actualizada exitosamente");
+      
+      // Recargar tareas desde Moodle
+      const updatedTasks = await getMoodleTasks();
+      setTasks(updatedTasks);
+      
+      // Cerrar el builder y resetear estados
+      setShowTaskBuilder(false);
+      setTaskToEdit(null);
+      setTaskBuilderMode('create');
+    } catch (error) {
+      console.error("Error updating task:", error);
+      toast.dismiss();
+      toast.error("Error al actualizar la tarea");
+    }
+  };
+
   const handleAddComment = async (content: string, parentId?: string) => {
     if (!currentUser) return;
     const newComment: Comment = {
@@ -465,9 +506,16 @@ export default function App() {
         {showTaskBuilder && (
             <TaskBuilder 
                 onSaveTask={handleSaveNewTask}
-                onCancel={() => setShowTaskBuilder(false)}
+                onUpdateTask={handleUpdateTask}
+                onCancel={() => {
+                    setShowTaskBuilder(false);
+                    setTaskToEdit(null);
+                    setTaskBuilderMode('create');
+                }}
                 initialStudentId={targetStudentForTask} 
                 studentName={students.find(s => s.id === targetStudentForTask)?.name}
+                mode={taskBuilderMode}
+                initialData={taskToEdit || undefined}
             />
         )}
 
@@ -487,6 +535,7 @@ export default function App() {
                 onSelectStudent={handleSelectStudent}
                 onGenerateTask={handleGenerateTask}
                 onDeleteTask={handleDeleteTask}
+                onEditTask={handleEditTask}
             />
 
             <Sheet 

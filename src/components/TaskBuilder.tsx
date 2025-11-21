@@ -23,18 +23,22 @@ interface TaskBuilderProps {
   mode?: 'create' | 'edit';
   initialData?: Task;
   onSaveTask: (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => void;
+  onUpdateTask?: (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => void;
   onCancel: () => void;
   initialStudentId?: string;
   studentName?: string;
+  taskToEdit?: Task | null;
 }
 
 export const TaskBuilder: React.FC<TaskBuilderProps> = ({ 
   mode = 'create',
   initialData,
   onSaveTask, 
+  onUpdateTask,
   onCancel, 
   initialStudentId, 
-  studentName 
+  studentName,
+  taskToEdit
 }) => {
   // ESTADOS
   const [title, setTitle] = useState('');
@@ -87,9 +91,25 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
 
   const handleSave = () => {
     if (!title.trim()) { alert("Falta el título"); return; }
-    const taskData = { title, description, category, content_data: { type: 'form', questions }, ai_generated: false, color_tag: '#A8D8FF', max_attempts: maxAttempts };
+    const taskData = { 
+      title, 
+      description, 
+      category, 
+      content_data: { 
+        type: 'form', 
+        questions,
+        max_attempts: maxAttempts === 'unlimited' ? undefined : maxAttempts
+      }, 
+      max_attempts: maxAttempts === 'unlimited' ? undefined : maxAttempts,
+      ai_generated: false, 
+      color_tag: '#A8D8FF'
+    };
     const scope = { type: assignType, targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined };
-    onSaveTask(taskData, scope as any);
+    if (mode === 'edit' && onUpdateTask) {
+      onUpdateTask(taskData, scope as any);
+    } else {
+      onSaveTask(taskData, scope as any);
+    }
   };
 
   // --- RENDER BODY ---

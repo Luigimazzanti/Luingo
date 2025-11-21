@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Task, Classroom } from '../types';
 import { StudentCard } from './StudentCard';
-import { Plus, Users, BookOpen, Target, QrCode, Link2, Sparkles, Music, Briefcase, Plane, Trash2 } from 'lucide-react';
+import { Plus, Users, BookOpen, Target, QrCode, Link2, Sparkles, Music, Briefcase, Plane, Trash2, Edit2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from './ui/dialog';
 import { Input } from './ui/input';
@@ -14,6 +14,7 @@ interface TeacherDashboardProps {
   onSelectStudent: (studentId: string) => void;
   onGenerateTask: (topic: string, level: string) => void;
   onDeleteTask: (id: string) => void;
+  onEditTask?: (task: Task) => void;
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
@@ -23,6 +24,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onSelectStudent,
   onGenerateTask,
   onDeleteTask,
+  onEditTask,
 }) => {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [showAITaskDialog, setShowAITaskDialog] = useState(false);
@@ -407,13 +409,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       {new Date(task.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => onDeleteTask(task.id)}
-                    className="text-rose-400 hover:text-rose-600 hover:bg-rose-50"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </Button>
+                  <div className="flex gap-2">
+                    {onEditTask && (
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => onEditTask(task)}
+                        className="text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50"
+                      >
+                        <Edit2 className="w-5 h-5" />
+                      </Button>
+                    )}
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => onDeleteTask(task.id)}
+                      className="text-rose-400 hover:text-rose-600 hover:bg-rose-50"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </Button>
+                  </div>
                 </div>
               ))
             )}
