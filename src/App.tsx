@@ -579,6 +579,7 @@ export default function App() {
         {view === 'exercise' && activeExercise && (
             <ExercisePlayer 
                 exercise={activeExercise}
+                studentName={currentUser?.name}
                 onExit={() => setView('dashboard')}
                 onComplete={async (score) => {
                     // 1. Feedback visual inmediato
