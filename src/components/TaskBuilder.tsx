@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { Sparkles, X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic } from 'lucide-react';
+import { Sparkles, X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
@@ -181,7 +181,8 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({ onSaveTask, onCancel, 
              <h2 className="text-2xl font-black text-slate-800 tracking-tight">Diseñador de Tareas</h2>
              <div className="flex items-center gap-2 mt-1">
                 {assignType === 'individual' && studentName ? (
-                    <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-black uppercase tracking-wide border border-indigo-200">
+                    <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md text-xs font-bold flex items-center gap-1 border border-emerald-200">
+                        <User className="w-3 h-3" />
                         Para: {studentName}
                     </span>
                 ) : (
