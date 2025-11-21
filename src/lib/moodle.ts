@@ -66,9 +66,12 @@ export const getEnrolledUsers = async (courseId: number) => {
 
 // Obtener usuario por nombre de usuario (Login)
 export const getUserByUsername = async (username: string) => {
+  // Moodle requiere minúsculas
+  const safeUsername = username.trim().toLowerCase();
+  
   const data = await callMoodle("core_user_get_users_by_field", {
     field: 'username',
-    values: [username]
+    "values[0]": safeUsername // CORRECCIÓN: Clave explícita con índice
   });
   
   // La API devuelve un array de usuarios
