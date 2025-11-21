@@ -45,6 +45,7 @@ export default function App() {
   const [activePDFTask, setActivePDFTask] = useState<Task | null>(null); // NEW
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [showTaskBuilder, setShowTaskBuilder] = useState(false); // NEW
+  const [targetStudentForTask, setTargetStudentForTask] = useState<string | undefined>(undefined); // NEW state for persistent assignment target
   const [mockSubmissions, setMockSubmissions] = useState<Submission[]>([]); // NEW state for demo
 
 
@@ -283,6 +284,7 @@ export default function App() {
       // Guardar en estado local (simulando DB Tasks_Library)
       setTasks(prev => [newTemplate, ...prev]);
       setShowTaskBuilder(false);
+      setTargetStudentForTask(undefined); // Reset temporal target
 
       // 2. Generar Asignaciones (Assignments Table)
       let targetedStudents: Student[] = [];
@@ -309,10 +311,11 @@ export default function App() {
       }));
 
       // Guardar asignaciones (simulando DB)
-      // Nota: En una app real, haríamos un POST a /assignments
       setMockSubmissions(prev => [...newAssignments, ...prev]);
 
-      toast.success(`Tarea creada y asignada a ${targetedStudents.length} alumnos.`);
+      // Feedback visible
+      const studentName = targetedStudents.length === 1 ? targetedStudents[0].name : null;
+      toast.success(`Tarea '${newTemplate.title}' asignada correctamente${studentName ? ` a ${studentName}` : ` a ${targetedStudents.length} alumnos`}.`);
 
       // Lógica de enrutamiento para Demo inmediata (si soy el profe probando)
       if (taskData.content_data.type === 'pdf') {
@@ -509,7 +512,8 @@ export default function App() {
             <TaskBuilder 
                 onSaveTask={handleSaveNewTask}
                 onCancel={() => setShowTaskBuilder(false)}
-                initialStudentId={selectedStudentId || undefined} // Use currently selected student from drawer if open
+                initialStudentId={targetStudentForTask} // Use persistent target state
+                studentName={students.find(s => s.id === targetStudentForTask)?.name}
             />
         )}
 
@@ -546,8 +550,17 @@ export default function App() {
                         student={students.find(s => s.id === selectedStudentId) || students[0]}
                         onBack={() => setSelectedStudentId(null)} // Cierra el sheet
                         onAssignTask={() => {
-                            // Abre el builder y pasa el ID para pre-seleccionar "Individual"
-                            setShowTaskBuilder(true);
+                            // 1. Guardar target en estado persistente
+                            const currentStudentId = selectedStudentId;
+                            setTargetStudentForTask(currentStudentId);
+                            
+                            // 2. Cerrar el sheet inmediatamente para evitar conflictos de z-index
+                            setSelectedStudentId(null);
+                            
+                            // 3. Abrir el builder con un ligero retraso para que la animación del sheet fluya
+                            setTimeout(() => {
+                                setShowTaskBuilder(true);
+                            }, 150);
                         }}
                     />
                 )}

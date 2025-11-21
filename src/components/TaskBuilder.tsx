@@ -23,9 +23,10 @@ interface TaskBuilderProps {
   onSaveTask: (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => void;
   onCancel: () => void;
   initialStudentId?: string;
+  studentName?: string;
 }
 
-export const TaskBuilder: React.FC<TaskBuilderProps> = ({ onSaveTask, onCancel, initialStudentId }) => {
+export const TaskBuilder: React.FC<TaskBuilderProps> = ({ onSaveTask, onCancel, initialStudentId, studentName }) => {
   // Estado General
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -178,7 +179,15 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({ onSaveTask, onCancel, 
         <div className="px-8 py-5 border-b border-slate-200 bg-white flex justify-between items-center sticky top-0 z-20">
           <div>
              <h2 className="text-2xl font-black text-slate-800 tracking-tight">Diseñador de Tareas</h2>
-             <p className="text-sm text-slate-500 font-medium">Crea manualmente o usa la IA</p>
+             <div className="flex items-center gap-2 mt-1">
+                {assignType === 'individual' && studentName ? (
+                    <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-black uppercase tracking-wide border border-indigo-200">
+                        Para: {studentName}
+                    </span>
+                ) : (
+                    <p className="text-sm text-slate-500 font-medium">Crea manualmente o usa la IA</p>
+                )}
+             </div>
           </div>
           <Button variant="ghost" size="icon" onClick={onCancel} className="rounded-full hover:bg-slate-100 text-slate-400"><X className="w-6 h-6" /></Button>
         </div>
