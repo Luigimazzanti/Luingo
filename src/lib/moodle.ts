@@ -81,11 +81,11 @@ export const getUserByUsername = async (username: string) => {
   return null; 
 };
 
-// GUARDAR TAREA (Crea un post en el foro con el JSON oculto)
+// GUARDAR TAREA (Estrategia Texto Robusto)
 export const createMoodleTask = async (title: string, description: string, jsonSettings: any) => {
   const payload = JSON.stringify(jsonSettings);
-  // El secreto está en el comentario HTML oculto
-  const messageContent = `${description}<br/><hr/><!--JSON:${payload}-->`;
+  // Usamos una etiqueta de texto explícita que Moodle NO borrará
+  const messageContent = `${description}<br/><br/><p style="display:none;">[LUINGO_DATA]${payload}[/LUINGO_DATA]</p>`;
   
   return await callMoodle("mod_forum_add_discussion", { 
     forumid: TASKS_FORUM_ID, 
@@ -94,21 +94,21 @@ export const createMoodleTask = async (title: string, description: string, jsonS
   });
 };
 
-// LEER TAREAS (Lee los posts y extrae el JSON)
+// LEER TAREAS
 export const getMoodleTasks = async () => {
   const data = await callMoodle("mod_forum_get_forum_discussions", { forumid: TASKS_FORUM_ID });
   
   if (!data || !data.discussions) return [];
 
   return data.discussions.map((disc: any) => {
-    // Rescatamos el JSON
-    const match = disc.message.match(/<!--JSON:(.*?)-->/);
+    // Buscamos el delimitador de texto
+    const match = disc.message.match(/\[LUINGO_DATA\](.*?)\[\/LUINGO_DATA\]/);
     const contentData = match ? JSON.parse(match[1]) : { type: 'form', questions: [] };
 
     return {
       id: `discussion-${disc.discussion}`,
       title: disc.subject,
-      description: disc.message.split('<br/><hr/>')[0].replace(/<[^>]*>?/gm, ''),
+      description: disc.message.split('[LUINGO_DATA]')[0].replace(/<[^>]*>?/gm, ''), // Limpiar HTML
       content_data: contentData,
       category: 'homework',
       status: 'published',

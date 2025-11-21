@@ -138,46 +138,18 @@ export default function App() {
         };
         setCurrentUser(userProfile);
         
-        // Cargar tareas reales del foro
-        const forumTasks = await getMoodleTasks();
-        if (forumTasks.length > 0) {
-            setTasks(forumTasks);
-            // Asignación temporal (Mock) para visualización
-            const newAssignments: Submission[] = [];
-            // Si es estudiante, nos auto-asignamos las tareas y preparamos el perfil de estudiante
-            if (userProfile.role === 'student') {
-                 // Adaptamos User -> Student para que funcione el Dashboard
-                 const studentProfile: Student = {
-                    ...userProfile,
-                    current_level_code: 'A1',
-                    progress: 0,
-                    streak_days: 0,
-                    xp: 0,
-                    stats: { listening: 0, reading: 0, speaking: 0, writing: 0 },
-                    achievements: [],
-                    completed_tasks: 0,
-                    total_tasks: forumTasks.length,
-                    materials_viewed: [],
-                    average_grade: 0
-                 };
-                 setStudents([studentProfile]);
-
-                 forumTasks.forEach((task: Task) => {
-                    newAssignments.push({
-                      id: `assign-${task.id}-${userProfile.id}`,
-                      task_id: task.id,
-                      student_id: userProfile.id,
-                      status: 'assigned',
-                      due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-                    });
-                 });
-                 setMockSubmissions(newAssignments);
-            }
+        // CARGA REAL DE TAREAS
+        toast.loading("Sincronizando tareas...");
+        try {
+            const realTasks = await getMoodleTasks();
+            setTasks(realTasks);
+            toast.dismiss();
+            toast.success(`¡Hola ${userProfile.name}! Tienes ${realTasks.length} tareas.`);
+        } catch (e) {
+            console.error(e);
+            setTasks([]); // Fallback vacío
         }
-
-        setComments(mockComments);
         setNotifications([]);
-        toast.success(`Bienvenido, ${userProfile.name}`);
       } else {
         toast.error("Usuario no encontrado en Moodle");
       }
