@@ -10,7 +10,7 @@ import { StudentDashboard } from './components/StudentDashboard';
 import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
-import { getSiteInfo, configureMoodle, getMoodleConfig } from './lib/moodle';
+import { getSiteInfo, createMoodleTask, getMoodleTasks } from './lib/moodle';
 import {
   mockClassroom,
   mockStudents,
@@ -19,8 +19,6 @@ import {
 } from './lib/mockData';
 import { Comment, Correction, Notification, User, Task, Student, Exercise, Submission } from './types'; 
 import { Button } from './components/ui/button';
-import { Input } from './components/ui/input';
-import { Label } from './components/ui/label';
 import { ArrowLeft, MessageCircle, Play, LogOut, Sparkles, Target, Home, Settings, RefreshCw } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './components/ui/dialog';
@@ -29,9 +27,6 @@ import { Toaster, toast } from 'sonner@2.0.3';
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [showConfigDialog, setShowConfigDialog] = useState(false);
-  const [configUrl, setConfigUrl] = useState(getMoodleConfig().url);
-  const [configToken, setConfigToken] = useState(getMoodleConfig().token);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer'>('home'); 
@@ -54,25 +49,45 @@ export default function App() {
   const initMoodle = async () => {
     setLoading(true);
     setConnectionError(null);
-    console.log("🔌 Conectando con Moodle...", getMoodleConfig().url);
+    console.log("🔌 Conectando con Moodle...");
     
     try {
       const info = await getSiteInfo();
       if (info && !info.error) {
         console.log("✅ Conectado a:", info.sitename);
         toast.success(`Conectado a Moodle: ${info.sitename}`);
-        setShowConfigDialog(false);
+        
+        // Cargar tareas del foro
+        const forumTasks = await getMoodleTasks();
+        if (forumTasks.length > 0) {
+           setTasks(forumTasks);
+           console.log("✅ Tareas cargadas del Foro:", forumTasks);
+           
+           // Auto-assign forum tasks to students locally so they appear in dashboard
+           // This is a temporary bridge since we are not managing assignments in Moodle yet
+           const newAssignments: Submission[] = [];
+           mockStudents.forEach(student => {
+             forumTasks.forEach((task: Task) => {
+                newAssignments.push({
+                  id: `assign-${task.id}-${student.id}`,
+                  task_id: task.id,
+                  student_id: student.id,
+                  status: 'assigned',
+                  due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                });
+             });
+           });
+           setMockSubmissions(prev => [...prev, ...newAssignments]);
+        }
       } else {
-        const errorMsg = info?.error || "No se pudo conectar a Moodle. Revisa la URL y el Token.";
+        const errorMsg = info?.error || "No se pudo conectar a Moodle.";
         console.error("Connection failed:", errorMsg);
         toast.error(errorMsg);
         setConnectionError(errorMsg);
-        setShowConfigDialog(true);
       }
     } catch (e) {
       console.error(e);
       setConnectionError("Error crítico de conexión");
-      setShowConfigDialog(true);
     } finally {
       setLoading(false);
     }
@@ -81,11 +96,6 @@ export default function App() {
   useEffect(() => {
     initMoodle();
   }, []);
-
-  const handleSaveConfig = () => {
-    configureMoodle(configUrl, configToken);
-    initMoodle();
-  };
 
   const initializeUser = async (roleData: { role: 'teacher' | 'student' }) => {
     setLoading(true);
@@ -101,7 +111,7 @@ export default function App() {
       };
       setCurrentUser(userProfile);
       setComments(mockComments);
-      setTasks(mockTasks);
+      // Tasks are loaded from Moodle in initMoodle
       setStudents(mockStudents);
       setNotifications([]);
     } catch (error) {
@@ -133,56 +143,41 @@ export default function App() {
     setSelectedStudentId(null);
   };
 
-  const handleSaveNewTask = (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => {
-      const newTemplate: Task = {
-          id: `template-${Date.now()}`,
-          teacher_id: currentUser?.id || 'teacher-1',
-          title: taskData.title,
-          description: taskData.description,
-          content_data: taskData.content_data, 
-          level_tag: assignmentScope.type === 'level' ? (assignmentScope.targetId as any) : 'A1', 
-          category: taskData.category,
-          created_at: new Date().toISOString(),
-          rubric: { criteria: [], total_points: 100 }
-      };
+  const handleSaveNewTask = async (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => {
+      // Guardar tarea en Moodle (Foro)
+      await createMoodleTask(taskData.title, taskData.description, taskData.content_data);
+      toast.success("Tarea guardada en Moodle exitosamente");
 
-      setTasks(prev => [newTemplate, ...prev]);
       setShowTaskBuilder(false);
-      setTargetStudentForTask(undefined); 
+      setTargetStudentForTask(undefined);
 
-      let targetedStudents: Student[] = [];
-      if (assignmentScope.type === 'individual' && assignmentScope.targetId) {
-          const student = students.find(s => s.id === assignmentScope.targetId);
-          if (student) targetedStudents = [student];
-      } else if (assignmentScope.type === 'level' && assignmentScope.targetId) {
-          targetedStudents = students.filter(s => s.current_level_code === assignmentScope.targetId);
-      } else if (assignmentScope.type === 'class') {
-          targetedStudents = students;
-      }
+      // Recargar la lista desde Moodle
+      const updatedTasks = await getMoodleTasks();
+      setTasks(updatedTasks);
 
-      const newAssignments: Submission[] = targetedStudents.map(student => ({
-          id: `assign-${Date.now()}-${student.id}`,
-          task_id: newTemplate.id,
-          student_id: student.id,
-          status: 'assigned',
-          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), 
-      }));
+      // Actualizar asignaciones locales (Mock) para que aparezcan en la UI
+      if (updatedTasks.length > 0) {
+          const newestTask = updatedTasks[0]; // Asumimos que la más nueva es la primera
+          
+          let targetedStudents: Student[] = [];
+          if (assignmentScope.type === 'individual' && assignmentScope.targetId) {
+              const student = students.find(s => s.id === assignmentScope.targetId);
+              if (student) targetedStudents = [student];
+          } else if (assignmentScope.type === 'level' && assignmentScope.targetId) {
+              targetedStudents = students.filter(s => s.current_level_code === assignmentScope.targetId);
+          } else if (assignmentScope.type === 'class') {
+              targetedStudents = students;
+          }
 
-      setMockSubmissions(prev => [...newAssignments, ...prev]);
-      const studentName = targetedStudents.length === 1 ? targetedStudents[0].name : null;
-      toast.success(`Tarea '${newTemplate.title}' asignada correctamente.`);
+          const newAssignments: Submission[] = targetedStudents.map(student => ({
+              id: `assign-${Date.now()}-${student.id}`,
+              task_id: newestTask.id,
+              student_id: student.id,
+              status: 'assigned',
+              due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), 
+          }));
 
-      if (taskData.content_data.type === 'pdf') {
-          setActivePDFTask(newTemplate);
-          setView('pdf-viewer');
-      } else {
-           const exercise: Exercise = {
-            title: newTemplate.title,
-            level: newTemplate.level_tag || 'A1',
-            banana_reward_total: 50,
-            questions: taskData.content_data.questions || []
-          };
-          setActiveExercise(exercise);
+          setMockSubmissions(prev => [...newAssignments, ...prev]);
       }
   };
 
@@ -239,54 +234,9 @@ export default function App() {
       return <div className="min-h-screen flex items-center justify-center bg-background">Cargando LuinGo (Moodle)...</div>;
   }
 
-  const renderConfigDialog = () => (
-    <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Configurar Conexión Moodle</DialogTitle>
-          <DialogDescription>
-            {connectionError 
-              ? "Hubo un error al conectar. Por favor verifica tus credenciales." 
-              : "Ingresa la URL y el Token de tu servidor Moodle."}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="url">Moodle URL</Label>
-            <Input
-              id="url"
-              value={configUrl}
-              onChange={(e) => setConfigUrl(e.target.value)}
-              placeholder="https://tu-escuela.moodlecloud.com/webservice/rest/server.php"
-            />
-             <p className="text-xs text-slate-500">Asegúrate que termine en <code>/webservice/rest/server.php</code></p>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="token">Token WebService</Label>
-            <Input
-              id="token"
-              value={configToken}
-              onChange={(e) => setConfigToken(e.target.value)}
-              type="password"
-              placeholder="Token..."
-            />
-          </div>
-        </div>
-        <DialogFooter className="sm:justify-between">
-           <Button variant="ghost" onClick={() => setShowConfigDialog(false)}>Cancelar</Button>
-           <Button onClick={handleSaveConfig}>
-             <RefreshCw className="w-4 h-4 mr-2"/> 
-             Guardar y Reconectar
-           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-
   if (!currentUser) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#FDFBF7] p-4">
-             {renderConfigDialog()}
              <div className="w-full max-w-md text-center space-y-6">
                  <div className="mx-auto w-20 h-20 rounded-full bg-amber-400 flex items-center justify-center text-4xl shadow-lg">🐵</div>
                  <h1 className="text-3xl font-bold text-slate-800">LuinGo <span className="text-amber-500">.</span></h1>
@@ -295,21 +245,12 @@ export default function App() {
                  {connectionError && (
                     <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-center justify-center gap-2">
                         <span>Error: {connectionError}</span>
-                        <Button variant="link" size="sm" className="h-auto p-0 text-red-700 underline" onClick={() => setShowConfigDialog(true)}>
-                            Configurar
-                        </Button>
                     </div>
                  )}
 
                  <div className="grid gap-4">
                     <Button className="h-12 text-lg" onClick={() => initializeUser({ role: 'teacher' })}>Soy Profesor</Button>
                     <Button variant="outline" className="h-12 text-lg" onClick={() => initializeUser({ role: 'student' })}>Soy Estudiante</Button>
-                 </div>
-                 
-                 <div className="pt-8">
-                    <Button variant="ghost" size="sm" className="text-slate-400" onClick={() => setShowConfigDialog(true)}>
-                        <Settings className="w-4 h-4 mr-2"/> Configuración Avanzada
-                    </Button>
                  </div>
 
                  <Toaster richColors />
@@ -324,7 +265,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F0F4F8] font-sans text-slate-800 selection:bg-amber-200 selection:text-amber-900">
       <Toaster richColors />
-      {renderConfigDialog()}
       <nav className="bg-white border-b-2 border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
           <div className="flex items-center justify-between">
@@ -389,7 +329,7 @@ export default function App() {
                 title="Cerrar Sesión" 
                 className="text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
               >
-                  <LogOut className="w-6 h-6" />
+                <LogOut className="w-6 h-6" />
               </Button>
             </div>
           </div>
