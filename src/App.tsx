@@ -520,13 +520,40 @@ export default function App() {
 
         {/* 2. VISTA DASHBOARD (Grid Estudiantes o Dashboard Alumno) */}
         {view === 'dashboard' && currentUser?.role === 'teacher' && (
-          <TeacherDashboard
-            classroom={classroom}
-            students={students}
-            tasks={tasks}
-            onSelectStudent={handleSelectStudent}
-            onGenerateTask={handleGenerateTask}
-          />
+           <>
+            <TeacherDashboard
+                classroom={classroom}
+                students={students}
+                tasks={tasks}
+                onSelectStudent={handleSelectStudent}
+                onGenerateTask={handleGenerateTask}
+            />
+
+            {/* EL DRAWER (SHEET) DEL PASAPORTE */}
+            <Sheet 
+                open={!!selectedStudentId} 
+                onOpenChange={(open) => !open && setSelectedStudentId(null)}
+            >
+                <SheetContent side="right" className="w-full sm:max-w-2xl p-0 border-l-4 border-slate-200 bg-[#F0F4F8] overflow-y-auto">
+                {/* Accesibilidad oculta requerida */}
+                <SheetHeader className="hidden">
+                    <SheetTitle>Perfil del Estudiante</SheetTitle>
+                    <SheetDescription>Detalles y asignación de tareas</SheetDescription>
+                </SheetHeader>
+
+                {selectedStudentId && (
+                    <StudentPassport 
+                        student={students.find(s => s.id === selectedStudentId) || students[0]}
+                        onBack={() => setSelectedStudentId(null)} // Cierra el sheet
+                        onAssignTask={() => {
+                            // Abre el builder y pasa el ID para pre-seleccionar "Individual"
+                            setShowTaskBuilder(true);
+                        }}
+                    />
+                )}
+                </SheetContent>
+            </Sheet>
+           </>
         )}
 
         {view === 'dashboard' && currentUser?.role === 'student' && (
@@ -553,30 +580,6 @@ export default function App() {
             />
         )}
 
-        {/* 
-            SHEET / DRAWER PARA PASAPORTE ESTUDIANTE 
-            (Reemplaza la vista completa 'student-passport')
-        */}
-        <Sheet open={!!selectedStudentId} onOpenChange={(open) => !open && setSelectedStudentId(null)}>
-            <SheetContent className="w-full sm:max-w-[600px] overflow-y-auto p-0">
-                <SheetHeader className="hidden">
-                    <SheetTitle>Perfil del Estudiante</SheetTitle>
-                    <SheetDescription>Ver detalles y asignar tareas</SheetDescription>
-                </SheetHeader>
-                {/* Nota: Pasamos onBack como cierre del drawer */}
-                {selectedStudentId && (
-                    <StudentPassport 
-                        student={students.find(s => s.id === selectedStudentId) || students[0]}
-                        onBack={() => setSelectedStudentId(null)}
-                        onAssignTask={() => {
-                            // Mantenemos el drawer abierto Y abrimos el TaskBuilder encima
-                            setShowTaskBuilder(true);
-                        }}
-                    />
-                )}
-            </SheetContent>
-        </Sheet>
-        
         {/* VISTA PDF VIEWER (NUEVA) */}
         {view === 'pdf-viewer' && activePDFTask && (
             <div className="p-4 h-screen bg-slate-100 flex flex-col">
