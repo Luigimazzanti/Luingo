@@ -171,25 +171,25 @@ export const getMoodleSubmissions = async () => {
 };
 
 // BORRAR TAREA (Elimina el post del foro)
-export const deleteMoodleTask = async (discussionId: string) => {
-  // El ID viene como "discussion-45", necesitamos el ID numérico
-  const cleanId = discussionId.replace(/\D/g, '');
+export const deleteMoodleTask = async (discussionId: string | number) => {
+  // CORRECCIÓN: Asegurar que es string antes de replace
+  const cleanId = String(discussionId).replace(/\D/g, '');
   
   // Usamos delete_post que borra el hilo entero si es el post inicial
   return await callMoodle("mod_forum_delete_post", { postid: cleanId });
 };
 
 // ACTUALIZAR TAREA (Edita el post del foro)
-export const updateMoodleTask = async (postId: string, title: string, description: string, jsonSettings: any) => {
+export const updateMoodleTask = async (discussionId: string | number, title: string, description: string, jsonSettings: any) => {
   const payload = JSON.stringify(jsonSettings);
-  const messageContent = `${description}<br/><br/><p style="display:none;">[LUINGO_DATA]${payload}[/LUINGO_DATA]</p>`;
+  const message = `${description}<br/><br/><p style="display:none;">[LUINGO_DATA]${payload}[/LUINGO_DATA]</p>`;
   
-  // El postId debe ser el ID del post inicial (no el discussionId)
-  const cleanId = postId.replace(/\D/g, '');
+  // CORRECCIÓN: Asegurar que es string antes de replace
+  const cleanId = String(discussionId).replace(/\D/g, '');
   
-  return await callMoodle("mod_forum_update_discussion_post", {
-    postid: cleanId,
-    subject: title,
-    message: messageContent
+  return await callMoodle("mod_forum_update_discussion_post", { 
+    postid: cleanId, 
+    subject: title, 
+    message: message 
   });
 };
