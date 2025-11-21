@@ -5,17 +5,9 @@ import { TrendingUp, CheckCircle, Clock, Eye, EyeOff } from 'lucide-react';
 interface StudentCardProps {
   student: Student;
   onClick: () => void;
-  totalMaterials?: number; // Para calcular % de materiales vistos
+  totalMaterials?: number; 
 }
 
-/**
- * COMPONENTE TARJETA DE ESTUDIANTE
- * 
- * Diseño Clean & Professional (No Circus)
- * - Información clara
- * - Colores semánticos suaves
- * - Niveles CEFR (A1-C2)
- */
 export const StudentCard: React.FC<StudentCardProps> = ({ 
   student, 
   onClick,
@@ -31,9 +23,16 @@ export const StudentCard: React.FC<StudentCardProps> = ({
       return { label: 'C2', color: 'bg-rose-100 text-rose-700 border-rose-300' };
   };
 
-  const cefr = getCEFRLevel(student.level);
-  const completionPercentage = (student.completed_tasks / student.total_tasks) * 100;
-  const materialsViewedPercentage = (student.materials_viewed.length / totalMaterials) * 100;
+  const cefr = getCEFRLevel(student.level || 1);
+  
+  // SAFE CALCULATIONS (Defensive Programming)
+  const safeCompleted = student.completed_tasks || 0;
+  const safeTotal = student.total_tasks || 0;
+  const safeMaterials = student.materials_viewed?.length || 0;
+  const safeAverage = student.average_grade || 0;
+
+  const completionPercentage = safeTotal > 0 ? (safeCompleted / safeTotal) * 100 : 0;
+  const materialsViewedPercentage = totalMaterials > 0 ? (safeMaterials / totalMaterials) * 100 : 0;
   
   return (
     <div
@@ -50,7 +49,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                     className="w-full h-full object-cover"
                 />
             </div>
-            {completionPercentage === 100 && (
+            {completionPercentage === 100 && safeTotal > 0 && (
                 <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-400 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-bounce">
                     <CheckCircle className="w-4 h-4 text-white font-bold" />
                 </div>
@@ -72,7 +71,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         <div>
             <div className="flex justify-between text-xs mb-2 font-bold">
                 <span className="text-slate-400 uppercase tracking-wider">Misiones</span>
-                <span className="text-slate-800">{student.completed_tasks}/{student.total_tasks}</span>
+                <span className="text-slate-800">{safeCompleted}/{safeTotal}</span>
             </div>
             <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                 <div 
@@ -86,7 +85,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         <div>
             <div className="flex justify-between text-xs mb-2 font-bold">
                 <span className="text-slate-400 uppercase tracking-wider">XP Ganada</span>
-                <span className="text-slate-800">{student.materials_viewed.length}/{totalMaterials}</span>
+                <span className="text-slate-800">{safeMaterials}/{totalMaterials}</span>
             </div>
             <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                 <div 
@@ -105,13 +104,17 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             </div>
             <div>
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Nota</p>
-                <p className="text-lg font-black text-slate-800 leading-none">{student.average_grade.toFixed(1)}</p>
+                <p className="text-lg font-black text-slate-800 leading-none">
+                    {safeAverage.toFixed(1)}
+                </p>
             </div>
         </div>
         
         <div className="text-right group-hover:translate-x-[-4px] transition-transform">
             <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Pendientes</p>
-            <p className="text-lg font-black text-rose-500 leading-none">{student.total_tasks - student.completed_tasks}</p>
+            <p className="text-lg font-black text-rose-500 leading-none">
+                {safeTotal - safeCompleted}
+            </p>
         </div>
       </div>
     </div>

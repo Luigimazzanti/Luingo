@@ -10,7 +10,7 @@ import { StudentDashboard } from './components/StudentDashboard';
 import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
-import { getSiteInfo, createMoodleTask, getMoodleTasks } from './lib/moodle';
+import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers } from './lib/moodle';
 import {
   mockClassroom,
   mockStudents,
@@ -42,6 +42,7 @@ export default function App() {
 
   const [classroom, setClassroom] = useState(mockClassroom);
   const [students, setStudents] = useState<Student[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -57,7 +58,14 @@ export default function App() {
         console.log("✅ Conectado a:", info.sitename);
         toast.success(`Conectado a Moodle: ${info.sitename}`);
         
-        // Cargar tareas del foro
+        // 1. Cargar Cursos de Moodle
+        const moodleCourses = await getCourses();
+        if (Array.isArray(moodleCourses)) {
+          setCourses(moodleCourses);
+          console.log("✅ Cursos cargados:", moodleCourses);
+        }
+
+        // 2. Cargar tareas del foro
         const forumTasks = await getMoodleTasks();
         if (forumTasks.length > 0) {
            setTasks(forumTasks);
@@ -112,7 +120,7 @@ export default function App() {
       setCurrentUser(userProfile);
       setComments(mockComments);
       // Tasks are loaded from Moodle in initMoodle
-      setStudents(mockStudents);
+      // Students are loaded when selecting a class now
       setNotifications([]);
     } catch (error) {
       console.error("Error initializing data:", error);
@@ -131,10 +139,47 @@ export default function App() {
     setSelectedStudentId(studentId);
   };
 
-  const handleSelectClass = (classId: string) => {
-    setSelectedClassId(classId);
-    setView('dashboard');
-    toast.success(`Entrando a la clase...`);
+  const handleSelectClass = async (courseId: string) => {
+    toast.loading("Cargando estudiantes...");
+    
+    try {
+      const enrolledUsers = await getEnrolledUsers(Number(courseId));
+      
+      if (Array.isArray(enrolledUsers)) {
+         const mappedStudents: Student[] = enrolledUsers.map((u: any) => ({
+            id: String(u.id),
+            name: u.fullname,
+            email: u.email,
+            avatar_url: u.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.fullname}`,
+            current_level_code: 'A1', // Default fallback
+            progress: Math.floor(Math.random() * 100), // Mock progress
+            streak_days: 0,
+            xp: 0,
+            stats: {
+                listening: 0,
+                reading: 0,
+                speaking: 0,
+                writing: 0
+            },
+            achievements: []
+         }));
+
+         setStudents(mappedStudents);
+         console.log("✅ Estudiantes cargados:", mappedStudents);
+         
+         setSelectedClassId(courseId);
+         setView('dashboard');
+         toast.dismiss();
+         toast.success(`Entrando a la clase...`);
+      } else {
+        toast.dismiss();
+        toast.error("No se pudieron cargar los estudiantes.");
+      }
+    } catch (error) {
+        console.error("Error loading students:", error);
+        toast.dismiss();
+        toast.error("Error al cargar la clase.");
+    }
   };
 
   const handleGoHome = () => {
@@ -347,7 +392,10 @@ export default function App() {
         )}
 
         {view === 'home' && (
-            <ClassSelection onSelectClass={handleSelectClass} />
+            <ClassSelection 
+                courses={courses} 
+                onSelectClass={handleSelectClass} 
+            />
         )}
 
         {view === 'dashboard' && currentUser?.role === 'teacher' && (

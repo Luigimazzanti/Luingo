@@ -89,3 +89,13 @@ export const getMoodleTasks = async () => {
     };
   });
 };
+
+// 2. Obtener cursos
+export const getCourses = async () => {
+  return await callMoodle("core_course_get_courses");
+};
+
+// Obtener usuarios matriculados en un curso
+export const getEnrolledUsers = async (courseId: number) => {
+  return await callMoodle("core_enrol_get_enrolled_users", { courseid: courseId });
+};
