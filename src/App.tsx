@@ -23,6 +23,7 @@ import { Comment, Correction, Notification, User, Task, Student, Exercise, TaskC
 import { Button } from './components/ui/button';
 import { ArrowLeft, MessageCircle, Play, LogOut, Sparkles, Target, Home } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from './components/ui/sheet';
 import { Toaster } from 'sonner@2.0.3';
 import { toast } from 'sonner@2.0.3';
 
@@ -35,7 +36,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // VIEW ROUTER STATE
-  const [view, setView] = useState<'home' | 'dashboard' | 'student-passport' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer'>('home'); 
+  // Eliminado 'student-passport' como vista completa
+  const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer'>('home'); 
   
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -44,7 +46,6 @@ export default function App() {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [showTaskBuilder, setShowTaskBuilder] = useState(false); // NEW
   const [mockSubmissions, setMockSubmissions] = useState<Submission[]>([]); // NEW state for demo
-
 
 
   const [classroom, setClassroom] = useState(mockClassroom);
@@ -245,11 +246,10 @@ export default function App() {
     setCurrentUser(null);
   };
 
-  // Manejar selección de estudiante
+  // Manejar selección de estudiante (MODIFIED: Abre Drawer en lugar de cambiar vista)
   const handleSelectStudent = (studentId: string) => {
     setSelectedStudentId(studentId);
-    setView('student-passport');
-    console.log('Selected student:', studentId);
+    console.log('Opening passport drawer for:', studentId);
   };
 
   const handleSelectClass = (classId: string) => {
@@ -509,7 +509,7 @@ export default function App() {
             <TaskBuilder 
                 onSaveTask={handleSaveNewTask}
                 onCancel={() => setShowTaskBuilder(false)}
-                initialStudentId={view === 'student-passport' ? selectedStudentId : undefined}
+                initialStudentId={selectedStudentId || undefined} // Use currently selected student from drawer if open
             />
         )}
 
@@ -553,17 +553,29 @@ export default function App() {
             />
         )}
 
-        {/* 3. VISTA PASAPORTE ESTUDIANTE (Vista del Profesor) */}
-        {view === 'student-passport' && selectedStudentId && (
-            <StudentPassport 
-                student={students.find(s => s.id === selectedStudentId) || students[0]}
-                onBack={() => setView('dashboard')}
-                onAssignTask={() => {
-                    // ESCENARIO A: Asignar a estudiante específico
-                    setShowTaskBuilder(true);
-                }}
-            />
-        )}
+        {/* 
+            SHEET / DRAWER PARA PASAPORTE ESTUDIANTE 
+            (Reemplaza la vista completa 'student-passport')
+        */}
+        <Sheet open={!!selectedStudentId} onOpenChange={(open) => !open && setSelectedStudentId(null)}>
+            <SheetContent className="w-full sm:max-w-[600px] overflow-y-auto p-0">
+                <SheetHeader className="hidden">
+                    <SheetTitle>Perfil del Estudiante</SheetTitle>
+                    <SheetDescription>Ver detalles y asignar tareas</SheetDescription>
+                </SheetHeader>
+                {/* Nota: Pasamos onBack como cierre del drawer */}
+                {selectedStudentId && (
+                    <StudentPassport 
+                        student={students.find(s => s.id === selectedStudentId) || students[0]}
+                        onBack={() => setSelectedStudentId(null)}
+                        onAssignTask={() => {
+                            // Mantenemos el drawer abierto Y abrimos el TaskBuilder encima
+                            setShowTaskBuilder(true);
+                        }}
+                    />
+                )}
+            </SheetContent>
+        </Sheet>
         
         {/* VISTA PDF VIEWER (NUEVA) */}
         {view === 'pdf-viewer' && activePDFTask && (
@@ -682,81 +694,46 @@ export default function App() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {selectedTask.rubric.criteria.map((criterion: any, idx: number) => (
-                        <div key={idx} className="bg-white rounded-2xl p-4 border-2 border-indigo-50 shadow-sm">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-bold text-slate-800">
-                              {criterion.name}
-                            </span>
-                            <span className="text-xs font-black bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg">
-                              {criterion.points} PTS
-                            </span>
+                        <div key={idx} className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
+                          <div className="flex justify-between items-center mb-2">
+                              <p className="font-bold text-indigo-800">{criterion.name}</p>
+                              <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-2 py-1 rounded-lg">{criterion.points} pts</span>
                           </div>
-                          <p className="text-xs font-medium text-slate-500 leading-relaxed">{criterion.description}</p>
+                          <p className="text-sm text-slate-500">{criterion.description}</p>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
+
+                {/* Contenido incrustado (Preview) */}
+                <div className="mt-8 p-6 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 text-center">
+                     <p className="text-slate-400 font-bold mb-4">Contenido de la Tarea</p>
+                     {selectedTask.content_data?.type === 'form' ? (
+                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200 text-slate-600">
+                             <MessageCircle className="w-4 h-4" />
+                             <span>Cuestionario ({selectedTask.content_data.questions?.length || 0} preguntas)</span>
+                         </div>
+                     ) : (
+                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200 text-slate-600">
+                             <Play className="w-4 h-4" />
+                             <span>Recurso Externo / PDF</span>
+                         </div>
+                     )}
+                </div>
               </div>
             )}
-
-            {/* Pestañas de contenido */}
-            <Tabs defaultValue="materials" className="w-full">
-              <TabsList className="inline-flex h-14 items-center justify-center rounded-2xl bg-slate-100 p-1 text-slate-500 w-full md:w-auto mb-8">
-                <TabsTrigger 
-                    value="materials" 
-                    className="rounded-xl px-6 h-12 text-sm font-bold data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm transition-all"
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Materiales
-                </TabsTrigger>
-                <TabsTrigger 
-                    value="comments" 
-                    className="rounded-xl px-6 h-12 text-sm font-bold data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm transition-all"
-                >
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Comentarios
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="materials" className="mt-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <MediaViewer
-                  materials={mockMaterials}
-                  onSelectMaterial={handleSelectMaterial}
-                />
-              </TabsContent>
-
-              <TabsContent value="comments" className="mt-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <CommentWall
-                  materialId="material-1"
-                  comments={comments}
-                  currentUser={currentUser}
-                  onAddComment={handleAddComment}
-                  onCorrectComment={handleCorrectComment}
-                />
-              </TabsContent>
-            </Tabs>
+            
+            {/* Sección de Comentarios */}
+            <CommentWall 
+                comments={comments} 
+                currentUser={currentUser}
+                onAddComment={handleAddComment}
+                onCorrectComment={handleCorrectComment}
+            />
           </div>
         )}
       </main>
-
-      {/* Botón flotante de acceso rápido con tema mono */}
-      <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-40">
-        <Button
-          onClick={() =>
-            setView(view === 'dashboard' ? 'task-detail' : 'dashboard')
-          }
-          className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-[#FFF4B7] to-[#FFE082] hover:opacity-90 shadow-lg hover:shadow-xl transition-all"
-        >
-          {view === 'dashboard' ? (
-            <Play className="w-6 h-6 text-gray-800" />
-          ) : (
-            <ArrowLeft className="w-6 h-6 text-gray-800" />
-          )}
-        </Button>
-      </div>
-
-      <Toaster position="top-right" richColors />
     </div>
   );
 }

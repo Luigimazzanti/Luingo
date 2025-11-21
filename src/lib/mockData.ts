@@ -245,5 +245,11 @@ export const mockComments: Comment[] = [
 ];
 
 // Legacy exports
-export const LUINGO_LEVELS = []; 
+export const LUINGO_LEVELS = [
+  { min: 1, max: 5, label: 'Mono Curioso', icon: '🐵' },
+  { min: 6, max: 10, label: 'Mono Explorador', icon: '🤠' },
+  { min: 11, max: 15, label: 'Mono Aventurero', icon: '🧭' },
+  { min: 16, max: 20, label: 'Mono Sabio', icon: '👓' },
+  { min: 21, max: 99, label: 'Rey de la Selva', icon: '👑' },
+];
 export const XP_VALUES = {};
