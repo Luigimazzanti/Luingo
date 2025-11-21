@@ -1,10 +1,21 @@
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 
-// CONFIGURACIÓN MOODLE
-// IMPORTANTE: Reemplaza esta URL con la de tu servidor real.
-// 'sandbox.moodledemo.net' es solo para pruebas y evitar errores de DNS.
-const MOODLE_URL = "https://sandbox.moodledemo.net/webservice/rest/server.php"; 
-const MOODLE_TOKEN = "8b1869dbac3f73adb6ed03421fdd8535"; // Tu token (Nota: no funcionará en el sandbox)
+// Variables mutables para la configuración en tiempo de ejecución
+let currentUrl = localStorage.getItem('moodle_url') || "https://luingo.moodiy.com/webservice/rest/server.php";
+let currentToken = localStorage.getItem('moodle_token') || "";
+
+export const configureMoodle = (url: string, token: string) => {
+  currentUrl = url;
+  currentToken = token;
+  // Persistir en localStorage para recargas
+  localStorage.setItem('moodle_url', url);
+  localStorage.setItem('moodle_token', token);
+};
+
+export const getMoodleConfig = () => ({
+  url: currentUrl,
+  token: currentToken
+});
 
 interface MoodleParams {
   [key: string]: string | number | boolean;
@@ -12,6 +23,10 @@ interface MoodleParams {
 
 // Función genérica para llamar a Moodle a través del Proxy
 const callMoodle = async (functionName: string, params: MoodleParams = {}) => {
+  if (!currentUrl || !currentToken) {
+    return { error: "Configuración incompleta. Por favor ingresa URL y Token." };
+  }
+
   const proxyUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/moodle-proxy`;
 
   try {
@@ -25,8 +40,8 @@ const callMoodle = async (functionName: string, params: MoodleParams = {}) => {
         functionName,
         params,
         settings: {
-            url: MOODLE_URL,
-            token: MOODLE_TOKEN
+            url: currentUrl,
+            token: currentToken
         }
       })
     });
@@ -41,7 +56,7 @@ const callMoodle = async (functionName: string, params: MoodleParams = {}) => {
     
     if (data.exception) {
       console.error(`❌ Error Moodle (${functionName}):`, data.message);
-      return null;
+      return { error: data.message, exception: data.exception }; // Retornar el error para manejarlo en UI
     }
     
     return data;
@@ -75,5 +90,6 @@ export const getUserById = async (userId: number) => {
     field: "id",
     "values[0]": userId
   });
-  return data ? data[0] : null;
+  // Manejo robusto de respuesta array
+  return Array.isArray(data) ? data[0] : null;
 };

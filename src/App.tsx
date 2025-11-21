@@ -6,12 +6,11 @@ import { TaskCorrector } from './components/TaskCorrector';
 import { CommentWall } from './components/CommentWall';
 import { MediaViewer } from './components/MediaViewer';
 import { NotificationBell } from './components/NotificationBell';
-// import { AuthPage } from './components/AuthPage'; // DEPRECATED for Moodle Migration
 import { StudentDashboard } from './components/StudentDashboard';
 import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
-import { getSiteInfo } from './lib/moodle';
+import { getSiteInfo, configureMoodle, getMoodleConfig } from './lib/moodle';
 import {
   mockClassroom,
   mockStudents,
@@ -20,12 +19,20 @@ import {
 } from './lib/mockData';
 import { Comment, Correction, Notification, User, Task, Student, Exercise, Submission } from './types'; 
 import { Button } from './components/ui/button';
-import { ArrowLeft, MessageCircle, Play, LogOut, Sparkles, Target, Home } from 'lucide-react';
+import { Input } from './components/ui/input';
+import { Label } from './components/ui/label';
+import { ArrowLeft, MessageCircle, Play, LogOut, Sparkles, Target, Home, Settings, RefreshCw } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './components/ui/dialog';
 import { Toaster, toast } from 'sonner@2.0.3';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [showConfigDialog, setShowConfigDialog] = useState(false);
+  const [configUrl, setConfigUrl] = useState(getMoodleConfig().url);
+  const [configToken, setConfigToken] = useState(getMoodleConfig().token);
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer'>('home'); 
   
@@ -44,28 +51,41 @@ export default function App() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
-  useEffect(() => {
-    const initMoodle = async () => {
-      setLoading(true);
-      console.log("🔌 Conectando con Moodle...");
-      
-      try {
-        const info = await getSiteInfo();
-        if (info) {
-          console.log("✅ Conectado a:", info.sitename);
-          toast.success(`Conectado a Moodle: ${info.sitename}`);
-        } else {
-          toast.error("No se pudo conectar a Moodle. Revisa el Token.");
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
+  const initMoodle = async () => {
+    setLoading(true);
+    setConnectionError(null);
+    console.log("🔌 Conectando con Moodle...", getMoodleConfig().url);
+    
+    try {
+      const info = await getSiteInfo();
+      if (info && !info.error) {
+        console.log("✅ Conectado a:", info.sitename);
+        toast.success(`Conectado a Moodle: ${info.sitename}`);
+        setShowConfigDialog(false);
+      } else {
+        const errorMsg = info?.error || "No se pudo conectar a Moodle. Revisa la URL y el Token.";
+        console.error("Connection failed:", errorMsg);
+        toast.error(errorMsg);
+        setConnectionError(errorMsg);
+        setShowConfigDialog(true);
       }
-    };
+    } catch (e) {
+      console.error(e);
+      setConnectionError("Error crítico de conexión");
+      setShowConfigDialog(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     initMoodle();
   }, []);
+
+  const handleSaveConfig = () => {
+    configureMoodle(configUrl, configToken);
+    initMoodle();
+  };
 
   const initializeUser = async (roleData: { role: 'teacher' | 'student' }) => {
     setLoading(true);
@@ -219,18 +239,79 @@ export default function App() {
       return <div className="min-h-screen flex items-center justify-center bg-background">Cargando LuinGo (Moodle)...</div>;
   }
 
+  const renderConfigDialog = () => (
+    <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Configurar Conexión Moodle</DialogTitle>
+          <DialogDescription>
+            {connectionError 
+              ? "Hubo un error al conectar. Por favor verifica tus credenciales." 
+              : "Ingresa la URL y el Token de tu servidor Moodle."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="url">Moodle URL</Label>
+            <Input
+              id="url"
+              value={configUrl}
+              onChange={(e) => setConfigUrl(e.target.value)}
+              placeholder="https://tu-escuela.moodlecloud.com/webservice/rest/server.php"
+            />
+             <p className="text-xs text-slate-500">Asegúrate que termine en <code>/webservice/rest/server.php</code></p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="token">Token WebService</Label>
+            <Input
+              id="token"
+              value={configToken}
+              onChange={(e) => setConfigToken(e.target.value)}
+              type="password"
+              placeholder="Token..."
+            />
+          </div>
+        </div>
+        <DialogFooter className="sm:justify-between">
+           <Button variant="ghost" onClick={() => setShowConfigDialog(false)}>Cancelar</Button>
+           <Button onClick={handleSaveConfig}>
+             <RefreshCw className="w-4 h-4 mr-2"/> 
+             Guardar y Reconectar
+           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (!currentUser) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#FDFBF7] p-4">
+             {renderConfigDialog()}
              <div className="w-full max-w-md text-center space-y-6">
                  <div className="mx-auto w-20 h-20 rounded-full bg-amber-400 flex items-center justify-center text-4xl shadow-lg">🐵</div>
                  <h1 className="text-3xl font-bold text-slate-800">LuinGo <span className="text-amber-500">.</span></h1>
                  <p className="text-slate-500">Conectando con tu Moodle Headless</p>
                  
+                 {connectionError && (
+                    <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-center justify-center gap-2">
+                        <span>Error: {connectionError}</span>
+                        <Button variant="link" size="sm" className="h-auto p-0 text-red-700 underline" onClick={() => setShowConfigDialog(true)}>
+                            Configurar
+                        </Button>
+                    </div>
+                 )}
+
                  <div className="grid gap-4">
                     <Button className="h-12 text-lg" onClick={() => initializeUser({ role: 'teacher' })}>Soy Profesor</Button>
                     <Button variant="outline" className="h-12 text-lg" onClick={() => initializeUser({ role: 'student' })}>Soy Estudiante</Button>
                  </div>
+                 
+                 <div className="pt-8">
+                    <Button variant="ghost" size="sm" className="text-slate-400" onClick={() => setShowConfigDialog(true)}>
+                        <Settings className="w-4 h-4 mr-2"/> Configuración Avanzada
+                    </Button>
+                 </div>
+
                  <Toaster richColors />
              </div>
         </div>
@@ -243,6 +324,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F0F4F8] font-sans text-slate-800 selection:bg-amber-200 selection:text-amber-900">
       <Toaster richColors />
+      {renderConfigDialog()}
       <nav className="bg-white border-b-2 border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
           <div className="flex items-center justify-between">
