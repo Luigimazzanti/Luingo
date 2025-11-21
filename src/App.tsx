@@ -10,7 +10,7 @@ import { StudentDashboard } from './components/StudentDashboard';
 import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
-import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask } from './lib/moodle';
+import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask } from './lib/moodle';
 import {
   mockClassroom,
   mockStudents,

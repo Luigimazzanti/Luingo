@@ -12,6 +12,7 @@ export interface TaskTemplate {
   category: 'homework' | 'quiz' | 'project' | 'reading';
   estimated_time?: number;
   rubric?: any;
+  max_attempts?: number; // Límite de intentos (undefined = ilimitado)
   created_at: string;
 }
 

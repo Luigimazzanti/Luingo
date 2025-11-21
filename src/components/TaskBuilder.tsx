@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, User } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { Task } from '../types';
 
 // TIPOS
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -19,24 +20,56 @@ interface QuestionDraft {
 }
 
 interface TaskBuilderProps {
+  mode?: 'create' | 'edit';
+  initialData?: Task;
   onSaveTask: (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => void;
   onCancel: () => void;
   initialStudentId?: string;
   studentName?: string;
 }
 
-export const TaskBuilder: React.FC<TaskBuilderProps> = ({ onSaveTask, onCancel, initialStudentId, studentName }) => {
+export const TaskBuilder: React.FC<TaskBuilderProps> = ({ 
+  mode = 'create',
+  initialData,
+  onSaveTask, 
+  onCancel, 
+  initialStudentId, 
+  studentName 
+}) => {
   // ESTADOS
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<'homework' | 'quiz' | 'project'>('homework');
   const [assignType, setAssignType] = useState<'individual' | 'level' | 'class'>(initialStudentId ? 'individual' : 'class');
   const [selectedLevel, setSelectedLevel] = useState('A1');
+  const [maxAttempts, setMaxAttempts] = useState<number | 'unlimited'>(3);
 
   // PREGUNTAS (Array real)
   const [questions, setQuestions] = useState<QuestionDraft[]>([
       { id: Date.now(), type: 'choice', question_text: '', options: ['', ''], correct_answer: '', explanation: '', allow_audio: false }
   ]);
+
+  // Inicializar con datos si estamos en modo edición
+  useEffect(() => {
+    if (mode === 'edit' && initialData) {
+      setTitle(initialData.title || '');
+      setDescription(initialData.description || '');
+      setCategory(initialData.category || 'homework');
+      setMaxAttempts(initialData.max_attempts || 'unlimited');
+      
+      if (initialData.content_data && initialData.content_data.questions) {
+        setQuestions(initialData.content_data.questions.map((q: any, idx: number) => ({
+          id: Date.now() + idx,
+          type: q.type || 'choice',
+          question_text: q.question_text || '',
+          options: q.options || ['', ''],
+          correct_answer: q.correct_answer || '',
+          explanation: q.explanation || '',
+          allow_audio: q.allow_audio || false
+        })));
+      }
+    }
+  }, [mode, initialData]);
 
   // --- HANDLERS ---
   const addQuestion = () => setQuestions([...questions, { id: Date.now(), type: 'choice', question_text: '', options: ['', ''], correct_answer: '', explanation: '', allow_audio: false }]);
@@ -54,7 +87,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({ onSaveTask, onCancel, 
 
   const handleSave = () => {
     if (!title.trim()) { alert("Falta el título"); return; }
-    const taskData = { title, description, category, content_data: { type: 'form', questions }, ai_generated: false, color_tag: '#A8D8FF' };
+    const taskData = { title, description, category, content_data: { type: 'form', questions }, ai_generated: false, color_tag: '#A8D8FF', max_attempts: maxAttempts };
     const scope = { type: assignType, targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined };
     onSaveTask(taskData, scope as any);
   };
@@ -132,6 +165,20 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({ onSaveTask, onCancel, 
                                 <option value="homework">Tarea</option>
                                 <option value="quiz">Examen</option>
                                 <option value="project">Proyecto</option>
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">▼</div>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase">Intentos Permitidos</label>
+                        <div className="relative">
+                            <select value={maxAttempts} onChange={(e) => setMaxAttempts(e.target.value === 'unlimited' ? 'unlimited' : Number(e.target.value))} className="w-full h-12 pl-4 pr-10 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-slate-700 appearance-none cursor-pointer outline-none focus:border-indigo-500">
+                                <option value="1">1 intento</option>
+                                <option value="2">2 intentos</option>
+                                <option value="3">3 intentos</option>
+                                <option value="4">4 intentos</option>
+                                <option value="5">5 intentos</option>
+                                <option value="unlimited">Ilimitados</option>
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">▼</div>
                         </div>

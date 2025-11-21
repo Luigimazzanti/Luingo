@@ -107,9 +107,11 @@ export const getMoodleTasks = async () => {
 
     return {
       id: `discussion-${disc.discussion}`,
+      postId: disc.id, // ID del post inicial para edición
       title: disc.subject,
       description: disc.message.split('[LUINGO_DATA]')[0].replace(/<[^>]*>?/gm, ''), // Limpiar HTML
       content_data: contentData,
+      max_attempts: contentData.max_attempts, // Extraer max_attempts del JSON
       category: 'homework',
       status: 'published',
       color_tag: '#A8D8FF',
@@ -175,4 +177,19 @@ export const deleteMoodleTask = async (discussionId: string) => {
   
   // Usamos delete_post que borra el hilo entero si es el post inicial
   return await callMoodle("mod_forum_delete_post", { postid: cleanId });
+};
+
+// ACTUALIZAR TAREA (Edita el post del foro)
+export const updateMoodleTask = async (postId: string, title: string, description: string, jsonSettings: any) => {
+  const payload = JSON.stringify(jsonSettings);
+  const messageContent = `${description}<br/><br/><p style="display:none;">[LUINGO_DATA]${payload}[/LUINGO_DATA]</p>`;
+  
+  // El postId debe ser el ID del post inicial (no el discussionId)
+  const cleanId = postId.replace(/\D/g, '');
+  
+  return await callMoodle("mod_forum_update_discussion_post", {
+    postid: cleanId,
+    subject: title,
+    message: messageContent
+  });
 };
