@@ -141,3 +141,38 @@ export const submitTaskResult = async (taskTitle: string, studentName: string, s
     message: message 
   });
 };
+
+// LEER ENTREGAS (Desde el Foro 7)
+export const getMoodleSubmissions = async () => {
+  // ID del Foro de Entregas
+  const SUBMISSIONS_FORUM_ID = 7; 
+  
+  const data = await callMoodle("mod_forum_get_forum_discussions", { forumid: SUBMISSIONS_FORUM_ID });
+  
+  if (!data || !data.discussions) return [];
+
+  return data.discussions.map((disc: any) => {
+    const match = disc.message.match(/<!--JSON:(.*?)-->/);
+    const jsonData = match ? JSON.parse(match[1]) : {};
+
+    return {
+      id: `sub-${disc.discussion}`,
+      student_name: disc.userfullname, // Nombre real del alumno en Moodle
+      task_title: disc.subject.replace('Entrega: ', '').split(' - ')[0],
+      score: jsonData.score || 0,
+      total: jsonData.total || 0,
+      grade: jsonData.grade || 0,
+      submitted_at: new Date(disc.created * 1000).toISOString(),
+      status: 'submitted'
+    };
+  });
+};
+
+// BORRAR TAREA (Elimina el post del foro)
+export const deleteMoodleTask = async (discussionId: string) => {
+  // El ID viene como "discussion-45", necesitamos el ID numérico
+  const cleanId = discussionId.replace(/\D/g, '');
+  
+  // Usamos delete_post que borra el hilo entero si es el post inicial
+  return await callMoodle("mod_forum_delete_post", { postid: cleanId });
+};

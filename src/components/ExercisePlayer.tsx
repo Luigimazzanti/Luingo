@@ -105,7 +105,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({ exercise, onComp
           key={idx}
           onClick={() => feedbackState === 'idle' && setSelectedOption(option)}
           disabled={feedbackState !== 'idle'}
-          className={`p-4 rounded-2xl text-lg font-bold border-b-4 transition-all text-left ${
+          className={`p-4 rounded-2xl text-lg font-bold border-b-4 transition-all text-left h-auto min-h-[60px] whitespace-normal ${
             selectedOption === option
               ? 'bg-indigo-100 border-indigo-400 text-indigo-800 ring-2 ring-indigo-200'
               : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
@@ -219,6 +219,8 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({ exercise, onComp
                 
                 <p className="text-slate-500 font-medium mb-8">
                     Has conseguido <strong className="text-amber-500">{finalScore * (exercise.banana_reward_total / totalQuestions)}</strong> bananas.
+                    <br/>
+                    <span className="text-emerald-600 font-bold block mt-2">✅ Tu tarea ha sido guardada en el servidor del profesor.</span>
                 </p>
 
                 <div className="grid grid-cols-2 gap-4 mb-8">
