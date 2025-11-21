@@ -33,7 +33,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onLogout
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<'tasks' | 'portfolio' | 'community'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'portfolio' | 'community' | 'achievements'>('tasks');
+
+  // Función para contar intentos de una tarea
+  const getAttempts = (taskId: string) => {
+    if (!submissions) return 0;
+    // Buscar por task_id o por task_title (compatibilidad)
+    const task = tasks.find(t => t.id === taskId);
+    return submissions.filter(s => 
+      s.task_id === taskId || 
+      (task && s.task_title === task.title)
+    ).length;
+  };
 
   // Safe access helper
   const getTaskStatus = (taskId: string) => {
@@ -45,14 +56,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   // Ensure arrays
   const safeTasks = Array.isArray(tasks) ? tasks : [];
 
+  // Filtrado por intentos
   const pendingTasks = safeTasks.filter(t => {
-      const status = getTaskStatus(t.id);
-      return status === 'assigned' || status === 'in_progress';
+      const attempts = getAttempts(t.id);
+      const maxAttempts = t.content_data?.max_attempts || t.max_attempts || 1;
+      return attempts < maxAttempts;
   });
 
   const completedTasks = safeTasks.filter(t => {
-      const status = getTaskStatus(t.id);
-      return status === 'submitted' || status === 'graded';
+      const attempts = getAttempts(t.id);
+      const maxAttempts = t.content_data?.max_attempts || t.max_attempts || 1;
+      return attempts >= maxAttempts;
   });
 
   // Safe student data
@@ -103,9 +117,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <SidebarItem 
                 icon={Trophy} 
                 label="Logros" 
+                isActive={activeTab === 'achievements'}
                 isOpen={sidebarOpen}
-                // No onClick needed here, but provided to prevent errors
-                onClick={() => {}}
+                onClick={() => setActiveTab('achievements')}
             />
         </nav>
 
@@ -226,6 +240,162 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     materials={mockMaterials} 
                     student={student}
                 />
+            )}
+
+            {activeTab === 'achievements' && (
+                <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h2 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3">
+                        <Trophy className="w-7 h-7 text-amber-500" />
+                        Tus Logros
+                    </h2>
+
+                    {/* XP Progress Bar */}
+                    <div className="bg-white p-6 rounded-2xl border-2 border-slate-100 mb-8 shadow-sm">
+                        <div className="flex justify-between items-center mb-3">
+                            <p className="font-bold text-slate-700">Progreso Total</p>
+                            <p className="text-2xl font-black text-indigo-600">{studentXP} XP</p>
+                        </div>
+                        <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-1000"
+                                style={{ width: `${Math.min((studentXP / 1000) * 100, 100)}%` }}
+                            ></div>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">Próximo nivel en {Math.max(0, 1000 - studentXP)} XP</p>
+                    </div>
+
+                    {/* Badges Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        
+                        {/* Badge Explorador */}
+                        <div className={cn(
+                            "bg-white p-6 rounded-2xl border-2 transition-all",
+                            studentXP >= 100 ? "border-amber-200 shadow-lg" : "border-slate-100 opacity-50 grayscale"
+                        )}>
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center shadow-lg">
+                                <span className="text-3xl">🥉</span>
+                            </div>
+                            <h3 className="font-bold text-center text-slate-800 mb-2">Explorador</h3>
+                            <p className="text-xs text-center text-slate-500">Completa tu primera tarea</p>
+                            <div className="mt-4 text-center">
+                                <span className={cn(
+                                    "text-xs font-bold px-3 py-1 rounded-full",
+                                    studentXP >= 100 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-400"
+                                )}>
+                                    {studentXP >= 100 ? "Desbloqueado" : "Bloqueado"}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Badge Aprendiz */}
+                        <div className={cn(
+                            "bg-white p-6 rounded-2xl border-2 transition-all",
+                            studentXP >= 500 ? "border-slate-300 shadow-lg" : "border-slate-100 opacity-50 grayscale"
+                        )}>
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-slate-300 to-slate-500 rounded-full flex items-center justify-center shadow-lg">
+                                <span className="text-3xl">🥈</span>
+                            </div>
+                            <h3 className="font-bold text-center text-slate-800 mb-2">Aprendiz</h3>
+                            <p className="text-xs text-center text-slate-500">Acumula 500 XP</p>
+                            <div className="mt-4 text-center">
+                                <span className={cn(
+                                    "text-xs font-bold px-3 py-1 rounded-full",
+                                    studentXP >= 500 ? "bg-slate-100 text-slate-700" : "bg-slate-100 text-slate-400"
+                                )}>
+                                    {studentXP >= 500 ? "Desbloqueado" : `${studentXP}/500 XP`}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Badge Maestro */}
+                        <div className={cn(
+                            "bg-white p-6 rounded-2xl border-2 transition-all",
+                            studentXP >= 1000 ? "border-yellow-200 shadow-lg" : "border-slate-100 opacity-50 grayscale"
+                        )}>
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center shadow-lg">
+                                <span className="text-3xl">🥇</span>
+                            </div>
+                            <h3 className="font-bold text-center text-slate-800 mb-2">Maestro</h3>
+                            <p className="text-xs text-center text-slate-500">Alcanza 1000 XP</p>
+                            <div className="mt-4 text-center">
+                                <span className={cn(
+                                    "text-xs font-bold px-3 py-1 rounded-full",
+                                    studentXP >= 1000 ? "bg-yellow-100 text-yellow-700" : "bg-slate-100 text-slate-400"
+                                )}>
+                                    {studentXP >= 1000 ? "Desbloqueado" : `${studentXP}/1000 XP`}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Badge Racha */}
+                        <div className="bg-white p-6 rounded-2xl border-2 border-slate-100 opacity-50 grayscale">
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center shadow-lg">
+                                <Flame className="w-8 h-8 text-white" />
+                            </div>
+                            <h3 className="font-bold text-center text-slate-800 mb-2">Imparable</h3>
+                            <p className="text-xs text-center text-slate-500">Mantén una racha de 7 días</p>
+                            <div className="mt-4 text-center">
+                                <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-400">
+                                    Próximamente
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Badge Comunidad */}
+                        <div className="bg-white p-6 rounded-2xl border-2 border-slate-100 opacity-50 grayscale">
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center shadow-lg">
+                                <Users className="w-8 h-8 text-white" />
+                            </div>
+                            <h3 className="font-bold text-center text-slate-800 mb-2">Social</h3>
+                            <p className="text-xs text-center text-slate-500">Participa en 10 discusiones</p>
+                            <div className="mt-4 text-center">
+                                <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-400">
+                                    Próximamente
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Badge Perfección */}
+                        <div className="bg-white p-6 rounded-2xl border-2 border-slate-100 opacity-50 grayscale">
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-purple-400 to-pink-500 rounded-full flex items-center justify-center shadow-lg">
+                                <span className="text-3xl">⭐</span>
+                            </div>
+                            <h3 className="font-bold text-center text-slate-800 mb-2">Perfeccionista</h3>
+                            <p className="text-xs text-center text-slate-500">Saca 100% en 5 tareas</p>
+                            <div className="mt-4 text-center">
+                                <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-400">
+                                    Próximamente
+                                </span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {/* Stats Summary */}
+                    <div className="mt-10 bg-gradient-to-br from-indigo-50 to-purple-50 p-8 rounded-3xl border-2 border-indigo-100">
+                        <h3 className="font-black text-xl text-indigo-900 mb-6">Resumen de Progreso</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <div className="text-center">
+                                <p className="text-3xl font-black text-indigo-600">{completedTasks.length}</p>
+                                <p className="text-sm text-slate-600 mt-1">Tareas Completadas</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-3xl font-black text-purple-600">{studentXP}</p>
+                                <p className="text-sm text-slate-600 mt-1">Puntos XP</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-3xl font-black text-amber-600">{studentLevel}</p>
+                                <p className="text-sm text-slate-600 mt-1">Nivel Actual</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-3xl font-black text-emerald-600">
+                                    {studentXP >= 1000 ? 3 : studentXP >= 500 ? 2 : studentXP >= 100 ? 1 : 0}
+                                </p>
+                                <p className="text-sm text-slate-600 mt-1">Badges Desbloqueados</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
 
         </div>

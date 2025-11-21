@@ -121,9 +121,21 @@ export const getMoodleTasks = async () => {
 };
 
 // ENVIAR RESULTADO (Crea un post en el foro 7)
-export const submitTaskResult = async (taskTitle: string, studentName: string, score: number, total: number) => {
+export const submitTaskResult = async (taskId: string, taskTitle: string, studentId: string, studentName: string, score: number, total: number, answers: any[] = []) => {
   const grade = (score / total) * 10; // Nota sobre 10
   const subject = `Entrega: ${taskTitle} - ${studentName}`;
+
+  // JSON completo con toda la información necesaria para el portafolio
+  const jsonPayload = JSON.stringify({
+    taskId,
+    taskTitle,
+    studentId,
+    studentName,
+    score,
+    total,
+    grade,
+    answers
+  });
 
   // Creamos un reporte visual bonito para Moodle y el JSON oculto para nosotros
   const message = `
@@ -134,7 +146,7 @@ export const submitTaskResult = async (taskTitle: string, studentName: string, s
       <li>Total Preguntas: ${total}</li>
     </ul>
     <hr/>
-    <!--JSON:{"score":${score},"total":${total},"grade":${grade}}-->
+    <!--JSON:${jsonPayload}-->
   `;
 
   return await callMoodle("mod_forum_add_discussion", { 
@@ -144,7 +156,7 @@ export const submitTaskResult = async (taskTitle: string, studentName: string, s
   });
 };
 
-// LEER ENTREGAS (Desde el Foro 7)
+// LEER ENTREGAS (Desde el Foro 7 - Recuperar memoria del alumno)
 export const getMoodleSubmissions = async () => {
   // ID del Foro de Entregas
   const SUBMISSIONS_FORUM_ID = 7; 
@@ -157,13 +169,20 @@ export const getMoodleSubmissions = async () => {
     const match = disc.message.match(/<!--JSON:(.*?)-->/);
     const jsonData = match ? JSON.parse(match[1]) : {};
 
+    // Extraer task_id del subject si viene en formato "Entrega: TaskTitle - StudentName"
+    const taskTitle = disc.subject.replace('Entrega: ', '').split(' - ')[0];
+
     return {
       id: `sub-${disc.discussion}`,
-      student_name: disc.userfullname, // Nombre real del alumno en Moodle
-      task_title: disc.subject.replace('Entrega: ', '').split(' - ')[0],
+      task_id: jsonData.taskId || taskTitle, // Guardar referencia a la tarea
+      task_title: jsonData.taskTitle || taskTitle,
+      student_id: String(disc.userid || ''), // ID numérico del usuario en Moodle
+      student_name: jsonData.studentName || disc.userfullname, // Nombre real del alumno
+      student_email: disc.useremail || '', // Email si está disponible
       score: jsonData.score || 0,
       total: jsonData.total || 0,
       grade: jsonData.grade || 0,
+      answers: jsonData.answers || [], // Respuestas guardadas
       submitted_at: new Date(disc.created * 1000).toISOString(),
       status: 'submitted'
     };

@@ -10,7 +10,7 @@ import { StudentDashboard } from './components/StudentDashboard';
 import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
-import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask } from './lib/moodle';
+import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask, getMoodleSubmissions } from './lib/moodle';
 import {
   mockClassroom,
   mockStudents,
@@ -51,6 +51,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [realSubmissions, setRealSubmissions] = useState<Submission[]>([]); // Memoria del alumno
   
   const [usernameInput, setUsernameInput] = useState("");
 
@@ -131,28 +132,68 @@ export default function App() {
         }
         // Cualquier otro (hans, pedro...) será student por defecto.
 
-        const userProfile: User = {
-            id: String(moodleUser.id),
-            email: moodleUser.email,
-            name: moodleUser.fullname,
-            role: role,
-            avatar_url: moodleUser.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-        };
-        setCurrentUser(userProfile);
-        
         // CARGA REAL DE TAREAS
         toast.loading("Sincronizando tareas...");
         try {
             const realTasks = await getMoodleTasks();
             setTasks(realTasks);
             toast.dismiss();
-            toast.success(`¡Hola ${userProfile.name}! Tienes ${realTasks.length} tareas.`);
+            toast.success(`Tareas cargadas: ${realTasks.length}`);
         } catch (e) {
             console.error(e);
             setTasks([]); // Fallback vacío
         }
+
+        // ✅ CARGA REAL DE ENTREGAS (Memoria del Alumno)
+        toast.loading("Cargando tu historial...");
+        try {
+            const allSubmissions = await getMoodleSubmissions();
+            console.log("📦 Submissions de Moodle:", allSubmissions);
+            
+            // Filtrar solo las entregas del usuario actual
+            const mySubmissions = allSubmissions.filter((sub: any) => 
+              sub.student_name === moodleUser.fullname || 
+              sub.student_id === String(moodleUser.id)
+            );
+            
+            setRealSubmissions(mySubmissions);
+            
+            // Calcular XP real basado en entregas
+            const totalXP = mySubmissions.length * 100; // 100 XP por tarea completada
+            
+            console.log(`✅ ${mySubmissions.length} entregas tuyas cargadas. XP: ${totalXP}`);
+            
+            const userProfile: User = {
+                id: String(moodleUser.id),
+                email: moodleUser.email,
+                name: moodleUser.fullname,
+                role: role,
+                avatar_url: moodleUser.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            };
+            
+            setCurrentUser(userProfile);
+            
+            toast.dismiss();
+            toast.success(`¡Hola ${userProfile.name}! ${mySubmissions.length} entregas encontradas.`);
+        } catch (e) {
+            console.error("Error cargando submissions:", e);
+            setRealSubmissions([]); // Fallback vacío
+            
+            const userProfile: User = {
+                id: String(moodleUser.id),
+                email: moodleUser.email,
+                name: moodleUser.fullname,
+                role: role,
+                avatar_url: moodleUser.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            };
+            
+            setCurrentUser(userProfile);
+        }
+        
         setNotifications([]);
       } else {
         toast.error("Usuario no encontrado en Moodle");
@@ -573,16 +614,16 @@ export default function App() {
                     ...currentUser, 
                     // Valores por defecto para evitar crash si faltan datos
                     total_tasks: tasks.length,
-                    completed_tasks: 0,
+                    completed_tasks: realSubmissions.length,
                     average_grade: 0,
-                    xp_points: 0,
+                    xp_points: realSubmissions.length * 100,
                     level: 1,
                     current_level_code: 'A1',
                     materials_viewed: []
                 }}
                 // CORRECCIÓN AQUÍ: Pasamos todas las tareas, sin filtrar por asignación
                 tasks={tasks}
-                submissions={mockSubmissions.filter(sub => sub.student_id === currentUser.id)}
+                submissions={realSubmissions.length > 0 ? realSubmissions : mockSubmissions.filter(sub => sub.student_id === currentUser.id)}
                 onLogout={handleLogout}
                 onSelectTask={(task) => {
                     if (task.content_data.type === 'pdf') {
@@ -634,15 +675,34 @@ export default function App() {
                     // 1. Feedback visual inmediato
                     toast.success("¡Buen trabajo! Guardando nota...");
                     
-                    // 2. Enviar a Moodle (Foro 7)
-                    if (currentUser) {
+                    // 2. Enviar a Moodle (Foro 7) con información completa
+                    if (currentUser && activeExercise) {
+                        // Buscar el task_id de la tarea actual
+                        const currentTask = tasks.find(t => t.title === activeExercise.title);
+                        const taskId = currentTask?.id || 'task-unknown';
+                        
                         await submitTaskResult(
+                            taskId,
                             activeExercise.title, 
+                            currentUser.id,
                             currentUser.name, 
                             score, 
-                            activeExercise.questions.length
+                            activeExercise.questions.length,
+                            [] // TODO: Pasar respuestas reales si es necesario
                         );
                         toast.success("✅ Nota registrada en Moodle");
+                        
+                        // Recargar submissions para actualizar el portafolio
+                        try {
+                            const allSubmissions = await getMoodleSubmissions();
+                            const mySubmissions = allSubmissions.filter((sub: any) => 
+                              sub.student_name === currentUser.name || 
+                              sub.student_id === currentUser.id
+                            );
+                            setRealSubmissions(mySubmissions);
+                        } catch (e) {
+                            console.error("Error recargando submissions:", e);
+                        }
                     }
                     
                     // 3. Cambiar vista
