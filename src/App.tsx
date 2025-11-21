@@ -114,18 +114,24 @@ export default function App() {
       const moodleUser = await getUserByUsername(username);
 
       if (moodleUser) {
-        // Lógica de Roles: Admin, Luigi y cualquiera que diga 'teacher' son Profesores
+        // Lógica de Roles ESTRICTA según configuración del usuario
         const lowerName = username.toLowerCase();
-        const isTeacher = lowerName === 'admin' || 
-                          lowerName === 'luigi' || 
-                          lowerName.includes('teacher') || 
-                          lowerName.includes('profesor');
+        let role: 'teacher' | 'student' = 'student'; // Por defecto estudiante
+
+        if (lowerName === 'luigi') {
+            role = 'teacher'; // Luigi SIEMPRE es Profesor
+        } else if (lowerName === 'admin') {
+            role = 'student'; // Admin SIEMPRE es Estudiante (para pruebas)
+        } else if (lowerName.includes('teacher') || lowerName.includes('profesor')) {
+            role = 'teacher';
+        }
+        // Cualquier otro (hans, pedro...) será student por defecto.
 
         const userProfile: User = {
             id: String(moodleUser.id),
             email: moodleUser.email,
             name: moodleUser.fullname,
-            role: isTeacher ? 'teacher' : 'student',
+            role: role,
             avatar_url: moodleUser.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -199,38 +205,34 @@ export default function App() {
       const enrolledUsers = await getEnrolledUsers(Number(courseId));
       
       if (Array.isArray(enrolledUsers)) {
-         // FILTRADO ESTRICTO POR ROL DE MOODLE
+         // FILTRO DE ESTUDIANTES RELAJADO
          const realStudents = enrolledUsers.filter((u: any) => {
-            // 1. Excluir al usuario logueado
-            if (String(u.id) === String(currentUser?.id)) return false;
-            // 2. Verificar roles en Moodle
-            // u.roles es un array ej: [{ shortname: 'student', ... }]
-            const hasStudentRole = u.roles?.some((r: any) => r.shortname === 'student');
-            const isTeacherOrAdmin = u.roles?.some((r: any) => 
-                ['teacher', 'editingteacher', 'manager'].includes(r.shortname)
-            );
-            // Solo mostramos si es estudiante y NO es profesor/admin
-            return hasStudentRole && !isTeacherOrAdmin;
+              // 1. Excluir al usuario logueado (yo mismo)
+              if (String(u.id) === String(currentUser?.id)) return false;
+              // 2. Verificar si tiene rol de estudiante
+              const roles = u.roles || [];
+              const hasStudentRole = roles.some((r: any) => r.shortname === 'student');
+              
+              // Si tiene rol de estudiante, lo mostramos (aunque tenga otros)
+              return hasStudentRole;
          });
-
+         
          const mappedStudents: Student[] = realStudents.map((u: any) => ({
             id: String(u.id),
             name: u.fullname,
             email: u.email,
             avatar_url: u.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.fullname}`,
-            current_level_code: 'A1',
-            progress: 0,
-            streak_days: 0,
-            xp: 0,
-            stats: { listening: 0, reading: 0, speaking: 0, writing: 0 },
-            achievements: [],
+            // Mapeamos campos que Moodle no tiene con valores por defecto para la UI
+            level: 1,
+            xp_points: 0,
             completed_tasks: 0,
-            total_tasks: 10,
-            materials_viewed: [],
+            total_tasks: tasks.length || 10, // Referencia a las tareas del curso
             average_grade: 0,
+            joined_at: new Date().toISOString(),
+            materials_viewed: [],
+            current_level_code: 'A1',
             role: 'student'
          }));
-
          setStudents(mappedStudents);
          
          if (mappedStudents.length === 0) {
