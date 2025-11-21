@@ -7,6 +7,7 @@ const MOODLE_TOKEN = "8b1869dbac3f73adb6ed03421fdd8535";
 
 // ID del Foro "Repositorio" (Confirmado por el usuario: id=4)
 const TASKS_FORUM_ID = 4;
+const SUBMISSIONS_FORUM_ID = 7; // BUZÓN DE ENTREGAS
 
 interface MoodleParams {
   [key: string]: string | number | boolean;
@@ -53,16 +54,40 @@ export const getSiteInfo = async () => {
   return await callMoodle("core_webservice_get_site_info");
 };
 
+// Obtener cursos
+export const getCourses = async () => {
+  return await callMoodle("core_course_get_courses");
+};
+
+// Obtener usuarios matriculados en un curso
+export const getEnrolledUsers = async (courseId: number) => {
+  return await callMoodle("core_enrol_get_enrolled_users", { courseid: courseId });
+};
+
+// Obtener usuario por nombre de usuario (Login)
+export const getUserByUsername = async (username: string) => {
+  const data = await callMoodle("core_user_get_users_by_field", {
+    field: 'username',
+    values: [username]
+  });
+  
+  // La API devuelve un array de usuarios
+  if (Array.isArray(data) && data.length > 0) {
+    return data[0];
+  }
+  return null;
+};
+
 // GUARDAR TAREA (Crea un post en el foro con el JSON oculto)
 export const createMoodleTask = async (title: string, description: string, jsonSettings: any) => {
   const payload = JSON.stringify(jsonSettings);
-  // Guardamos el JSON en un comentario HTML invisible al final del mensaje
+  // El secreto está en el comentario HTML oculto
   const messageContent = `${description}<br/><hr/><!--JSON:${payload}-->`;
-
-  return await callMoodle("mod_forum_add_discussion", {
-    forumid: TASKS_FORUM_ID,
-    subject: title,
-    message: messageContent
+  
+  return await callMoodle("mod_forum_add_discussion", { 
+    forumid: TASKS_FORUM_ID, 
+    subject: title, 
+    message: messageContent 
   });
 };
 
@@ -73,16 +98,16 @@ export const getMoodleTasks = async () => {
   if (!data || !data.discussions) return [];
 
   return data.discussions.map((disc: any) => {
-    // Intentar extraer el JSON oculto
+    // Rescatamos el JSON
     const match = disc.message.match(/<!--JSON:(.*?)-->/);
-    const contentData = match ? JSON.parse(match[1]) : { type: 'text', content: disc.message };
+    const contentData = match ? JSON.parse(match[1]) : { type: 'form', questions: [] };
 
     return {
       id: `discussion-${disc.discussion}`,
       title: disc.subject,
-      description: disc.message.split('<br/><hr/>')[0].replace(/<[^>]*>?/gm, ''), // Limpiar HTML para preview
+      description: disc.message.split('<br/><hr/>')[0].replace(/<[^>]*>?/gm, ''),
       content_data: contentData,
-      category: 'homework', // Default
+      category: 'homework',
       status: 'published',
       color_tag: '#A8D8FF',
       created_at: new Date(disc.created * 1000).toISOString()
@@ -90,12 +115,26 @@ export const getMoodleTasks = async () => {
   });
 };
 
-// 2. Obtener cursos
-export const getCourses = async () => {
-  return await callMoodle("core_course_get_courses");
-};
+// ENVIAR RESULTADO (Crea un post en el foro 7)
+export const submitTaskResult = async (taskTitle: string, studentName: string, score: number, total: number) => {
+  const grade = (score / total) * 10; // Nota sobre 10
+  const subject = `Entrega: ${taskTitle} - ${studentName}`;
 
-// Obtener usuarios matriculados en un curso
-export const getEnrolledUsers = async (courseId: number) => {
-  return await callMoodle("core_enrol_get_enrolled_users", { courseid: courseId });
+  // Creamos un reporte visual bonito para Moodle y el JSON oculto para nosotros
+  const message = `
+    <h3>Resultado: ${grade.toFixed(1)} / 10</h3>
+    <p>El estudiante <strong>${studentName}</strong> ha completado la tarea.</p>
+    <ul>
+      <li>Aciertos: ${score}</li>
+      <li>Total Preguntas: ${total}</li>
+    </ul>
+    <hr/>
+    <!--JSON:{"score":${score},"total":${total},"grade":${grade}}-->
+  `;
+
+  return await callMoodle("mod_forum_add_discussion", { 
+    forumid: SUBMISSIONS_FORUM_ID, 
+    subject: subject, 
+    message: message 
+  });
 };

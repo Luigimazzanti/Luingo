@@ -10,7 +10,7 @@ import { StudentDashboard } from './components/StudentDashboard';
 import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
-import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers } from './lib/moodle';
+import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername } from './lib/moodle';
 import {
   mockClassroom,
   mockStudents,
@@ -19,6 +19,7 @@ import {
 } from './lib/mockData';
 import { Comment, Correction, Notification, User, Task, Student, Exercise, Submission } from './types'; 
 import { Button } from './components/ui/button';
+import { Input } from './components/ui/input';
 import { ArrowLeft, MessageCircle, Play, LogOut, Sparkles, Target, Home, Settings, RefreshCw } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './components/ui/dialog';
@@ -47,6 +48,8 @@ export default function App() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
+  const [usernameInput, setUsernameInput] = useState("");
+
   const initMoodle = async () => {
     setLoading(true);
     setConnectionError(null);
@@ -105,26 +108,70 @@ export default function App() {
     initMoodle();
   }, []);
 
-  const initializeUser = async (roleData: { role: 'teacher' | 'student' }) => {
+  const initializeUser = async (username: string) => {
     setLoading(true);
     try {
-      const userProfile: User = {
-        id: 'user-moodle-1',
-        email: 'demo@moodle.school',
-        name: roleData.role === 'teacher' ? 'Profesor Moodle' : 'Estudiante Moodle',
-        role: roleData.role,
-        avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${roleData.role}`,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setCurrentUser(userProfile);
-      setComments(mockComments);
-      // Tasks are loaded from Moodle in initMoodle
-      // Students are loaded when selecting a class now
-      setNotifications([]);
+      const moodleUser = await getUserByUsername(username);
+
+      if (moodleUser) {
+        const userProfile: User = {
+            id: String(moodleUser.id),
+            email: moodleUser.email,
+            name: moodleUser.fullname,
+            // Heurística básica para rol: si el username contiene 'teacher' o 'profesor' es profesor, sino estudiante
+            role: username.toLowerCase().includes('teacher') || username.toLowerCase().includes('profesor') ? 'teacher' : 'student',
+            avatar_url: moodleUser.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        setCurrentUser(userProfile);
+        
+        // Cargar tareas reales del foro
+        const forumTasks = await getMoodleTasks();
+        if (forumTasks.length > 0) {
+            setTasks(forumTasks);
+            // Asignación temporal (Mock) para visualización
+            const newAssignments: Submission[] = [];
+            // Si es estudiante, nos auto-asignamos las tareas y preparamos el perfil de estudiante
+            if (userProfile.role === 'student') {
+                 // Adaptamos User -> Student para que funcione el Dashboard
+                 const studentProfile: Student = {
+                    ...userProfile,
+                    current_level_code: 'A1',
+                    progress: 0,
+                    streak_days: 0,
+                    xp: 0,
+                    stats: { listening: 0, reading: 0, speaking: 0, writing: 0 },
+                    achievements: [],
+                    completed_tasks: 0,
+                    total_tasks: forumTasks.length,
+                    materials_viewed: [],
+                    average_grade: 0
+                 };
+                 setStudents([studentProfile]);
+
+                 forumTasks.forEach((task: Task) => {
+                    newAssignments.push({
+                      id: `assign-${task.id}-${userProfile.id}`,
+                      task_id: task.id,
+                      student_id: userProfile.id,
+                      status: 'assigned',
+                      due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                    });
+                 });
+                 setMockSubmissions(newAssignments);
+            }
+        }
+
+        setComments(mockComments);
+        setNotifications([]);
+        toast.success(`Bienvenido, ${userProfile.name}`);
+      } else {
+        toast.error("Usuario no encontrado en Moodle");
+      }
     } catch (error) {
       console.error("Error initializing data:", error);
-      toast.error("Error al cargar datos");
+      toast.error("Error al iniciar sesión");
     } finally {
       setLoading(false);
     }
@@ -161,7 +208,11 @@ export default function App() {
                 speaking: 0,
                 writing: 0
             },
-            achievements: []
+            achievements: [],
+            completed_tasks: 0,
+            total_tasks: 10,
+            materials_viewed: [],
+            average_grade: 0
          }));
 
          setStudents(mappedStudents);
@@ -190,8 +241,13 @@ export default function App() {
 
   const handleSaveNewTask = async (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => {
       // Guardar tarea en Moodle (Foro)
-      await createMoodleTask(taskData.title, taskData.description, taskData.content_data);
-      toast.success("Tarea guardada en Moodle exitosamente");
+      try {
+        await createMoodleTask(taskData.title, taskData.description, taskData.content_data);
+        toast.success("Tarea guardada en Moodle exitosamente");
+      } catch (error) {
+        console.error("Error saving task to Moodle:", error);
+        toast.error("Error al guardar en Moodle");
+      }
 
       setShowTaskBuilder(false);
       setTargetStudentForTask(undefined);
@@ -294,8 +350,20 @@ export default function App() {
                  )}
 
                  <div className="grid gap-4">
-                    <Button className="h-12 text-lg" onClick={() => initializeUser({ role: 'teacher' })}>Soy Profesor</Button>
-                    <Button variant="outline" className="h-12 text-lg" onClick={() => initializeUser({ role: 'student' })}>Soy Estudiante</Button>
+                    <Input 
+                       placeholder="Nombre de Usuario (ej. hans)" 
+                       value={usernameInput}
+                       onChange={(e) => setUsernameInput(e.target.value)}
+                       className="h-12 text-lg"
+                       onKeyDown={(e) => e.key === 'Enter' && initializeUser(usernameInput)}
+                    />
+                    <Button 
+                       className="h-12 text-lg" 
+                       onClick={() => initializeUser(usernameInput)}
+                       disabled={!usernameInput.trim()}
+                    >
+                       Entrar
+                    </Button>
                  </div>
 
                  <Toaster richColors />
@@ -488,9 +556,23 @@ export default function App() {
             <ExercisePlayer 
                 exercise={activeExercise}
                 onExit={() => setView('dashboard')}
-                onComplete={(score) => {
-                    toast.success(`¡Tarea enviada al Profesor!`);
-                    setView('correction');
+                onComplete={async (score) => {
+                    // 1. Feedback visual inmediato
+                    toast.success("¡Buen trabajo! Guardando nota...");
+                    
+                    // 2. Enviar a Moodle (Foro 7)
+                    if (currentUser) {
+                        await submitTaskResult(
+                            activeExercise.title, 
+                            currentUser.name, 
+                            score, 
+                            activeExercise.questions.length
+                        );
+                        toast.success("✅ Nota registrada en Moodle");
+                    }
+                    
+                    // 3. Cambiar vista
+                    setView('correction'); // O volver al dashboard
                 }}
             />
         )}
