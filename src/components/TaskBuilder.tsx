@@ -2,20 +2,12 @@ import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { Sparkles, X, Save, Plus, Trash2, CheckCircle2, GripVertical, List, Type, MoveHorizontal, Link as LinkIcon, Mic, CheckSquare, Image as ImageIcon } from 'lucide-react';
+import { Sparkles, X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Switch } from './ui/switch'; // Asegúrate de tener este componente o usa un checkbox simple
 
-interface TaskBuilderProps {
-  onSaveTask: (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => void;
-  onCancel: () => void;
-  initialStudentId?: string;
-}
-
-// 🚀 TIPOS AMPLIADOS
-type QuestionType = 'choice' | 'fill_blank' | 'order_sentence' | 'matching' | 'true_false' | 'open';
+// Definición de Tipos
+type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
 
 interface QuestionDraft {
   id: number;
@@ -23,333 +15,257 @@ interface QuestionDraft {
   question_text: string;
   options: string[]; 
   correct_answer: string; 
-  pairs: { left: string; right: string }[]; // Para Matching
-  allow_audio: boolean; // Para Open
   explanation: string;
+  allow_audio?: boolean;
+}
+
+interface TaskBuilderProps {
+  onSaveTask: (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => void;
+  onCancel: () => void;
+  initialStudentId?: string;
 }
 
 export const TaskBuilder: React.FC<TaskBuilderProps> = ({ onSaveTask, onCancel, initialStudentId }) => {
+  // Estado General
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<'homework' | 'quiz' | 'project'>('homework');
   const [assignType, setAssignType] = useState<'individual' | 'level' | 'class'>(initialStudentId ? 'individual' : 'class');
   const [selectedLevel, setSelectedLevel] = useState('A1');
 
-  // --- ESTADO INICIAL CON PREGUNTA DE EJEMPLO ---
+  // Estado de Preguntas
   const [questions, setQuestions] = useState<QuestionDraft[]>([
-      { 
-        id: Date.now(), 
-        type: 'choice', 
-        question_text: '', 
-        options: ['', '', ''], 
-        correct_answer: '', 
-        pairs: [{ left: '', right: '' }, { left: '', right: '' }],
-        allow_audio: false,
-        explanation: '' 
-      }
+      { id: Date.now(), type: 'choice', question_text: '', options: ['', ''], correct_answer: '', explanation: '', allow_audio: false }
   ]);
 
+  // Estado IA
   const [aiTopic, setAiTopic] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [activeTab, setActiveTab] = useState('manual');
 
-  // --- MANEJADORES DE LÓGICA COMPLEJA ---
-
+  // --- ACCIONES MANUALES ---
   const addQuestion = () => {
-      setQuestions([...questions, {
-          id: Date.now(),
-          type: 'choice',
-          question_text: '',
-          options: ['', '', ''],
-          correct_answer: '',
-          pairs: [{ left: '', right: '' }, { left: '', right: '' }],
-          allow_audio: false,
-          explanation: ''
-      }]);
+      setQuestions([...questions, { id: Date.now(), type: 'choice', question_text: '', options: ['', ''], correct_answer: '', explanation: '', allow_audio: false }]);
+  };
+
+  const removeQuestion = (id: number) => {
+      if (questions.length > 1) setQuestions(questions.filter(q => q.id !== id));
   };
 
   const updateQuestion = (id: number, field: keyof QuestionDraft, value: any) => {
       setQuestions(questions.map(q => q.id === id ? { ...q, [field]: value } : q));
   };
 
-  // Manejo de Parejas (Matching)
-  const updatePair = (qId: number, pairIndex: number, side: 'left' | 'right', value: string) => {
-      const q = questions.find(q => q.id === qId);
+  // Gestión de Opciones (Choice)
+  const updateOption = (qId: number, idx: number, text: string) => {
+      const q = questions.find(x => x.id === qId);
       if (!q) return;
-      const newPairs = [...q.pairs];
-      newPairs[pairIndex] = { ...newPairs[pairIndex], [side]: value };
-      updateQuestion(qId, 'pairs', newPairs);
+      const newOptions = [...q.options];
+      newOptions[idx] = text;
+      if (q.correct_answer === q.options[idx]) updateQuestion(qId, 'correct_answer', text);
+      updateQuestion(qId, 'options', newOptions);
   };
 
-  const addPair = (qId: number) => {
-      const q = questions.find(q => q.id === qId);
-      if (!q) return;
-      updateQuestion(qId, 'pairs', [...q.pairs, { left: '', right: '' }]);
+  const addOption = (qId: number) => {
+      const q = questions.find(x => x.id === qId);
+      if (q) updateQuestion(qId, 'options', [...q.options, '']);
   };
 
+  const removeOption = (qId: number, idx: number) => {
+      const q = questions.find(x => x.id === qId);
+      if (q && q.options.length > 2) {
+          const newOptions = q.options.filter((_, i) => i !== idx);
+          updateQuestion(qId, 'options', newOptions);
+      }
+  };
+
+  // --- MAGIA IA ---
+  const handleAiGenerate = () => {
+      if (!aiTopic) return;
+      setIsGenerating(true);
+      
+      // Simulación de respuesta inteligente
+      setTimeout(() => {
+          setTitle(`Lección sobre: ${aiTopic}`);
+          setDescription(`Ejercicios prácticos generados automáticamente para aprender ${aiTopic}.`);
+          setQuestions([
+              { 
+                  id: Date.now(), 
+                  type: 'choice', 
+                  question_text: `¿Cuál es la definición correcta de ${aiTopic}?`, 
+                  options: ['Opción A (Correcta)', 'Opción B (Distractor)', 'Opción C'], 
+                  correct_answer: 'Opción A (Correcta)', 
+                  explanation: 'Esta es la definición más aceptada.',
+                  allow_audio: false
+              },
+              { 
+                  id: Date.now() + 1, 
+                  type: 'fill_blank', 
+                  question_text: `El concepto de [...] es fundamental aquí.`, 
+                  options: [], 
+                  correct_answer: aiTopic.split(' ')[0] || 'clave', 
+                  explanation: 'Es la palabra base del tema.',
+                  allow_audio: false
+              }
+          ]);
+          setIsGenerating(false);
+          setActiveTab('manual'); // Volver al editor para revisar
+      }, 1500);
+  };
+
+  // --- GUARDAR ---
   const handleSave = () => {
+    if (!title.trim()) { alert("Falta el título"); return; }
     const taskData = {
-      title: title || 'Nueva Tarea',
-      description: description || 'Sin descripción',
-      category,
+      title, description, category,
       content_data: { type: 'form', questions },
-      ai_generated: false,
-      color_tag: '#A8D8FF'
+      ai_generated: false, color_tag: '#A8D8FF'
     };
     const scope = { type: assignType, targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined };
     onSaveTask(taskData, scope as any);
   };
 
-  // --- RENDERIZADO DE CONTENIDO POR TIPO ---
-  const renderQuestionContent = (q: QuestionDraft, idx: number) => {
+  // --- RENDERIZADO DEL CUERPO DE PREGUNTA ---
+  const renderQuestionBody = (q: QuestionDraft) => {
       switch (q.type) {
-          case 'choice':
-              return (
-                  <div className="space-y-3">
-                      <label className="text-xs font-bold text-slate-400 uppercase">Opciones (Marca la correcta)</label>
-                      {q.options.map((opt, i) => (
-                          <div key={i} className="flex items-center gap-3">
-                              <button 
-                                  onClick={() => {
-                                      const newOpts = [...q.options];
-                                      updateQuestion(q.id, 'correct_answer', newOpts[i]);
-                                  }}
-                                  className={cn("shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center", q.correct_answer === opt && opt !== '' ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300 hover:border-emerald-400")}
-                              >
-                                  <CheckCircle2 className="w-4 h-4" />
-                              </button>
-                              <Input 
-                                  value={opt} 
-                                  onChange={(e) => {
-                                      const newOpts = [...q.options];
-                                      newOpts[i] = e.target.value;
-                                      updateQuestion(q.id, 'options', newOpts);
-                                      // Si era la correcta, actualizamos también el valor de correct_answer
-                                      if (q.correct_answer === opt) updateQuestion(q.id, 'correct_answer', e.target.value);
-                                  }}
-                                  placeholder={`Opción ${i + 1}`}
-                                  className={cn("bg-white", q.correct_answer === opt && opt !== '' && "border-emerald-500")}
-                              />
-                          </div>
-                      ))}
-                      <Button variant="ghost" size="sm" onClick={() => updateQuestion(q.id, 'options', [...q.options, ''])} className="text-indigo-600 text-xs font-bold">+ Añadir Opción</Button>
-                  </div>
-              );
-
-          case 'matching':
-              return (
-                  <div className="space-y-3">
-                      <div className="flex justify-between text-xs font-bold text-slate-400 uppercase px-1">
-                          <span>Columna A (Concepto)</span>
-                          <span>Columna B (Definición/Imagen)</span>
-                      </div>
-                      {q.pairs.map((pair, i) => (
-                          <div key={i} className="flex items-center gap-4">
-                              <Input 
-                                  value={pair.left} 
-                                  onChange={(e) => updatePair(q.id, i, 'left', e.target.value)}
-                                  placeholder="Ej: Manzana"
-                                  className="bg-white border-indigo-100 focus:border-indigo-400"
-                              />
-                              <LinkIcon className="w-4 h-4 text-slate-300 shrink-0" />
-                              <Input 
-                                  value={pair.right} 
-                                  onChange={(e) => updatePair(q.id, i, 'right', e.target.value)}
-                                  placeholder="Ej: Fruta roja..."
-                                  className="bg-white border-emerald-100 focus:border-emerald-400"
-                              />
-                              <button onClick={() => updateQuestion(q.id, 'pairs', q.pairs.filter((_, idx) => idx !== i))} className="text-slate-300 hover:text-rose-500"><Trash2 className="w-4 h-4"/></button>
-                          </div>
-                      ))}
-                      <Button variant="ghost" size="sm" onClick={() => addPair(q.id)} className="text-indigo-600 text-xs font-bold">+ Añadir Pareja</Button>
-                  </div>
-              );
-
-          case 'true_false':
-              return (
-                  <div className="flex gap-4 mt-2">
-                      {['Verdadero', 'Falso'].map((val) => (
-                          <button
-                              key={val}
-                              onClick={() => updateQuestion(q.id, 'correct_answer', val)}
-                              className={cn(
-                                  "flex-1 py-3 rounded-xl border-2 font-bold transition-all",
-                                  q.correct_answer === val 
-                                      ? (val === 'Verdadero' ? "bg-emerald-100 border-emerald-500 text-emerald-700" : "bg-rose-100 border-rose-500 text-rose-700")
-                                      : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
-                              )}
-                          >
-                              {val}
+          case 'choice': return (
+              <div className="mt-4 space-y-3 pl-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Opciones (Marca la correcta)</label>
+                  {q.options.map((opt, idx) => (
+                      <div key={idx} className="flex items-center gap-3">
+                          <button onClick={() => updateQuestion(q.id, 'correct_answer', opt)} className={cn("w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all shrink-0", q.correct_answer === opt && opt !== '' ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300 bg-white hover:border-indigo-300")}>
+                              {q.correct_answer === opt && opt !== '' && <CheckCircle2 className="w-4 h-4" />}
                           </button>
-                      ))}
-                  </div>
-              );
-
-          case 'fill_blank':
-              return (
-                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-sm">
-                      <p className="font-bold text-amber-800 mb-2 flex items-center gap-2"><Sparkles className="w-4 h-4"/> Instrucciones:</p>
-                      <p className="text-amber-700 mb-3">Escribe la frase en el título y usa <strong>[...]</strong> donde va el hueco.</p>
-                      <div className="flex items-center gap-3">
-                          <span className="font-bold text-amber-900">Respuesta Oculta:</span>
-                          <Input 
-                              value={q.correct_answer} 
-                              onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)}
-                              placeholder="Palabra exacta"
-                              className="bg-white max-w-xs"
-                          />
+                          <Input value={opt} onChange={(e) => updateOption(q.id, idx, e.target.value)} placeholder={`Opción ${idx + 1}`} className={cn("flex-1 bg-white h-10", q.correct_answer === opt && opt !== '' && "border-emerald-500 ring-1 ring-emerald-500 font-bold text-emerald-900")} />
+                          {q.options.length > 2 && <button onClick={() => removeOption(q.id, idx)} className="p-2 text-slate-300 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>}
                       </div>
-                  </div>
-              );
-
-          case 'open':
-              return (
-                  <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                              <div className={cn("p-2 rounded-lg", q.allow_audio ? "bg-rose-100 text-rose-600" : "bg-slate-200 text-slate-400")}>
-                                  <Mic className="w-5 h-5" />
-                              </div>
-                              <div>
-                                  <p className="font-bold text-slate-700">Permitir Audio</p>
-                                  <p className="text-xs text-slate-500">El alumno puede grabar su voz</p>
-                              </div>
-                          </div>
-                          <Switch 
-                              checked={q.allow_audio}
-                              onCheckedChange={(checked) => updateQuestion(q.id, 'allow_audio', checked)}
-                          />
-                      </div>
-                      <div className="h-px bg-slate-200 w-full"></div>
-                      <p className="text-xs text-slate-400 italic">Esta pregunta requiere corrección manual por parte del profesor.</p>
-                  </div>
-              );
-          
-          default: // order_sentence
-              return (
-                  <div className="bg-indigo-50 p-3 rounded-xl text-indigo-700 text-sm font-medium border border-indigo-100">
-                      Escribe la frase correcta arriba. El sistema la desordenará automáticamente palabra por palabra.
-                  </div>
-              );
+                  ))}
+                  <Button variant="ghost" size="sm" onClick={() => addOption(q.id)} className="text-indigo-600 text-xs font-bold hover:bg-indigo-50 ml-9">+ Añadir opción</Button>
+              </div>
+          );
+          case 'true_false': return (
+              <div className="mt-4 flex gap-4">
+                  {['Verdadero', 'Falso'].map((val) => (
+                      <button key={val} onClick={() => updateQuestion(q.id, 'correct_answer', val)} className={cn("flex-1 py-4 rounded-xl border-2 font-bold text-center transition-all", q.correct_answer === val ? (val === 'Verdadero' ? "bg-emerald-100 border-emerald-500 text-emerald-700" : "bg-rose-100 border-rose-500 text-rose-700") : "bg-white border-slate-200 text-slate-500 hover:border-indigo-200")}>
+                          {val}
+                      </button>
+                  ))}
+              </div>
+          );
+          case 'fill_blank': return (
+              <div className="mt-4 bg-amber-50 p-4 rounded-xl border border-amber-200">
+                  <p className="text-xs text-amber-800 font-bold mb-2">Palabra Oculta:</p>
+                  <Input value={q.correct_answer} onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)} placeholder="Ej: comido" className="bg-white border-amber-300 text-amber-900 font-bold" />
+                  <p className="text-[10px] text-amber-600 mt-2">Tip: Usa <strong>[...]</strong> en el título donde va el hueco.</p>
+              </div>
+          );
+          case 'open': return (
+              <div className="mt-4 p-4 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex justify-between items-center">
+                  <div className="flex items-center gap-3 text-slate-600"><AlignLeft className="w-5 h-5" /><span className="font-bold text-sm">Respuesta Libre</span></div>
+                  <button onClick={() => updateQuestion(q.id, 'allow_audio', !q.allow_audio)} className={cn("px-3 py-1.5 rounded-lg text-xs font-bold border-2 flex gap-2", q.allow_audio ? "bg-indigo-100 border-indigo-500 text-indigo-700" : "bg-white border-slate-200 text-slate-400")}>
+                      <Mic className="w-3 h-3" /> {q.allow_audio ? 'Audio Permitido' : 'Solo Texto'}
+                  </button>
+              </div>
+          );
       }
   };
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-[#F8FAFC] w-full max-w-5xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border-4 border-white">
+      <div className="bg-[#F8FAFC] w-full max-w-5xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border-4 border-white ring-1 ring-slate-900/10">
         
-        {/* Header */}
-        <div className="px-8 py-5 border-b border-slate-200 bg-white flex justify-between items-center">
+        {/* HEADER */}
+        <div className="px-8 py-5 border-b border-slate-200 bg-white flex justify-between items-center sticky top-0 z-20">
           <div>
-             <h2 className="text-2xl font-black text-slate-800 tracking-tight">LuinGo Builder Pro</h2>
-             <p className="text-sm text-slate-500 font-medium">Diseñador de Actividades Avanzado</p>
+             <h2 className="text-2xl font-black text-slate-800 tracking-tight">Diseñador de Tareas</h2>
+             <p className="text-sm text-slate-500 font-medium">Crea manualmente o usa la IA</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onCancel} className="rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600">
-            <X className="w-6 h-6" />
-          </Button>
+          <Button variant="ghost" size="icon" onClick={onCancel} className="rounded-full hover:bg-slate-100 text-slate-400"><X className="w-6 h-6" /></Button>
         </div>
 
         <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-            {/* SIDEBAR (Igual que antes, resumido) */}
-            <div className="w-full md:w-72 bg-white border-r border-slate-200 p-6 overflow-y-auto space-y-6 z-10 hidden md:block">
-                <div className="space-y-3">
-                    <label className="text-xs font-black text-slate-400 uppercase">Detalles</label>
-                    <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título" className="font-bold" />
-                    <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Instrucciones..." className="resize-none h-24" />
-                </div>
-                <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase">Categoría</label>
-                    <Select value={category} onValueChange={(v: any) => setCategory(v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="homework">Tarea</SelectItem>
-                            <SelectItem value="quiz">Examen</SelectItem>
-                            <SelectItem value="project">Proyecto</SelectItem>
-                        </SelectContent>
-                    </Select>
+            {/* SIDEBAR: CONFIG & TABS */}
+            <div className="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col z-10">
+                <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                        <TabsList className="w-full bg-slate-100 p-1 rounded-xl mb-6">
+                            <TabsTrigger value="manual" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:text-indigo-600">✍️ Manual</TabsTrigger>
+                            <TabsTrigger value="ai" className="flex-1 font-bold data-[state=active]:bg-white data-[state=active]:text-amber-600">✨ IA</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="manual" className="space-y-4 mt-0">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase">Título</label>
+                                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Verbos" className="font-bold" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase">Instrucciones</label>
+                                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe la tarea..." className="resize-none h-24 bg-slate-50" />
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="ai" className="space-y-4 mt-0">
+                            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 text-center">
+                                <div className="w-12 h-12 bg-amber-200 rounded-full flex items-center justify-center mx-auto mb-3 text-amber-700"><Sparkles className="w-6 h-6" /></div>
+                                <h4 className="font-black text-amber-900 mb-1">Asistente LuinGo</h4>
+                                <p className="text-xs text-amber-700/80 mb-4">Dime el tema y crearé las preguntas por ti.</p>
+                                <Textarea value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder="Ej: Comida española, nivel A1..." className="bg-white border-amber-200 mb-3" />
+                                <Button onClick={handleAiGenerate} disabled={isGenerating || !aiTopic} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl border-b-4 border-amber-700 active:border-b-0 active:translate-y-1">
+                                    {isGenerating ? 'Creando...' : 'Generar Preguntas'}
+                                </Button>
+                            </div>
+                        </TabsContent>
+                    </Tabs>
                 </div>
             </div>
 
-            {/* MAIN EDITOR */}
-            <div className="flex-1 flex flex-col bg-slate-50/50 overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
+            {/* MAIN: PREGUNTAS (Visible solo en Tab Manual o tras generar) */}
+            <div className="flex-1 bg-slate-50/50 overflow-hidden flex flex-col">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     {questions.map((q, idx) => (
-                        <div key={q.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm group hover:shadow-md transition-all relative">
-                            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-slate-200 rounded-l-2xl group-hover:bg-indigo-400 transition-colors"></div>
+                        <div key={q.id} className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-sm group hover:border-indigo-300 transition-all relative">
+                            <div className="absolute -left-3 top-6 w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black text-sm shadow-lg border-2 border-white">{idx + 1}</div>
                             
-                            {/* Top Bar del Item */}
-                            <div className="flex items-start gap-4 mb-6 pl-2">
-                                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-slate-500 font-black text-sm shrink-0">{idx + 1}</span>
-                                <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    {/* Selector de Tipo MEJORADO */}
-                                    <div className="md:col-span-1">
-                                        <Select value={q.type} onValueChange={(val: any) => updateQuestion(q.id, 'type', val)}>
-                                            <SelectTrigger className="font-bold bg-slate-50 border-slate-200 h-10">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="choice"><span className="flex items-center gap-2"><List className="w-4 h-4" /> Test</span></SelectItem>
-                                                <SelectItem value="true_false"><span className="flex items-center gap-2"><CheckSquare className="w-4 h-4" /> V / F</span></SelectItem>
-                                                <SelectItem value="fill_blank"><span className="flex items-center gap-2"><Type className="w-4 h-4" /> Huecos</span></SelectItem>
-                                                <SelectItem value="matching"><span className="flex items-center gap-2"><LinkIcon className="w-4 h-4" /> Parejas</span></SelectItem>
-                                                <SelectItem value="order_sentence"><span className="flex items-center gap-2"><MoveHorizontal className="w-4 h-4" /> Ordenar</span></SelectItem>
-                                                <SelectItem value="open"><span className="flex items-center gap-2"><Mic className="w-4 h-4" /> Abierta/Voz</span></SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                            <div className="pl-4">
+                                <div className="flex flex-col md:flex-row gap-4 mb-4">
+                                    <div className="relative min-w-[180px]">
+                                        <select value={q.type} onChange={(e) => updateQuestion(q.id, 'type', e.target.value)} className="w-full h-11 pl-9 pr-8 bg-indigo-50 border-2 border-indigo-100 rounded-xl text-sm font-bold text-indigo-800 appearance-none cursor-pointer hover:border-indigo-300 outline-none">
+                                            <option value="choice">Test A/B/C</option>
+                                            <option value="true_false">Verdadero/Falso</option>
+                                            <option value="fill_blank">Rellenar Hueco</option>
+                                            <option value="open">Respuesta Abierta</option>
+                                        </select>
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none">
+                                            {q.type === 'choice' && <List className="w-4 h-4" />}
+                                            {q.type === 'true_false' && <CheckSquare className="w-4 h-4" />}
+                                            {q.type === 'fill_blank' && <Type className="w-4 h-4" />}
+                                            {q.type === 'open' && <AlignLeft className="w-4 h-4" />}
+                                        </div>
                                     </div>
-                                    
-                                    {/* Pregunta Input */}
-                                    <div className="md:col-span-3">
-                                        <Input 
-                                            value={q.question_text}
-                                            onChange={(e) => updateQuestion(q.id, 'question_text', e.target.value)}
-                                            placeholder="Escribe la pregunta o instrucción..." 
-                                            className="text-lg font-medium border-0 border-b-2 border-slate-100 rounded-none px-0 focus-visible:ring-0 focus-visible:border-indigo-500 bg-transparent"
-                                        />
-                                    </div>
+                                    <Input value={q.question_text} onChange={(e) => updateQuestion(q.id, 'question_text', e.target.value)} placeholder="Escribe la pregunta..." className="flex-1 font-bold text-lg border-0 border-b-2 border-slate-100 rounded-none px-0 focus:ring-0 focus:border-indigo-500 bg-transparent" />
+                                    <button onClick={() => removeQuestion(q.id)} className="text-slate-300 hover:text-rose-500 p-2"><Trash2 className="w-5 h-5" /></button>
                                 </div>
-                                <button onClick={() => setQuestions(questions.filter(qi => qi.id !== q.id))} className="text-slate-300 hover:text-rose-500 p-2"><Trash2 className="w-5 h-5" /></button>
-                            </div>
-
-                            {/* Contenido Específico */}
-                            <div className="pl-12 pr-2">
-                                {renderQuestionContent(q, idx)}
-                            </div>
-
-                            {/* Feedback Opcional */}
-                            <div className="mt-6 pl-12 pr-2 pt-4 border-t border-slate-100">
-                                <Input 
-                                    value={q.explanation}
-                                    onChange={(e) => updateQuestion(q.id, 'explanation', e.target.value)}
-                                    placeholder="Explicación o pista para el alumno (opcional)..." 
-                                    className="text-sm text-slate-500 bg-transparent border-transparent placeholder:italic focus:bg-slate-50 focus:border-slate-200 transition-colors"
-                                />
+                                {renderQuestionBody(q)}
+                                <div className="mt-4 pt-4 border-t border-slate-50">
+                                    <Input value={q.explanation} onChange={(e) => updateQuestion(q.id, 'explanation', e.target.value)} placeholder="Feedback opcional (si falla)..." className="text-sm text-slate-500 italic border-transparent bg-transparent placeholder:text-slate-300 focus:bg-slate-50" />
+                                </div>
                             </div>
                         </div>
                     ))}
-
-                    <Button 
-                        onClick={addQuestion}
-                        variant="outline" 
-                        className="w-full h-20 border-2 border-dashed border-slate-300 rounded-2xl text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50/50 transition-all flex flex-col gap-1"
-                    >
-                        <Plus className="w-8 h-8" />
-                        <span className="font-bold text-lg">Añadir Elemento</span>
-                    </Button>
+                    <Button onClick={addQuestion} className="w-full py-8 border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 text-slate-400 rounded-2xl font-bold text-lg h-auto flex gap-2"><Plus className="w-6 h-6" /> Añadir Pregunta</Button>
                 </div>
-            </div>
-        </div>
 
-        {/* Footer Global */}
-        <div className="p-5 border-t border-slate-200 bg-white flex justify-between items-center z-20">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden md:block">
-                {questions.length} preguntas configuradas
-            </div>
-            <div className="flex gap-3">
-                <Button variant="ghost" onClick={onCancel} className="text-slate-500 font-bold">Cancelar</Button>
-                <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-8 rounded-xl shadow-lg shadow-indigo-200 border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1 transition-all">
-                    <Save className="w-4 h-4 mr-2" />
-                    Guardar Tarea
-                </Button>
+                {/* FOOTER */}
+                <div className="p-5 border-t border-slate-200 bg-white flex justify-between items-center z-20">
+                    <div className="flex bg-slate-100 rounded-lg p-1">
+                        <button onClick={() => setAssignType('class')} className={cn("px-4 py-2 rounded-md text-xs font-bold", assignType === 'class' ? "bg-white shadow-sm text-slate-800" : "text-slate-500")}>Clase</button>
+                        <button onClick={() => setAssignType('level')} className={cn("px-4 py-2 rounded-md text-xs font-bold", assignType === 'level' ? "bg-white shadow-sm text-slate-800" : "text-slate-500")}>Nivel ({selectedLevel})</button>
+                    </div>
+                    <div className="flex gap-3">
+                        <Button variant="ghost" onClick={onCancel}>Cancelar</Button>
+                        <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 rounded-xl shadow-lg border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1"><Save className="w-4 h-4 mr-2" /> GUARDAR</Button>
+                    </div>
+                </div>
             </div>
         </div>
       </div>
