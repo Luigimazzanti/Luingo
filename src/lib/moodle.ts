@@ -66,19 +66,19 @@ export const getEnrolledUsers = async (courseId: number) => {
 
 // Obtener usuario por nombre de usuario (Login)
 export const getUserByUsername = async (username: string) => {
-  // 1. Limpiar el input (Moodle usa minúsculas)
   const safeUsername = username.trim().toLowerCase();
   
-  // 2. CORRECCIÓN: Usar la clave "values[0]" entre comillas para Moodle
-  const data = await callMoodle("core_user_get_users_by_field", {
-    field: 'username',
-    "values[0]": safeUsername
-  });
+  console.log("🔍 Buscando usuario:", safeUsername);
+  // USAMOS LA SINTAXIS CORRECTA PARA MOODLE (values[0]) 
+  const data = await callMoodle("core_user_get_users_by_field", { field: 'username', "values[0]": safeUsername });
 
-  if (Array.isArray(data) && data.length > 0) {
-    return data[0];
+  if (Array.isArray(data) && data.length > 0) { 
+    console.log("✅ Usuario encontrado:", data[0].fullname); 
+    return data[0]; 
   }
-  return null;
+
+  console.error("❌ Usuario no encontrado o error:", data); 
+  return null; 
 };
 
 // GUARDAR TAREA (Crea un post en el foro con el JSON oculto)

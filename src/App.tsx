@@ -114,12 +114,18 @@ export default function App() {
       const moodleUser = await getUserByUsername(username);
 
       if (moodleUser) {
+        // Lógica de Roles: Admin, Luigi y cualquiera que diga 'teacher' son Profesores
+        const lowerName = username.toLowerCase();
+        const isTeacher = lowerName === 'admin' || 
+                          lowerName === 'luigi' || 
+                          lowerName.includes('teacher') || 
+                          lowerName.includes('profesor');
+
         const userProfile: User = {
             id: String(moodleUser.id),
             email: moodleUser.email,
             name: moodleUser.fullname,
-            // Heurística básica para rol: si el username contiene 'teacher' o 'profesor' es profesor, sino estudiante
-            role: username.toLowerCase().includes('teacher') || username.toLowerCase().includes('profesor') ? 'teacher' : 'student',
+            role: isTeacher ? 'teacher' : 'student',
             avatar_url: moodleUser.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -187,44 +193,55 @@ export default function App() {
   };
 
   const handleSelectClass = async (courseId: string) => {
-    toast.loading("Cargando estudiantes...");
+    toast.loading("Cargando estudiantes reales...");
     
     try {
       const enrolledUsers = await getEnrolledUsers(Number(courseId));
       
       if (Array.isArray(enrolledUsers)) {
-         const mappedStudents: Student[] = enrolledUsers.map((u: any) => ({
+         // FILTRADO ESTRICTO POR ROL DE MOODLE
+         const realStudents = enrolledUsers.filter((u: any) => {
+            // 1. Excluir al usuario logueado
+            if (String(u.id) === String(currentUser?.id)) return false;
+            // 2. Verificar roles en Moodle
+            // u.roles es un array ej: [{ shortname: 'student', ... }]
+            const hasStudentRole = u.roles?.some((r: any) => r.shortname === 'student');
+            const isTeacherOrAdmin = u.roles?.some((r: any) => 
+                ['teacher', 'editingteacher', 'manager'].includes(r.shortname)
+            );
+            // Solo mostramos si es estudiante y NO es profesor/admin
+            return hasStudentRole && !isTeacherOrAdmin;
+         });
+
+         const mappedStudents: Student[] = realStudents.map((u: any) => ({
             id: String(u.id),
             name: u.fullname,
             email: u.email,
             avatar_url: u.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.fullname}`,
-            current_level_code: 'A1', // Default fallback
-            progress: Math.floor(Math.random() * 100), // Mock progress
+            current_level_code: 'A1',
+            progress: 0,
             streak_days: 0,
             xp: 0,
-            stats: {
-                listening: 0,
-                reading: 0,
-                speaking: 0,
-                writing: 0
-            },
+            stats: { listening: 0, reading: 0, speaking: 0, writing: 0 },
             achievements: [],
             completed_tasks: 0,
             total_tasks: 10,
             materials_viewed: [],
-            average_grade: 0
+            average_grade: 0,
+            role: 'student'
          }));
 
          setStudents(mappedStudents);
-         console.log("✅ Estudiantes cargados:", mappedStudents);
+         
+         if (mappedStudents.length === 0) {
+             toast("No se encontraron alumnos en este curso (solo profes/admins).");
+         } else {
+             toast.success(`${mappedStudents.length} alumnos cargados.`);
+         }
          
          setSelectedClassId(courseId);
          setView('dashboard');
          toast.dismiss();
-         toast.success(`Entrando a la clase...`);
-      } else {
-        toast.dismiss();
-        toast.error("No se pudieron cargar los estudiantes.");
       }
     } catch (error) {
         console.error("Error loading students:", error);
@@ -507,8 +524,19 @@ export default function App() {
 
         {view === 'dashboard' && currentUser?.role === 'student' && (
             <StudentDashboard 
-                student={students.find(s => s.id === currentUser.id) as Student || mockStudents[0]}
-                tasks={tasks.filter(t => mockSubmissions.some(sub => sub.student_id === currentUser.id && sub.task_id === t.id))}
+                student={students.find(s => s.id === currentUser.id) as Student || {
+                    ...currentUser, 
+                    // Valores por defecto para evitar crash si faltan datos
+                    total_tasks: tasks.length,
+                    completed_tasks: 0,
+                    average_grade: 0,
+                    xp_points: 0,
+                    level: 1,
+                    current_level_code: 'A1',
+                    materials_viewed: []
+                }}
+                // CORRECCIÓN AQUÍ: Pasamos todas las tareas, sin filtrar por asignación
+                tasks={tasks}
                 submissions={mockSubmissions.filter(sub => sub.student_id === currentUser.id)}
                 onLogout={handleLogout}
                 onSelectTask={(task) => {
