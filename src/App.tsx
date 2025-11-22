@@ -43,7 +43,10 @@ export default function App() {
 
   // Estados para modo edición
   const [taskBuilderMode, setTaskBuilderMode] = useState<'create' | 'edit'>('create');
-  const [taskToEdit, setTaskToEdit] = useState<Task | null>(null); 
+  const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
+  
+  // Estado para auto-abrir IA en TaskBuilder
+  const [startBuilderWithAI, setStartBuilderWithAI] = useState(false);
 
   const [classroom, setClassroom] = useState(mockClassroom);
   const [students, setStudents] = useState<Student[]>([]);
@@ -346,8 +349,10 @@ export default function App() {
       }
   };
 
-  const handleGenerateTask = async (topic: string, level: string) => {
-      setShowTaskBuilder(true); 
+  const handleGenerateTask = () => {
+      // Abrir el builder en modo "crear" con IA activada
+      setStartBuilderWithAI(true);
+      setShowTaskBuilder(true);
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -580,11 +585,13 @@ export default function App() {
                     setShowTaskBuilder(false);
                     setTaskToEdit(null);
                     setTaskBuilderMode('create');
+                    setStartBuilderWithAI(false); // Resetear el flag
                 }}
                 initialStudentId={targetStudentForTask} 
                 studentName={students.find(s => s.id === targetStudentForTask)?.name}
                 mode={taskBuilderMode}
                 initialData={taskToEdit || undefined}
+                autoOpenAI={startBuilderWithAI} // Prop correcta
             />
         )}
 
@@ -729,12 +736,21 @@ export default function App() {
                         
                         // Recargar submissions para actualizar el portafolio
                         try {
-                            const allSubmissions = await getMoodleSubmissions();
-                            const mySubmissions = allSubmissions.filter((sub: any) => 
+                            const allSubmissionsData = await getMoodleSubmissions();
+                            
+                            // Si es profesor, actualizar TODAS las submissions
+                            if (currentUser.role === 'teacher') {
+                                setAllSubmissions(allSubmissionsData);
+                            }
+                            
+                            // Filtrar las del usuario actual
+                            const mySubmissions = allSubmissionsData.filter((sub: any) => 
                               sub.student_name === currentUser.name || 
                               sub.student_id === currentUser.id
                             );
                             setRealSubmissions(mySubmissions);
+                            
+                            console.log(`✅ Submissions actualizadas: ${mySubmissions.length} propias, ${allSubmissionsData.length} totales`);
                         } catch (e) {
                             console.error("Error recargando submissions:", e);
                         }

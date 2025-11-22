@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Student, Submission, Task } from '../types';
-import { Star, Zap, Trophy, Calendar, CheckCircle2, X, ChevronDown, ChevronUp, Medal, Layout } from 'lucide-react';
+import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle } from 'lucide-react';
 import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { LUINGO_LEVELS } from '../lib/mockData';
 import { cn } from '../lib/utils';
 
@@ -13,16 +14,17 @@ interface StudentPassportProps {
   onAssignTask: () => void;
 }
 
-export const StudentPassport: React.FC<StudentPassportProps> = ({ 
-  student, 
-  tasks = [], 
-  submissions = [], 
-  onBack, 
-  onAssignTask 
+export const StudentPassport: React.FC<StudentPassportProps> = ({
+  student,
+  tasks = [],
+  submissions = [],
+  onBack,
+  onAssignTask
 }) => {
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
 
-  // LÓGICA DE DATOS
+  // --- LÓGICA DE DATOS ---
   const totalXP = submissions.length * 15;
   const currentLevelInfo = LUINGO_LEVELS.slice().reverse().find(l => totalXP >= l.min_xp) || LUINGO_LEVELS[0];
 
@@ -42,181 +44,106 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
   const visibleSubmissions = showAllHistory ? sortedSubmissions : sortedSubmissions.slice(0, historyLimit);
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-50">
+    <div className="h-full w-full bg-[#F0F4F8] flex flex-col overflow-hidden relative">
       
-      {/* 1. HEADER QUE SCROLLEA (Parte del flujo) */}
-      <div className={`relative h-48 shrink-0 bg-gradient-to-r ${currentLevelInfo.color}`}>
-         <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
-         
-         {/* Controles Superiores (Ahora se mueven con el scroll) */}
-         <div className="absolute top-0 left-0 right-0 p-4 md:p-6 flex justify-between items-start">
-            <div className="bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 flex items-center gap-2 text-white shadow-sm">
-                <div className="w-6 h-6 bg-white rounded-md flex items-center justify-center text-indigo-600 font-black text-xs">L</div>
-                <span className="font-black text-[10px] md:text-xs tracking-widest uppercase">Pasaporte LuinGo</span>
+      {/* 1. HEADER DE FONDO */}
+      <div className={`h-32 shrink-0 w-full bg-gradient-to-r ${currentLevelInfo.color} relative`}>
+         <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
+            <div className="bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white shadow-sm">
+                <span className="font-black text-[10px] uppercase tracking-widest">Pasaporte Oficial</span>
             </div>
-            <button 
-                onClick={onBack} 
-                className="p-2 bg-black/20 hover:bg-black/30 text-white rounded-full backdrop-blur-md border border-white/10 shadow-lg transition-all"
-            >
+            <button onClick={onBack} className="p-2 bg-black/20 hover:bg-black/30 text-white rounded-full backdrop-blur-md transition-all z-50">
                 <X className="w-5 h-5" />
             </button>
          </div>
       </div>
 
-      {/* 2. CONTENIDO PRINCIPAL (Superpuesto con margen negativo) */}
-      <div className="px-4 md:px-8 pb-20 -mt-12 relative z-10"> 
-         <div className="max-w-4xl mx-auto">
+      {/* 2. CONTENIDO */}
+      <div className="flex-1 overflow-y-auto -mt-8 z-10 px-4 pb-10">
+         <div className="max-w-3xl mx-auto">
             
-            {/* TARJETA DE PERFIL */}
-            <div className="bg-white rounded-[2rem] shadow-xl border-4 border-white mb-6 overflow-hidden">
-                
-                {/* LAYOUT FLEXIBLE (El secreto para no dejar espacios) */}
-                <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-8 p-6 pt-0">
-                    
-                    {/* COLUMNA AVATAR (Sube con margen negativo) */}
-                    <div className="relative shrink-0 -mt-16 md:-mt-20">
-                        <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2rem] border-[6px] border-white shadow-lg bg-slate-100 overflow-hidden">
-                            <img src={student.avatar_url} alt={student.name} className="w-full h-full object-cover" />
+            {/* TARJETA PERFIL */}
+            <div className="bg-white rounded-3xl shadow-lg border border-slate-100 p-5 md:p-6">
+                <div className="flex flex-row gap-5 items-center">
+                    <div className="shrink-0 relative -mt-12 mb-2"> 
+                        <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-white p-1 shadow-md">
+                            <img src={student.avatar_url} alt={student.name} className="w-full h-full object-cover rounded-xl bg-slate-100" />
                         </div>
-                        {/* Badge Elemento */}
-                        <div 
-                          className="absolute -bottom-2 -right-2 w-10 h-10 md:w-12 md:h-12 bg-white rounded-full flex items-center justify-center shadow-md text-xl md:text-2xl border-4 border-slate-50" 
-                          title={currentLevelInfo.label}
-                        >
+                        <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow text-lg border border-slate-50" title={currentLevelInfo.label}>
                             {currentLevelInfo.icon}
                         </div>
                     </div>
-
-                    {/* COLUMNA INFO (Fluye natural) */}
-                    <div className="flex-1 text-center md:text-left w-full pt-2 md:pt-6">
-                        <div className="flex flex-col md:flex-row items-center md:items-start gap-2 mb-1">
-                            <h1 className="text-2xl md:text-4xl font-black text-slate-800 leading-tight">
-                              {student.name}
-                            </h1>
-                            {/* Badge Nivel (Al lado o abajo del nombre) */}
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap mt-1 md:mt-2">
-                                <Medal className="w-3 h-3" />
-                                <span>{currentLevelInfo.label}</span>
-                            </div>
+                    <div className="flex-1 min-w-0 pt-1">
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wide mb-1`}>
+                            <Medal className="w-3 h-3 text-amber-500" /> {currentLevelInfo.label}
                         </div>
-                        
-                        <p className="text-slate-400 text-sm font-medium mb-4">{student.email}</p>
-
-                        {/* Botones */}
-                        <div className="flex flex-col sm:flex-row gap-3 w-full">
-                            <Button 
-                              onClick={onAssignTask} 
-                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 rounded-xl shadow-md border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1 transition-all"
-                            >
-                                ✨ Nueva Misión
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              onClick={onBack} 
-                              className="sm:w-auto border-2 border-slate-200 text-slate-500 font-bold h-11 rounded-xl hover:bg-slate-50"
-                            >
-                                Cerrar
-                            </Button>
+                        <h1 className="text-xl md:text-2xl font-black text-slate-800 truncate leading-tight mb-0.5">{student.name}</h1>
+                        <p className="text-slate-400 text-xs font-medium truncate mb-3">{student.email}</p>
+                        <div className="flex gap-2">
+                            <Button onClick={onAssignTask} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 rounded-lg text-xs shadow-sm">✨ Nueva Misión</Button>
+                            <Button variant="outline" onClick={onBack} className="px-4 border-slate-200 text-slate-500 font-bold h-9 rounded-lg text-xs hover:bg-slate-50">Cerrar</Button>
                         </div>
                     </div>
                 </div>
-
-                {/* STATS BAR (Pegado abajo sin huecos) */}
-                <div className="grid grid-cols-3 border-t border-slate-100 divide-x divide-slate-100 bg-slate-50/50 mt-4">
-                    <div className="p-4 text-center">
-                        <div className="text-xl md:text-2xl font-black text-amber-500">{totalXP}</div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">XP Total</div>
-                    </div>
-                    <div className="p-4 text-center">
-                        <div className="text-xl md:text-2xl font-black text-purple-500">{submissions.length}</div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Misiones</div>
-                    </div>
-                    <div className="p-4 text-center">
-                        <div className="text-xl md:text-2xl font-black text-emerald-500">{averageGrade.toFixed(1)}</div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nota Media</div>
-                    </div>
+                
+                {/* Stats Bar */}
+                <div className="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-slate-50 bg-slate-50/50 -mx-5 -mb-5 px-5 py-4 rounded-b-3xl">
+                    <div className="text-center"><div className="text-xl font-black text-amber-500">{totalXP}</div><div className="text-[9px] font-bold text-slate-400 uppercase">XP Total</div></div>
+                    <div className="text-center border-l border-slate-200"><div className="text-xl font-black text-purple-500">{submissions.length}</div><div className="text-[9px] font-bold text-slate-400 uppercase">Misiones</div></div>
+                    <div className="text-center border-l border-slate-200"><div className="text-xl font-black text-emerald-500">{averageGrade.toFixed(1)}</div><div className="text-[9px] font-bold text-slate-400 uppercase">Nota</div></div>
                 </div>
             </div>
 
-            {/* GRID INFERIOR (Habilidades + Historial) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
+            {/* SECCIONES INFERIORES */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
                 {/* Habilidades */}
-                <div className="md:col-span-1 h-fit">
-                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border-2 border-slate-100">
-                        <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
-                            <Zap className="w-4 h-4 text-amber-500" /> Habilidades
-                        </h3>
-                        <div className="space-y-5">
+                <div className="md:col-span-1">
+                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 h-full">
+                        <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-xs uppercase tracking-wider"><Zap className="w-4 h-4 text-amber-500" /> Habilidades</h3>
+                        <div className="space-y-4">
                             <SkillBar label="Vocabulario" percent={vocabScore} color="bg-emerald-500" />
                             <SkillBar label="Gramática" percent={grammarScore} color="bg-blue-500" />
                         </div>
                     </div>
                 </div>
 
-                {/* Historial */}
+                {/* Historial Interactivo */}
                 <div className="md:col-span-2">
-                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border-2 border-slate-100">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="font-black text-slate-800 flex items-center gap-2">
-                                <Calendar className="w-5 h-5 text-indigo-500" /> Historial
-                            </h3>
-                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg uppercase">
-                              Reciente
-                            </span>
+                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider"><Calendar className="w-4 h-4 text-indigo-500" /> Historial</h3>
+                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">{submissions.length} Total</span>
                         </div>
-
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                             {submissions.length === 0 ? (
-                                <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-xl">
-                                    <Trophy className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                                    <p className="text-slate-400 text-sm font-medium">Sin actividad registrada.</p>
-                                </div>
+                                <p className="text-center text-slate-400 py-6 text-xs">Sin actividad registrada.</p>
                             ) : (
                                 <>
                                     {visibleSubmissions.map((sub, idx) => {
-                                        const grade = (sub.grade && sub.grade > 0) 
-                                          ? sub.grade 
-                                          : (sub.score && sub.total) 
-                                            ? (sub.score / sub.total) * 10 
-                                            : 0;
-
+                                        const grade = (sub.grade && sub.grade > 0) ? sub.grade : (sub.score && sub.total) ? (sub.score / sub.total) * 10 : 0;
                                         return (
                                             <div 
-                                              key={idx} 
-                                              className="flex items-center gap-4 p-3 rounded-xl bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all"
+                                                key={idx} 
+                                                onClick={() => setSelectedSubmission(sub)}
+                                                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-transparent hover:border-indigo-200 hover:bg-indigo-50/30 cursor-pointer transition-all group"
                                             >
-                                                <div className={cn(
-                                                  "w-10 h-10 rounded-lg flex flex-col items-center justify-center shrink-0 font-black text-white text-sm shadow-sm",
-                                                  grade >= 6 ? 'bg-emerald-400' : 'bg-rose-400'
-                                                )}>
+                                                <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center shrink-0 font-black text-white text-sm shadow-sm ${grade >= 6 ? 'bg-emerald-400' : 'bg-rose-400'}`}>
                                                     {grade.toFixed(0)}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <h4 className="font-bold text-slate-700 text-sm truncate">
-                                                      {sub.task_title}
-                                                    </h4>
-                                                    <p className="text-[10px] text-slate-400 font-medium uppercase">
-                                                      {new Date(sub.submitted_at || Date.now()).toLocaleDateString()}
-                                                    </p>
+                                                    <h4 className="font-bold text-slate-700 text-xs truncate group-hover:text-indigo-700">{sub.task_title}</h4>
+                                                    <p className="text-[10px] text-slate-400">{new Date(sub.submitted_at || Date.now()).toLocaleDateString()}</p>
                                                 </div>
                                                 <div className="text-right px-2">
-                                                    <span className="text-xs font-black text-slate-500">
-                                                      {sub.score || 0}/{sub.total || 0}
-                                                    </span>
+                                                    <span className="text-[10px] font-black text-slate-400 flex items-center gap-1 group-hover:text-indigo-600"><Eye className="w-3 h-3" /> Ver</span>
                                                 </div>
                                             </div>
                                         );
                                     })}
-
                                     {submissions.length > historyLimit && (
-                                        <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            onClick={() => setShowAllHistory(!showAllHistory)}
-                                            className="w-full mt-2 text-indigo-600 font-bold text-xs hover:bg-indigo-50"
-                                        >
-                                            {showAllHistory ? "Mostrar menos" : `Ver ${submissions.length - historyLimit} más`}
+                                        <Button variant="ghost" size="sm" onClick={() => setShowAllHistory(!showAllHistory)} className="w-full text-indigo-600 text-xs font-bold h-8 mt-2 hover:bg-indigo-50">
+                                            {showAllHistory ? "Ver menos" : "Ver todo el historial"}
                                         </Button>
                                     )}
                                 </>
@@ -227,21 +154,72 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
             </div>
          </div>
       </div>
+
+      {/* MODAL DETALLES DE ENTREGA */}
+      <Dialog open={!!selectedSubmission} onOpenChange={(open) => !open && setSelectedSubmission(null)}>
+        <DialogContent className="w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col">
+            <DialogHeader className="p-6 border-b border-slate-100 bg-slate-50/50">
+                <DialogTitle className="text-xl font-black text-slate-800 flex items-center gap-2">
+                    📝 Resumen de Intento
+                </DialogTitle>
+                {selectedSubmission && (
+                    <div className="flex items-center gap-4 mt-2">
+                        <div className="text-sm text-slate-500">{selectedSubmission.task_title}</div>
+                        <div className={`ml-auto font-black px-3 py-1 rounded-lg text-sm ${
+                            ((selectedSubmission.grade && selectedSubmission.grade > 0) 
+                                ? selectedSubmission.grade 
+                                : (selectedSubmission.score && selectedSubmission.total) 
+                                    ? (selectedSubmission.score / selectedSubmission.total) * 10 
+                                    : 0) >= 5 
+                            ? 'bg-emerald-100 text-emerald-700' 
+                            : 'bg-rose-100 text-rose-700'
+                        }`}>
+                            Nota: {((selectedSubmission.grade && selectedSubmission.grade > 0) 
+                                ? selectedSubmission.grade 
+                                : (selectedSubmission.score && selectedSubmission.total) 
+                                    ? (selectedSubmission.score / selectedSubmission.total) * 10 
+                                    : 0).toFixed(1)}
+                        </div>
+                    </div>
+                )}
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {selectedSubmission?.answers && Array.isArray(selectedSubmission.answers) && selectedSubmission.answers.length > 0 ? (
+                    selectedSubmission.answers.map((ans: any, idx: number) => (
+                        <div key={idx} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                            <p className="font-bold text-slate-700 text-sm mb-2">{idx + 1}. {ans.questionText}</p>
+                            <div className={`p-3 rounded-lg text-sm font-medium flex items-start gap-2 ${ans.isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                                {ans.isCorrect ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+                                <div className="flex-1">
+                                    <p>Tu respuesta: <span className="font-bold">{ans.studentAnswer || "(Sin responder)"}</span></p>
+                                    {!ans.isCorrect && ans.correctAnswer && (
+                                        <p className="mt-1 text-xs">Correcta: <span className="font-bold">{ans.correctAnswer}</span></p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                ) : (
+                    <div className="text-center text-slate-400 py-8">
+                        <p className="mb-2">No hay detalles de respuestas guardados para esta tarea.</p>
+                        <p className="text-xs">Puntuación: {selectedSubmission?.score || 0}/{selectedSubmission?.total || 0}</p>
+                    </div>
+                )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 bg-white">
+                <Button onClick={() => setSelectedSubmission(null)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold h-12 rounded-xl">Cerrar Detalle</Button>
+            </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 const SkillBar = ({ label, percent, color }: { label: string, percent: number, color: string }) => (
     <div>
-        <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
-          <span>{label}</span>
-          <span>{percent.toFixed(0)}%</span>
-        </div>
-        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-          <div 
-            className={cn("h-full rounded-full transition-all duration-1000", color)} 
-            style={{ width: `${percent}%` }}
-          />
-        </div>
+        <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1"><span>{label}</span><span>{percent.toFixed(0)}%</span></div>
+        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full ${color} rounded-full`} style={{ width: `${percent}%` }}></div></div>
     </div>
 );
