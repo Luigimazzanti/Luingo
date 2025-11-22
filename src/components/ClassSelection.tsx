@@ -1,13 +1,18 @@
 import React from 'react';
 import { Users, ArrowRight, Plus, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
+import { Input } from './ui/input';
 
 interface ClassSelectionProps {
   courses: any[];
   onSelectClass: (courseId: string) => void;
+  onCreateClass?: (name: string) => void;
 }
 
-export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelectClass }) => {
+export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelectClass, onCreateClass }) => {
+  const [showCreateDialog, setShowCreateDialog] = React.useState(false);
+  const [newClassName, setNewClassName] = React.useState('');
   
   // Function to assign random styles to courses since Moodle doesn't provide them
   const getCourseStyle = (id: number) => {
@@ -19,6 +24,14 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
         { theme: 'bg-sky-100', border: 'border-sky-200', text: 'text-sky-800', icon: '✈️' },
     ];
     return styles[id % styles.length];
+  };
+
+  const handleCreateClass = () => {
+    if (newClassName.trim() && onCreateClass) {
+      onCreateClass(newClassName.trim());
+      setNewClassName('');
+      setShowCreateDialog(false);
+    }
   };
 
   if (!courses || courses.length === 0) {
@@ -40,7 +53,7 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
           <h1 className="text-3xl font-black text-slate-800">Mis Clases</h1>
           <p className="text-slate-500 font-bold">Hola Profe, ¿dónde vamos a enseñar hoy?</p>
         </div>
-        <Button className="bg-slate-800 text-white rounded-2xl h-12 px-6 font-bold hover:bg-slate-700 shadow-lg hover:-translate-y-1 transition-all">
+        <Button className="bg-slate-800 text-white rounded-2xl h-12 px-6 font-bold hover:bg-slate-700 shadow-lg hover:-translate-y-1 transition-all" onClick={() => setShowCreateDialog(true)}>
           <Plus className="w-5 h-5 mr-2" />
           Nueva Clase
         </Button>
@@ -78,6 +91,33 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
           );
         })}
       </div>
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Crear Nueva Clase</DialogTitle>
+            <DialogDescription>
+              Ingresa el nombre de la nueva clase que deseas crear.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col space-y-4">
+            <Input
+              id="name"
+              placeholder="Nombre de la clase"
+              value={newClassName}
+              onChange={(e) => setNewClassName(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={() => setShowCreateDialog(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleCreateClass}>
+              Crear
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

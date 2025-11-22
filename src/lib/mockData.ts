@@ -246,10 +246,10 @@ export const mockComments: Comment[] = [
 
 // Legacy exports
 export const LUINGO_LEVELS = [
-  { min: 1, max: 5, label: 'Mono Curioso', icon: '🐵' },
-  { min: 6, max: 10, label: 'Mono Explorador', icon: '🤠' },
-  { min: 11, max: 15, label: 'Mono Aventurero', icon: '🧭' },
-  { min: 16, max: 20, label: 'Mono Sabio', icon: '👓' },
-  { min: 21, max: 99, label: 'Rey de la Selva', icon: '👑' },
+  { level: 1, min_xp: 0, max_xp: 100, label: 'Aprendiz de Tierra', icon: '🪨', color: 'from-stone-300 to-stone-500' },
+  { level: 2, min_xp: 101, max_xp: 300, label: 'Adepto de Agua', icon: '💧', color: 'from-blue-300 to-blue-500' },
+  { level: 3, min_xp: 301, max_xp: 600, label: 'Maestro de Fuego', icon: '🔥', color: 'from-orange-300 to-red-500' },
+  { level: 4, min_xp: 601, max_xp: 1000, label: 'Sabio del Aire', icon: '🌪️', color: 'from-sky-200 to-indigo-400' },
+  { level: 5, min_xp: 1001, max_xp: 9999, label: 'Espíritu de Éter', icon: '✨', color: 'from-purple-400 to-pink-600' },
 ];
 export const XP_VALUES = {};

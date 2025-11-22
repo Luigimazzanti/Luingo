@@ -189,6 +189,16 @@ export const getMoodleSubmissions = async () => {
   });
 };
 
+// CREAR CURSO (Nueva Clase)
+export const createCourse = async (fullname: string, shortname: string) => {
+  return await callMoodle("core_course_create_courses", {
+    "courses[0][fullname]": fullname,
+    "courses[0][shortname]": shortname,
+    "courses[0][categoryid]": 1, // Default category
+    "courses[0][format]": "topics"
+  });
+};
+
 // BORRAR TAREA (Elimina el post del foro)
 export const deleteMoodleTask = async (discussionId: string | number) => {
   // CORRECCIÓN: Asegurar que es string antes de replace

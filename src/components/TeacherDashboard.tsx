@@ -103,12 +103,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               <p className="text-indigo-100 max-w-xl text-lg font-medium opacity-90">{classroom.description}</p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full md:w-auto">
               {/* Botón de invitación - Estilo 3D */}
               <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
                 <DialogTrigger asChild>
-                  <Button className="bg-white text-indigo-600 hover:bg-indigo-50 border-b-4 border-indigo-200 hover:border-indigo-300 h-14 px-8 rounded-2xl font-black text-lg transition-all active:translate-y-1 active:border-b-0">
-                    <Users className="w-6 h-6 mr-2" />
+                  <Button className="w-full sm:w-auto bg-white text-indigo-600 hover:bg-indigo-50 border-b-4 border-indigo-200 hover:border-indigo-300 h-12 sm:h-14 px-6 sm:px-8 rounded-xl sm:rounded-2xl font-black text-base sm:text-lg transition-all active:translate-y-1 active:border-b-0">
+                    <Users className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
                     INVITAR
                   </Button>
                 </DialogTrigger>
@@ -159,8 +159,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   if (!open) setHighlightedLevel(null); 
               }}>
                 <DialogTrigger asChild>
-                  <Button className="bg-amber-400 text-amber-900 hover:bg-amber-500 border-b-4 border-amber-700 h-14 px-8 rounded-2xl font-black text-lg transition-all active:translate-y-1 active:border-b-0 shadow-xl shadow-amber-900/20">
-                    <Sparkles className="w-6 h-6 mr-2" />
+                  <Button className="w-full sm:w-auto bg-amber-400 text-amber-900 hover:bg-amber-500 border-b-4 border-amber-700 h-12 sm:h-14 px-6 sm:px-8 rounded-xl sm:rounded-2xl font-black text-base sm:text-lg transition-all active:translate-y-1 active:border-b-0 shadow-xl shadow-amber-900/20">
+                    <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
                     CREAR TAREA IA
                   </Button>
                 </DialogTrigger>

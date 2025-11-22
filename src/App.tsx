@@ -10,7 +10,7 @@ import { StudentDashboard } from './components/StudentDashboard';
 import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
-import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask, getMoodleSubmissions } from './lib/moodle';
+import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask, getMoodleSubmissions, createCourse } from './lib/moodle';
 import {
   mockClassroom,
   mockStudents,
@@ -158,8 +158,8 @@ export default function App() {
             
             setRealSubmissions(mySubmissions);
             
-            // Calcular XP real basado en entregas
-            const totalXP = mySubmissions.length * 100; // 100 XP por tarea completada
+            // Calcular XP real basado en entregas (REDUCIDO: 15 XP por tarea)
+            const totalXP = mySubmissions.length * 15; // Gamificación más difícil
             
             console.log(`✅ ${mySubmissions.length} entregas tuyas cargadas. XP: ${totalXP}`);
             
@@ -266,6 +266,27 @@ export default function App() {
         console.error("Error loading students:", error);
         toast.dismiss();
         toast.error("Error al cargar la clase.");
+    }
+  };
+
+  const handleCreateClass = async (name: string) => {
+    const shortname = name.substring(0, 10).toLowerCase().replace(/\s/g, '') + Math.floor(Math.random()*100);
+    toast.loading("Creando aula en Moodle...");
+    
+    try {
+      const res = await createCourse(name, shortname);
+      if (res && !res.exception) {
+        toast.dismiss();
+        toast.success("Clase creada. Recargando...");
+        const updatedCourses = await getCourses();
+        setCourses(updatedCourses);
+      } else {
+        toast.dismiss();
+        toast.error("Error al crear clase");
+      }
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Error al crear clase");
     }
   };
 
@@ -564,6 +585,7 @@ export default function App() {
             <ClassSelection 
                 courses={courses} 
                 onSelectClass={handleSelectClass} 
+                onCreateClass={handleCreateClass}
             />
         )}
 
@@ -616,7 +638,7 @@ export default function App() {
                     total_tasks: tasks.length,
                     completed_tasks: realSubmissions.length,
                     average_grade: 0,
-                    xp_points: realSubmissions.length * 100,
+                    xp_points: realSubmissions.length * 15, // REDUCIDO: 15 XP por tarea
                     level: 1,
                     current_level_code: 'A1',
                     materials_viewed: []

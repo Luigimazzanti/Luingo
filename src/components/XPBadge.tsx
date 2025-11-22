@@ -59,16 +59,16 @@ export const XPBadge: React.FC<XPBadgeProps> = ({
       {/* Badge de nivel */}
       <div className="flex items-center gap-3">
         <div
-          className={`${sizeConfig.badge} rounded-full bg-gradient-to-br from-[#FFF4B7] to-[#FFE082] flex items-center justify-center shadow-md border-2 border-white`}
+          className={`${sizeConfig.badge} rounded-full bg-gradient-to-br ${currentLevel.color} flex items-center justify-center shadow-md border-2 border-white`}
         >
           <span className={sizeConfig.icon}>{currentLevel.icon}</span>
         </div>
         {showDetails && (
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h4 className={`${sizeConfig.text} text-gray-900`}>{currentLevel.title}</h4>
+              <h4 className={`${sizeConfig.text} text-gray-900 font-bold`}>{currentLevel.label}</h4>
               <span
-                className={`${sizeConfig.text} text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full`}
+                className={`${sizeConfig.text} text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full font-bold`}
               >
                 Nivel {level}
               </span>
@@ -78,7 +78,7 @@ export const XPBadge: React.FC<XPBadgeProps> = ({
               {nextLevel && (
                 <span className="text-gray-400">
                   {' '}
-                  · {nextLevel.min_xp - xp} XP para {nextLevel.title}
+                  · {nextLevel.min_xp - xp} XP para {nextLevel.label}
                 </span>
               )}
             </p>
@@ -91,12 +91,12 @@ export const XPBadge: React.FC<XPBadgeProps> = ({
         <div className="space-y-1">
           <div className={`w-full bg-gray-100 rounded-full overflow-hidden ${sizeConfig.bar}`}>
             <div
-              className={`${sizeConfig.bar} bg-gradient-to-r from-[#FFF4B7] to-[#FFE082] transition-all duration-500`}
+              className={`${sizeConfig.bar} bg-gradient-to-r ${currentLevel.color} transition-all duration-500`}
               style={{ width: `${Math.min(progressPercentage, 100)}%` }}
             />
           </div>
           {progressPercentage >= 80 && (
-            <div className="flex items-center gap-1 text-xs text-[#FF9800] animate-pulse">
+            <div className="flex items-center gap-1 text-xs text-indigo-600 animate-pulse font-bold">
               <Sparkles className="w-3 h-3" />
               <span>¡Casi subes de nivel!</span>
             </div>
@@ -114,13 +114,13 @@ export const MiniXPBadge: React.FC<{ xp: number; level: number }> = ({ xp, level
   const currentLevel = LUINGO_LEVELS.find((l) => l.level === level) || LUINGO_LEVELS[0];
 
   return (
-    <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#FFF4B7] to-[#FFE082] rounded-full px-2 py-1">
+    <div className={`flex items-center gap-1.5 bg-gradient-to-r ${currentLevel.color} rounded-full px-2 py-1 shadow-sm`}>
       <span className="text-sm">{currentLevel.icon}</span>
-      <span className="text-xs text-gray-800">
+      <span className="text-xs text-slate-800 font-bold">
         Nv.{level}
       </span>
-      <span className="text-xs text-gray-600">·</span>
-      <span className="text-xs text-gray-700">{xp} XP</span>
+      <span className="text-xs text-slate-600">·</span>
+      <span className="text-xs text-slate-700 font-bold">{xp} XP</span>
     </div>
   );
 };
