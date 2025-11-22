@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Student, Task, Submission } from '../types';
 import { TaskCard } from './TaskCard';
 import { Button } from './ui/button';
-import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from './ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { 
   LayoutDashboard, 
@@ -216,6 +216,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="p-0 w-72">
+                  {/* Títulos accesibles (ocultos visualmente) */}
+                  <SheetTitle className="sr-only">Menú de Navegación</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Navega entre las diferentes secciones: Mi Espacio, Comunidad, Portafolio y Logros
+                  </SheetDescription>
                   <NavContent />
                 </SheetContent>
               </Sheet>

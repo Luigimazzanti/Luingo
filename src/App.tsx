@@ -614,6 +614,12 @@ export default function App() {
                 {selectedStudentId && (
                     <StudentPassport 
                         student={students.find(s => s.id === selectedStudentId) || students[0]}
+                        // PASAR DATOS REALES
+                        tasks={tasks}
+                        submissions={realSubmissions.filter(s => 
+                            s.student_name === (students.find(st => st.id === selectedStudentId)?.name) ||
+                            s.student_id === selectedStudentId
+                        )}
                         onBack={() => setSelectedStudentId(null)}
                         onAssignTask={() => {
                             const currentStudentId = selectedStudentId;
