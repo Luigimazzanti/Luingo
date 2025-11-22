@@ -52,6 +52,7 @@ export default function App() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [realSubmissions, setRealSubmissions] = useState<Submission[]>([]); // Memoria del alumno
+  const [allSubmissions, setAllSubmissions] = useState<Submission[]>([]); // NUEVO: Todas las submissions (para profesor)
   
   const [usernameInput, setUsernameInput] = useState("");
 
@@ -147,11 +148,17 @@ export default function App() {
         // ✅ CARGA REAL DE ENTREGAS (Memoria del Alumno)
         toast.loading("Cargando tu historial...");
         try {
-            const allSubmissions = await getMoodleSubmissions();
-            console.log("📦 Submissions de Moodle:", allSubmissions);
+            const allSubmissionsData = await getMoodleSubmissions();
+            console.log("📦 Submissions de Moodle:", allSubmissionsData);
+            
+            // Si es profesor, guardar TODAS las submissions para poder verlas en StudentPassport
+            if (role === 'teacher') {
+                setAllSubmissions(allSubmissionsData);
+                console.log(`✅ ${allSubmissionsData.length} submissions totales cargadas (modo profesor)`);
+            }
             
             // Filtrar solo las entregas del usuario actual
-            const mySubmissions = allSubmissions.filter((sub: any) => 
+            const mySubmissions = allSubmissionsData.filter((sub: any) => 
               sub.student_name === moodleUser.fullname || 
               sub.student_id === String(moodleUser.id)
             );
@@ -614,9 +621,9 @@ export default function App() {
                 {selectedStudentId && (
                     <StudentPassport 
                         student={students.find(s => s.id === selectedStudentId) || students[0]}
-                        // PASAR DATOS REALES
+                        // PASAR DATOS REALES: Usar allSubmissions para profesor
                         tasks={tasks}
-                        submissions={realSubmissions.filter(s => 
+                        submissions={allSubmissions.filter(s => 
                             s.student_name === (students.find(st => st.id === selectedStudentId)?.name) ||
                             s.student_id === selectedStudentId
                         )}
