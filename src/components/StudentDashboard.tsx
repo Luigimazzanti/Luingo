@@ -41,6 +41,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // --- LÓGICA DE NAVEGACIÓN MÓVIL ---
+  const handleNavClick = (tab: 'tasks' | 'portfolio' | 'community' | 'achievements') => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false); // <--- ESTO CIERRA EL MENÚ AUTOMÁTICAMENTE
+  };
+
   // Lógica de filtrado de tareas
   const getTaskStatus = (taskId: string) => {
     if (!submissions) return 'assigned';
@@ -97,37 +103,25 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           icon={LayoutDashboard} 
           label="Mi Espacio" 
           isActive={activeTab === 'tasks'} 
-          onClick={() => {
-            setActiveTab('tasks');
-            setMobileMenuOpen(false);
-          }}
+          onClick={() => handleNavClick('tasks')}
         />
         <SidebarItem 
           icon={Users} 
           label="Comunidad" 
           isActive={activeTab === 'community'} 
-          onClick={() => {
-            setActiveTab('community');
-            setMobileMenuOpen(false);
-          }}
+          onClick={() => handleNavClick('community')}
         />
         <SidebarItem 
           icon={BookOpen} 
           label="Portafolio" 
           isActive={activeTab === 'portfolio'} 
-          onClick={() => {
-            setActiveTab('portfolio');
-            setMobileMenuOpen(false);
-          }}
+          onClick={() => handleNavClick('portfolio')}
         />
         <SidebarItem 
           icon={Trophy} 
           label="Logros" 
           isActive={activeTab === 'achievements'} 
-          onClick={() => {
-            setActiveTab('achievements');
-            setMobileMenuOpen(false);
-          }}
+          onClick={() => handleNavClick('achievements')}
         />
       </nav>
 
