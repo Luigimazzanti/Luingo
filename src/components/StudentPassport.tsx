@@ -22,7 +22,7 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
 }) => {
   const [showAllHistory, setShowAllHistory] = useState(false);
 
-  // --- LÓGICA DE DATOS ---
+  // LÓGICA DE DATOS
   const totalXP = submissions.length * 15;
   const currentLevelInfo = LUINGO_LEVELS.slice().reverse().find(l => totalXP >= l.min_xp) || LUINGO_LEVELS[0];
 
@@ -42,99 +42,108 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
   const visibleSubmissions = showAllHistory ? sortedSubmissions : sortedSubmissions.slice(0, historyLimit);
 
   return (
-    <div className="h-full w-full relative overflow-hidden bg-slate-50">
+    <div className="h-full overflow-y-auto bg-slate-50">
       
-      {/* 1. HEADER FONDO FIJO (Solo decoración) */}
-      <div className={`absolute top-0 left-0 right-0 h-64 bg-gradient-to-br ${currentLevelInfo.color} z-0`}>
+      {/* 1. HEADER QUE SCROLLEA (Parte del flujo) */}
+      <div className={`relative h-48 shrink-0 bg-gradient-to-r ${currentLevelInfo.color}`}>
          <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
-         {/* Patrón sutil */}
-         <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '20px 20px', opacity: 0.1 }}></div>
+         
+         {/* Controles Superiores (Ahora se mueven con el scroll) */}
+         <div className="absolute top-0 left-0 right-0 p-4 md:p-6 flex justify-between items-start">
+            <div className="bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 flex items-center gap-2 text-white shadow-sm">
+                <div className="w-6 h-6 bg-white rounded-md flex items-center justify-center text-indigo-600 font-black text-xs">L</div>
+                <span className="font-black text-[10px] md:text-xs tracking-widest uppercase">Pasaporte LuinGo</span>
+            </div>
+            <button 
+                onClick={onBack} 
+                className="p-2 bg-black/20 hover:bg-black/30 text-white rounded-full backdrop-blur-md border border-white/10 shadow-lg transition-all"
+            >
+                <X className="w-5 h-5" />
+            </button>
+         </div>
       </div>
 
-      {/* Botones Flotantes Superiores (Siempre visibles) */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-50 pointer-events-none">
-          <div className="pointer-events-auto bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 flex items-center gap-2 text-white shadow-sm">
-              <span className="font-black text-xs tracking-widest uppercase">Pasaporte LuinGo</span>
-          </div>
-          <button 
-            onClick={onBack} 
-            className="pointer-events-auto p-2 bg-black/20 hover:bg-black/30 text-white rounded-full backdrop-blur-md border border-white/10 shadow-lg transition-all"
-          >
-              <X className="w-5 h-5" />
-          </button>
-      </div>
-
-      {/* 2. ÁREA DE SCROLL (Contenido Real) */}
-      <div className="absolute inset-0 overflow-y-auto z-10 pt-32 px-4 pb-10">
-         <div className="max-w-3xl mx-auto">
+      {/* 2. CONTENIDO PRINCIPAL (Superpuesto con margen negativo) */}
+      <div className="px-4 md:px-8 pb-20 -mt-12 relative z-10"> 
+         <div className="max-w-4xl mx-auto">
             
-            {/* TARJETA PRINCIPAL */}
-            <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 relative overflow-visible mt-4">
+            {/* TARJETA DE PERFIL */}
+            <div className="bg-white rounded-[2rem] shadow-xl border-4 border-white mb-6 overflow-hidden">
                 
-                {/* AVATAR FLOTANTE (Sin clipping) */}
-                <div className="absolute -top-16 left-1/2 -translate-x-1/2 md:left-8 md:translate-x-0">
-                    <div className="relative">
-                        <div className="w-32 h-32 rounded-[2rem] border-[6px] border-white shadow-2xl overflow-hidden bg-white">
+                {/* LAYOUT FLEXIBLE (El secreto para no dejar espacios) */}
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-8 p-6 pt-0">
+                    
+                    {/* COLUMNA AVATAR (Sube con margen negativo) */}
+                    <div className="relative shrink-0 -mt-16 md:-mt-20">
+                        <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2rem] border-[6px] border-white shadow-lg bg-slate-100 overflow-hidden">
                             <img src={student.avatar_url} alt={student.name} className="w-full h-full object-cover" />
                         </div>
-                        {/* Icono Elemento */}
+                        {/* Badge Elemento */}
                         <div 
-                          className="absolute -bottom-3 -right-3 w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg text-2xl border-4 border-slate-50" 
+                          className="absolute -bottom-2 -right-2 w-10 h-10 md:w-12 md:h-12 bg-white rounded-full flex items-center justify-center shadow-md text-xl md:text-2xl border-4 border-slate-50" 
                           title={currentLevelInfo.label}
                         >
                             {currentLevelInfo.icon}
                         </div>
                     </div>
-                </div>
 
-                {/* CONTENIDO TARJETA */}
-                <div className="pt-20 px-6 pb-8 md:pl-48 md:pt-8">
-                    
-                    <div className="text-center md:text-left">
-                        {/* Badge de Nivel (Arreglado con whitespace-nowrap) */}
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold shadow-sm mb-3 whitespace-nowrap">
-                            <Medal className="w-3 h-3 text-amber-500" />
-                            <span className="uppercase tracking-wide">{currentLevelInfo.label}</span>
+                    {/* COLUMNA INFO (Fluye natural) */}
+                    <div className="flex-1 text-center md:text-left w-full pt-2 md:pt-6">
+                        <div className="flex flex-col md:flex-row items-center md:items-start gap-2 mb-1">
+                            <h1 className="text-2xl md:text-4xl font-black text-slate-800 leading-tight">
+                              {student.name}
+                            </h1>
+                            {/* Badge Nivel (Al lado o abajo del nombre) */}
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap mt-1 md:mt-2">
+                                <Medal className="w-3 h-3" />
+                                <span>{currentLevelInfo.label}</span>
+                            </div>
                         </div>
+                        
+                        <p className="text-slate-400 text-sm font-medium mb-4">{student.email}</p>
 
-                        <h1 className="text-3xl font-black text-slate-800 mb-1 leading-tight">{student.name}</h1>
-                        <p className="text-slate-400 font-medium text-sm mb-6">{student.email}</p>
-
-                        {/* Botones de Acción */}
-                        <div className="flex flex-col sm:flex-row gap-3">
+                        {/* Botones */}
+                        <div className="flex flex-col sm:flex-row gap-3 w-full">
                             <Button 
                               onClick={onAssignTask} 
-                              className="w-full sm:flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black h-12 rounded-xl shadow-lg border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1 transition-all"
+                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 rounded-xl shadow-md border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1 transition-all"
                             >
                                 ✨ Nueva Misión
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              onClick={onBack} 
+                              className="sm:w-auto border-2 border-slate-200 text-slate-500 font-bold h-11 rounded-xl hover:bg-slate-50"
+                            >
+                                Cerrar
                             </Button>
                         </div>
                     </div>
                 </div>
 
-                {/* STATS BAR */}
-                <div className="grid grid-cols-3 border-t border-slate-100 divide-x divide-slate-100 bg-slate-50/50 rounded-b-[2rem]">
+                {/* STATS BAR (Pegado abajo sin huecos) */}
+                <div className="grid grid-cols-3 border-t border-slate-100 divide-x divide-slate-100 bg-slate-50/50 mt-4">
                     <div className="p-4 text-center">
-                        <div className="text-2xl font-black text-amber-500">{totalXP}</div>
+                        <div className="text-xl md:text-2xl font-black text-amber-500">{totalXP}</div>
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">XP Total</div>
                     </div>
                     <div className="p-4 text-center">
-                        <div className="text-2xl font-black text-purple-500">{submissions.length}</div>
+                        <div className="text-xl md:text-2xl font-black text-purple-500">{submissions.length}</div>
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Misiones</div>
                     </div>
                     <div className="p-4 text-center">
-                        <div className="text-2xl font-black text-emerald-500">{averageGrade.toFixed(1)}</div>
+                        <div className="text-xl md:text-2xl font-black text-emerald-500">{averageGrade.toFixed(1)}</div>
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nota Media</div>
                     </div>
                 </div>
             </div>
 
-            {/* SECCIONES INFERIORES */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            {/* GRID INFERIOR (Habilidades + Historial) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
                 {/* Habilidades */}
-                <div className="md:col-span-1">
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 h-full">
+                <div className="md:col-span-1 h-fit">
+                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border-2 border-slate-100">
                         <h3 className="font-black text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
                             <Zap className="w-4 h-4 text-amber-500" /> Habilidades
                         </h3>
@@ -147,13 +156,13 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
 
                 {/* Historial */}
                 <div className="md:col-span-2">
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border-2 border-slate-100">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-black text-slate-800 flex items-center gap-2">
                                 <Calendar className="w-5 h-5 text-indigo-500" /> Historial
                             </h3>
-                            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
-                              {submissions.length} Total
+                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg uppercase">
+                              Reciente
                             </span>
                         </div>
 
@@ -173,30 +182,30 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                                             : 0;
 
                                         return (
-                                          <div 
-                                            key={idx} 
-                                            className="flex items-center gap-4 p-3 rounded-xl bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all"
-                                          >
-                                              <div className={cn(
-                                                "w-10 h-10 rounded-lg flex flex-col items-center justify-center shrink-0 font-black text-white text-sm shadow-sm",
-                                                grade >= 6 ? 'bg-emerald-400' : 'bg-rose-400'
-                                              )}>
-                                                  {grade.toFixed(0)}
-                                              </div>
-                                              <div className="flex-1 min-w-0">
-                                                  <h4 className="font-bold text-slate-700 text-sm truncate">
-                                                    {sub.task_title}
-                                                  </h4>
-                                                  <p className="text-[10px] text-slate-400 font-medium uppercase">
-                                                    {new Date(sub.submitted_at || Date.now()).toLocaleDateString()}
-                                                  </p>
-                                              </div>
-                                              <div className="text-right px-2">
-                                                  <span className="text-xs font-black text-slate-400">
-                                                    {sub.score || 0}/{sub.total || 0}
-                                                  </span>
-                                              </div>
-                                          </div>
+                                            <div 
+                                              key={idx} 
+                                              className="flex items-center gap-4 p-3 rounded-xl bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all"
+                                            >
+                                                <div className={cn(
+                                                  "w-10 h-10 rounded-lg flex flex-col items-center justify-center shrink-0 font-black text-white text-sm shadow-sm",
+                                                  grade >= 6 ? 'bg-emerald-400' : 'bg-rose-400'
+                                                )}>
+                                                    {grade.toFixed(0)}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-bold text-slate-700 text-sm truncate">
+                                                      {sub.task_title}
+                                                    </h4>
+                                                    <p className="text-[10px] text-slate-400 font-medium uppercase">
+                                                      {new Date(sub.submitted_at || Date.now()).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right px-2">
+                                                    <span className="text-xs font-black text-slate-500">
+                                                      {sub.score || 0}/{sub.total || 0}
+                                                    </span>
+                                                </div>
+                                            </div>
                                         );
                                     })}
 
