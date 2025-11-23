@@ -146,7 +146,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     onSaveTask(taskData);
   };
 
-  // MODO LOCAL (FALLBACK)
+  // MODO LOCAL (FALLBACK) - MEJORADO CON BANCO EXTENSO
   const runLocalAI = () => {
     setTimeout(() => {
       const topic = aiPrompt.toLowerCase();
@@ -155,33 +155,93 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       let newDesc = `Ejercicios prácticos sobre ${aiPrompt}.`;
 
       if (topic.includes('verbo') || topic.includes('gramática')) {
-        newTitle = "Práctica Verbal";
+        newTitle = "Dominando los Verbos";
+        newDesc = "Practica conjugaciones y tiempos verbales";
         newQs = [
-          { id: Date.now(), type: 'fill_blank', question_text: 'Yo ___ (cantar) bien.', options: [], correct_answer: 'canto', explanation: 'Presente de indicativo.', allow_audio: false },
-          { id: Date.now()+1, type: 'choice', question_text: '¿Cuál es el pretérito de "hacer"?', options: ['hice', 'hacé', 'hací'], correct_answer: 'hice', explanation: 'Verbo irregular.', allow_audio: false },
-          { id: Date.now()+2, type: 'true_false', question_text: 'Los verbos en -ar tienen terminación -ado en participio.', options: [], correct_answer: 'Verdadero', explanation: 'Ej: cantar → cantado.', allow_audio: false }
+          { id: Date.now(), type: 'fill_blank', question_text: 'Ayer nosotros ___ (ir) al cine.', options: [], correct_answer: 'fuimos', explanation: 'Pretérito indefinido del verbo ir (irregular).', allow_audio: false },
+          { id: Date.now()+1, type: 'choice', question_text: '¿Cuál es el futuro de "Saber"?', options: ['Sabré', 'Saberé', 'Supo', 'Sabía'], correct_answer: 'Sabré', explanation: 'Verbo irregular. La raíz cambia a sabr-.', allow_audio: false },
+          { id: Date.now()+2, type: 'true_false', question_text: 'El verbo "Estar" se usa para características permanentes.', options: [], correct_answer: 'Falso', explanation: 'Estar se usa para estados temporales. Ser es para características permanentes.', allow_audio: false },
+          { id: Date.now()+3, type: 'fill_blank', question_text: 'Si yo ___ (tener) dinero, viajaría más.', options: [], correct_answer: 'tuviera', explanation: 'Subjuntivo imperfecto en condicional.', allow_audio: false }
         ];
-      } else if (topic.includes('comida')) {
-        newTitle = "Vocabulario: Comida";
+      } else if (topic.includes('comida') || topic.includes('restaurante') || topic.includes('cocina')) {
+        newTitle = "En el Restaurante";
+        newDesc = "Vocabulario y expresiones para comer fuera";
         newQs = [
-          { id: Date.now(), type: 'choice', question_text: '¿Qué es una "tapa"?', options: ['Postre', 'Aperitivo', 'Bebida'], correct_answer: 'Aperitivo', explanation: 'Tradición española.', allow_audio: false },
-          { id: Date.now()+1, type: 'open', question_text: '¿Cuál es tu plato español favorito?', options: [], correct_answer: '', explanation: 'Respuesta libre.', allow_audio: true }
+          { id: Date.now(), type: 'choice', question_text: '¿Qué se pide al final de la comida?', options: ['La cuenta', 'El menú', 'La mesa', 'Los cubiertos'], correct_answer: 'La cuenta', explanation: 'Para pagar al terminar de comer.', allow_audio: false },
+          { id: Date.now()+1, type: 'open', question_text: 'Describe tu plato español favorito. ¿Qué ingredientes lleva?', options: [], correct_answer: '', explanation: 'Usa adjetivos descriptivos y vocabulario de ingredientes.', allow_audio: true },
+          { id: Date.now()+2, type: 'true_false', question_text: 'La paella valenciana tradicional lleva chorizo.', options: [], correct_answer: 'Falso', explanation: 'La paella valenciana original lleva conejo, pollo y judías verdes, pero no chorizo.', allow_audio: false },
+          { id: Date.now()+3, type: 'fill_blank', question_text: 'Camarero, ¿me trae ___ de vino tinto, por favor?', options: [], correct_answer: 'una copa', explanation: 'Se dice "una copa de vino".', allow_audio: false }
+        ];
+      } else if (topic.includes('viaje') || topic.includes('turismo') || topic.includes('hotel') || topic.includes('aeropuerto')) {
+        newTitle = "De Viaje";
+        newDesc = "Expresiones útiles para viajar en español";
+        newQs = [
+          { id: Date.now(), type: 'choice', question_text: '¿Dónde facturas el equipaje?', options: ['En el aeropuerto', 'En el hotel', 'En el taxi', 'En la estación'], correct_answer: 'En el aeropuerto', explanation: 'El check-in del equipaje se hace en el aeropuerto.', allow_audio: false },
+          { id: Date.now()+1, type: 'true_false', question_text: 'El DNI es suficiente para viajar a América Latina.', options: [], correct_answer: 'Falso', explanation: 'Se necesita pasaporte para viajes internacionales fuera de la UE.', allow_audio: false },
+          { id: Date.now()+2, type: 'fill_blank', question_text: '¿A qué hora es el ___ del vuelo?', options: [], correct_answer: 'embarque', explanation: 'El boarding o embarque es cuando subes al avión.', allow_audio: false },
+          { id: Date.now()+3, type: 'open', question_text: 'Cuenta una anécdota de un viaje memorable.', options: [], correct_answer: '', explanation: 'Usa pasado (pretérito e imperfecto).', allow_audio: true }
+        ];
+      } else if (topic.includes('tecnología') || topic.includes('internet') || topic.includes('ordenador') || topic.includes('móvil')) {
+        newTitle = "Tecnología y Comunicación";
+        newDesc = "Vocabulario del mundo digital";
+        newQs = [
+          { id: Date.now(), type: 'choice', question_text: '¿Cómo se dice "to download" en español?', options: ['Descargar', 'Bajar archivos', 'Ambas son correctas', 'Ninguna'], correct_answer: 'Ambas son correctas', explanation: 'Tanto "descargar" como "bajar" son válidas.', allow_audio: false },
+          { id: Date.now()+1, type: 'fill_blank', question_text: 'Necesito ___ el programa antes de usarlo.', options: [], correct_answer: 'instalar', explanation: 'Instalar = install.', allow_audio: false },
+          { id: Date.now()+2, type: 'true_false', question_text: 'En España se dice "ordenador" en lugar de "computadora".', options: [], correct_answer: 'Verdadero', explanation: 'En España: ordenador. En Latinoamérica: computadora/computador.', allow_audio: false },
+          { id: Date.now()+3, type: 'open', question_text: '¿Qué redes sociales usas y para qué?', options: [], correct_answer: '', explanation: 'Practica vocabulario de tecnología.', allow_audio: true }
         ];
       } else {
-        // Genérico
+        // Genérico - preguntas adaptables
+        newTitle = `Explorando: ${aiPrompt}`;
+        newDesc = `Actividades variadas sobre ${aiPrompt}`;
         for (let i = 0; i < aiNumQuestions; i++) {
-          newQs.push({
-            id: Date.now() + i,
-            type: i % 2 === 0 ? 'open' : 'fill_blank',
-            question_text: i % 2 === 0 
-              ? `Opina sobre: ${aiPrompt}` 
-              : `Completa: ${aiPrompt} es ___.`,
-            options: [],
-            correct_answer: i % 2 === 1 ? aiPrompt.split(' ')[0] : '',
-            explanation: 'Práctica libre.',
-            allow_audio: i % 2 === 0
-          });
+          if (i % 4 === 0) {
+            newQs.push({
+              id: Date.now() + i,
+              type: 'open',
+              question_text: `Escribe un párrafo sobre: ${aiPrompt}`,
+              options: [],
+              correct_answer: '',
+              explanation: 'Evalúa vocabulario, gramática y coherencia.',
+              allow_audio: true
+            });
+          } else if (i % 4 === 1) {
+            newQs.push({
+              id: Date.now() + i,
+              type: 'true_false',
+              question_text: `¿Es ${aiPrompt} relevante en el mundo actual?`,
+              options: [],
+              correct_answer: 'Verdadero',
+              explanation: 'Pregunta de opinión y argumentación.',
+              allow_audio: false
+            });
+          } else if (i % 4 === 2) {
+            newQs.push({
+              id: Date.now() + i,
+              type: 'fill_blank',
+              question_text: `El concepto clave de ${aiPrompt} es ___.`,
+              options: [],
+              correct_answer: aiPrompt.split(' ')[0],
+              explanation: 'Completa con tu opinión.',
+              allow_audio: false
+            });
+          } else {
+            newQs.push({
+              id: Date.now() + i,
+              type: 'choice',
+              question_text: `¿Qué asocias más con ${aiPrompt}?`,
+              options: ['Conocimiento', 'Experiencia', 'Práctica', 'Teoría'],
+              correct_answer: 'Práctica',
+              explanation: 'No hay respuesta incorrecta, es reflexión.',
+              allow_audio: false
+            });
+          }
         }
+      }
+
+      // Limitar a la cantidad solicitada
+      if (newQs.length > aiNumQuestions) {
+        newQs = newQs.slice(0, aiNumQuestions);
       }
 
       setTitle(newTitle);
@@ -190,18 +250,18 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       setIsGenerating(false);
       setShowAiModal(false);
       setAiPrompt('');
-      toast.success("✅ Generado (Modo Local)");
+      toast.success("✅ Contenido generado (Modo Local)");
     }, 1000);
   };
 
-  // IA REAL (HUGGING FACE) - USA TOKEN DEL USUARIO
+  // IA REAL (HUGGING FACE) - CON CORS PROXY
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
 
     // VALIDAR QUE EXISTE TOKEN
     if (!userToken) {
       toast.error("⚠️ Falta tu API Key de Hugging Face");
-      setShowKeyModal(true); // Abrir modal de configuración
+      setShowKeyModal(true);
       return;
     }
 
@@ -228,23 +288,15 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
       "options": ["Opción A", "Opción B", "Opción C"],
       "correct_answer": "Opción A",
       "explanation": "Feedback pedagógico útil"
-    },
-    {
-      "type": "true_false",
-      "question_text": "Afirmación sobre el tema.",
-      "correct_answer": "Verdadero",
-      "explanation": "Explicación gramatical"
-    },
-    {
-      "type": "fill_blank",
-      "question_text": "La palabra correcta es ___.",
-      "correct_answer": "ejemplo",
-      "explanation": "Contexto gramatical"
     }
   ]
 } [/INST]`;
 
-      const response = await fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-Nemo-Instruct-2407", {
+      // USAMOS CORS PROXY PARA EVITAR BLOQUEOS
+      const targetUrl = "https://api-inference.huggingface.co/models/mistralai/Mistral-Nemo-Instruct-2407";
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
+      const response = await fetch(proxyUrl, {
         method: "POST",
         headers: { 
           "Authorization": `Bearer ${userToken}`, 
@@ -303,12 +355,13 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
         allow_audio: q.type === 'open'
       })));
       
-      toast.success("🎉 ¡Generado con IA Mistral!");
+      toast.success("🎉 ¡Generado con IA Real (Mistral)!");
       setShowAiModal(false);
       setAiPrompt('');
     } catch (error) {
-      console.error("AI Error:", error);
-      toast.error("⚠️ Error de conexión. Usando modo local...");
+      console.error("Error en generación IA:", error);
+      // FALLBACK SILENTIO: Si falla el proxy o la API, usamos modo local
+      toast.info("🔄 Usando generador local...");
       runLocalAI();
     } finally {
       setIsGenerating(false);
