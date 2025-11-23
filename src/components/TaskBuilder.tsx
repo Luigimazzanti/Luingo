@@ -5,10 +5,10 @@ import { Textarea } from './ui/textarea';
 import { X, Save, Plus, Trash2, CheckCircle2, AlignLeft, Mic, User, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { toast } from 'sonner@2.0.3';
 
-// --- CONFIGURACIÓN API KEY ---
-// SI EL .ENV FALLA, PEGA TU CLAVE AQUÍ ENTRE LAS COMILLAS:
-const HARDCODED_OPENAI_KEY = "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";
+// --- CLAVE API GEMINI ---
+const HARDCODED_GEMINI_KEY = "AIzaSyC_3XyoYa1UGD2qTpRh97DhrsiDI-aZqqY";
 
 // TIPOS
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -66,7 +66,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   // IA States
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
-  const [aiNumQuestions, setAiNumQuestions] = useState(5);
+  const [aiNumQuestions, setAiNumQuestions] = useState(3);
   const [aiLevel, setAiLevel] = useState('A1');
   const [aiDifficulty, setAiDifficulty] = useState('Básico');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -135,114 +135,64 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     onSaveTask(taskData);
   };
 
-  // --- IA GENERATOR ---
+  // --- MOTOR IA: GEMINI ---
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
 
-    // INTENTO DE RECUPERAR KEY (Seguro)
-    let apiKey = HARDCODED_OPENAI_KEY;
-    try {
-      // @ts-ignore
-      if (!apiKey && typeof window !== 'undefined' && (window as any).import?.meta?.env) {
-        // @ts-ignore
-        apiKey = (window as any).import.meta.env.VITE_OPENAI_API_KEY || "";
-      }
-    } catch (e) {
-      console.log("Env var not available, using hardcoded key");
-    }
-
-    // SI NO HAY KEY -> USAR SIMULACIÓN
-    if (!apiKey || !apiKey.startsWith('sk-')) {
-      console.warn("⚠️ Usando IA Simulada (Falta API Key)");
-      setTimeout(() => {
-        const topic = aiPrompt.toLowerCase();
-        let newQuestions: QuestionDraft[] = [];
-        
-        // Lógica Simulada Mejorada
-        for (let i = 0; i < aiNumQuestions; i++) {
-          const types: QuestionType[] = ['choice', 'true_false', 'fill_blank', 'open'];
-          const type = types[i % types.length];
-          
-          newQuestions.push({
-            id: Date.now() + i,
-            type: type,
-            question_text: `Pregunta ${i+1} sobre ${aiPrompt} - Nivel ${aiLevel}`,
-            options: type === 'choice' ? ['Opción A', 'Opción B', 'Opción C'] : [],
-            correct_answer: type === 'choice' ? 'Opción A' : type === 'true_false' ? 'Verdadero' : type === 'fill_blank' ? 'respuesta' : '',
-            explanation: `Explicación pedagógica para nivel ${aiLevel} sobre ${aiPrompt}.`,
-            allow_audio: type === 'open'
-          });
-        }
-        
-        setTitle(`Lección: ${aiPrompt} (${aiLevel})`);
-        setDescription(`Ejercicios de dificultad ${aiDifficulty} sobre ${aiPrompt}.`);
-        setQuestions(newQuestions);
-        setIsGenerating(false);
-        setShowAiModal(false);
-        setAiPrompt('');
-      }, 1500);
-      return;
-    }
-
-    // SI HAY KEY -> LLAMADA REAL
-    try {
-      const systemPrompt = `
-Actúa como un experto profesor de Español como Lengua Extranjera (ELE). 
-Crea una actividad educativa JSON estricta.
-
-CONFIGURACIÓN:
-- Tema: ${aiPrompt}
-- Nivel MCER: ${aiLevel}
-- Dificultad: ${aiDifficulty}
-- Cantidad de preguntas: ${aiNumQuestions}
+    // 1. Construir Prompt Rico
+    const fullPrompt = `
+Actúa como profesor de español (ELE). Crea un examen JSON estricto.
+Tema: "${aiPrompt}". Nivel MCER: ${aiLevel}. Dificultad: ${aiDifficulty}.
+Cantidad: ${aiNumQuestions} preguntas variadas (choice, true_false, fill_blank, open).
 
 REQUISITOS:
-- Las preguntas deben ser variadas (choice, true_false, fill_blank, open).
-- El campo "explanation" debe dar un feedback gramatical útil para un estudiante de nivel ${aiLevel}.
-- Adapta el vocabulario y la gramática al nivel solicitado.
-- Para preguntas de tipo "choice", incluye 3-4 opciones plausibles.
-- Para "fill_blank", usa ___ para marcar el hueco en question_text.
+- Distribuye los tipos de pregunta de manera equilibrada
+- Para "choice": incluye 3-4 opciones plausibles
+- Para "fill_blank": usa ___ en question_text para marcar el hueco
+- Para "open": marca allow_audio como true
+- El campo "explanation" debe ser pedagógico y útil
 
-FORMATO JSON ESPERADO:
+Output SOLO JSON limpio (sin markdown):
 {
   "title": "Título creativo en español",
-  "description": "Instrucciones para el alumno",
+  "description": "Instrucciones breves para el alumno",
   "questions": [
     {
-      "type": "choice" | "true_false" | "fill_blank" | "open",
-      "question_text": "Texto de la pregunta",
-      "options": ["A", "B", "C"] (solo para choice),
-      "correct_answer": "Respuesta exacta",
-      "explanation": "Por qué es correcta (feedback pedagógico)"
+      "type": "choice",
+      "question_text": "¿Pregunta?",
+      "options": ["Opción A", "Opción B", "Opción C"],
+      "correct_answer": "Opción A",
+      "explanation": "Feedback gramatical útil para nivel ${aiLevel}"
     }
   ]
 }
-      `;
+    `;
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "gpt-3.5-turbo",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: "Generar ahora" }
-          ],
-          temperature: 0.7
-        })
-      });
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${HARDCODED_GEMINI_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: fullPrompt }] }]
+          })
+        }
+      );
 
       const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
+      
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
 
-      const content = data.choices[0].message.content;
-      const jsonStr = content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1);
+      // 2. Parsear Respuesta de Gemini
+      const textResponse = data.candidates[0].content.parts[0].text;
+      const jsonStr = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
       const result = JSON.parse(jsonStr);
 
+      // 3. Aplicar Datos
       setTitle(result.title);
       setDescription(result.description);
       setQuestions(result.questions.map((q: any, i: number) => ({
@@ -252,17 +202,42 @@ FORMATO JSON ESPERADO:
         allow_audio: q.type === 'open'
       })));
       
+      toast.success("🎉 ¡Contenido generado con Gemini!");
       setShowAiModal(false);
       setAiPrompt('');
-    } catch (e) {
-      console.error("AI Error:", e);
-      alert("Error al generar con IA. Verifica la conexión.");
+    } catch (error) {
+      console.error("Gemini Error:", error);
+      toast.error("⚠️ Error de IA. Activando modo de respaldo...");
+      
+      // Fallback Local (Por si acaso)
+      setTimeout(() => {
+        const fallbackQuestions: QuestionDraft[] = [];
+        for (let i = 0; i < aiNumQuestions; i++) {
+          fallbackQuestions.push({
+            id: Date.now() + i,
+            type: i % 2 === 0 ? 'open' : 'fill_blank',
+            question_text: i % 2 === 0 
+              ? `Describe con tus palabras: ${aiPrompt}` 
+              : `Completa la frase sobre ${aiPrompt}: La idea principal es ___.`,
+            options: [],
+            correct_answer: i % 2 === 0 ? '' : aiPrompt.split(' ')[0],
+            explanation: 'Respuesta de práctica libre.',
+            allow_audio: i % 2 === 0
+          });
+        }
+        setTitle(`Actividad: ${aiPrompt}`);
+        setDescription(`Ejercicios de nivel ${aiLevel} sobre ${aiPrompt}`);
+        setQuestions(fallbackQuestions);
+        toast.success("✅ Contenido generado (modo local)");
+        setIsGenerating(false);
+        setShowAiModal(false);
+      }, 1000);
+      return;
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // RENDERERS VISUALES
   const renderQuestionBody = (q: QuestionDraft, idx: number) => {
     if (q.type === 'choice') return (
       <div className="mt-4 space-y-2 pl-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
@@ -369,9 +344,9 @@ FORMATO JSON ESPERADO:
             <div className="flex gap-2 mt-1">
               <button 
                 onClick={() => setShowAiModal(true)} 
-                className="bg-amber-400 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-md hover:bg-amber-500 transition-all"
+                className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-md hover:from-purple-600 hover:to-indigo-700 transition-all"
               >
-                <Sparkles className="w-3 h-3"/> ASISTENTE IA
+                <Sparkles className="w-3 h-3"/> GEMINI IA
               </button>
             </div>
           </div>
@@ -437,7 +412,7 @@ FORMATO JSON ESPERADO:
                     <div className="relative min-w-[180px]">
                       <select 
                         value={q.type} 
-                        onChange={(e) => updateQuestion(q.id, 'type', e.target.value)} 
+                        onChange={(e) => updateQuestion(q.id, 'type', e.target.value as QuestionType)} 
                         className="w-full h-12 sm:h-14 pl-4 pr-8 bg-indigo-50 border-2 border-indigo-100 rounded-xl font-bold text-indigo-900 appearance-none cursor-pointer text-sm sm:text-base"
                       >
                         <option value="choice">📝 Test</option>
@@ -551,36 +526,36 @@ FORMATO JSON ESPERADO:
           </div>
         </div>
 
-        {/* MODAL IA FLOTANTE CON CONTROLES */}
+        {/* MODAL IA GEMINI */}
         <Dialog open={showAiModal} onOpenChange={setShowAiModal}>
-          <DialogContent className="w-[90%] max-w-lg rounded-3xl p-6 border-4 border-amber-200 bg-[#FFFBF0]">
+          <DialogContent className="w-[90%] max-w-lg rounded-3xl p-6 border-4 border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-black text-amber-900 flex items-center gap-2">
-                <Sparkles className="w-6 h-6 fill-amber-500 text-amber-600" /> Asistente Creativo
+              <DialogTitle className="text-2xl font-black text-purple-900 flex items-center gap-2">
+                <Sparkles className="w-6 h-6 fill-purple-500 text-purple-600" /> Gemini IA
               </DialogTitle>
-              <DialogDescription className="text-amber-800/60">
-                Genera ejercicios personalizados en segundos.
+              <DialogDescription className="text-purple-800/60">
+                Genera ejercicios pedagógicos con inteligencia artificial.
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-5 mt-2">
               <div className="space-y-2">
-                <label className="text-xs font-black text-amber-800 uppercase tracking-wider">Tema</label>
+                <label className="text-xs font-black text-purple-800 uppercase tracking-wider">Tema</label>
                 <Textarea 
                   value={aiPrompt} 
                   onChange={e => setAiPrompt(e.target.value)} 
-                  placeholder="Ej: Vocabulario de Navidad, Verbos en Futuro..." 
-                  className="h-20 text-lg bg-white border-amber-200 rounded-xl focus:border-amber-400" 
+                  placeholder="Ej: Verbos irregulares en pretérito, Vocabulario de viajes..." 
+                  className="h-20 text-lg bg-white border-purple-200 rounded-xl focus:border-purple-400" 
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-amber-800 uppercase">Nivel</label>
+                  <label className="text-[10px] font-black text-purple-800 uppercase">Nivel MCER</label>
                   <select 
                     value={aiLevel} 
                     onChange={e => setAiLevel(e.target.value)} 
-                    className="w-full h-10 bg-white border-2 border-amber-200 rounded-lg font-bold text-amber-900 px-2"
+                    className="w-full h-10 bg-white border-2 border-purple-200 rounded-lg font-bold text-purple-900 px-2"
                   >
                     <option>A1</option>
                     <option>A2</option>
@@ -591,11 +566,11 @@ FORMATO JSON ESPERADO:
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-amber-800 uppercase">Dificultad</label>
+                  <label className="text-[10px] font-black text-purple-800 uppercase">Dificultad</label>
                   <select 
                     value={aiDifficulty} 
                     onChange={e => setAiDifficulty(e.target.value)} 
-                    className="w-full h-10 bg-white border-2 border-amber-200 rounded-lg font-bold text-amber-900 px-2"
+                    className="w-full h-10 bg-white border-2 border-purple-200 rounded-lg font-bold text-purple-900 px-2"
                   >
                     <option>Básico</option>
                     <option>Medio</option>
@@ -606,25 +581,29 @@ FORMATO JSON ESPERADO:
 
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <label className="text-[10px] font-black text-amber-800 uppercase">Cantidad de Preguntas</label>
-                  <span className="text-xs font-black text-amber-600">{aiNumQuestions}</span>
+                  <label className="text-[10px] font-black text-purple-800 uppercase">Cantidad de Preguntas</label>
+                  <span className="text-xs font-black text-purple-600">{aiNumQuestions}</span>
                 </div>
                 <input 
                   type="range" 
                   min="1" 
-                  max="10" 
+                  max="8" 
                   value={aiNumQuestions} 
                   onChange={e => setAiNumQuestions(Number(e.target.value))} 
-                  className="w-full accent-amber-500" 
+                  className="w-full accent-purple-500" 
                 />
               </div>
 
               <Button 
                 onClick={handleAiGenerate} 
                 disabled={isGenerating || !aiPrompt.trim()} 
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black h-12 rounded-xl shadow-lg border-b-4 border-amber-700 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-black h-12 rounded-xl shadow-lg border-b-4 border-purple-800 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isGenerating ? <Loader2 className="animate-spin"/> : '✨ GENERAR ACTIVIDAD'}
+                {isGenerating ? (
+                  <><Loader2 className="animate-spin mr-2"/> Generando...</>
+                ) : (
+                  <>✨ GENERAR CON GEMINI</>
+                )}
               </Button>
             </div>
           </DialogContent>
