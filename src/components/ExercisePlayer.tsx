@@ -196,6 +196,12 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
                   selectedOption === opt
                     ? 'border-indigo-500 bg-indigo-50 text-indigo-800 ring-2 ring-indigo-200'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                } ${
+                  feedbackState === 'correct' && selectedOption === opt
+                    ? '!border-emerald-500 !bg-emerald-50 !text-emerald-700'
+                    : feedbackState === 'incorrect' && selectedOption === opt
+                    ? '!border-rose-500 !bg-rose-50 !text-rose-700'
+                    : ''
                 }`}
               >
                 {opt}
@@ -205,7 +211,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
         )}
 
         {currentQuestion.type === 'true_false' && (
-          <div className="grid grid-cols-2 gap-4 md:gap-6">
+          <div className="grid grid-cols-2 gap-4">
             {['Verdadero', 'Falso'].map(opt => (
               <button
                 key={opt}
@@ -225,17 +231,34 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
           </div>
         )}
 
-        {currentQuestion.type === 'fill_blank' && (
-          <div className="py-8">
-            <input
-              value={textInput}
-              onChange={e => setTextInput(e.target.value)}
-              className="w-full h-20 border-b-4 border-slate-300 text-center text-3xl md:text-4xl font-black text-indigo-800 bg-transparent focus:border-indigo-500 outline-none placeholder:text-slate-200"
-              placeholder="Escribe aquí..."
-              disabled={feedbackState !== 'idle'}
-            />
-          </div>
-        )}
+        {currentQuestion.type === 'fill_blank' && (() => {
+          // ✅ CORRECCIÓN: Renderizado con flex-wrap para frases largas
+          const parts = currentQuestion.question_text.split(/\[\.\.\.\]|___/); // Soporta [...] o ___
+          return (
+            <div className="mt-6 bg-white p-6 rounded-3xl border-b-4 border-slate-200 shadow-sm">
+              <div className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-4 text-xl md:text-2xl font-medium text-slate-700 leading-relaxed text-center">
+                {parts[0] && <span>{parts[0]}</span>}
+                <input
+                  type="text"
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  disabled={feedbackState !== 'idle'}
+                  className={`px-4 py-1 rounded-xl border-b-4 outline-none font-bold text-center min-w-[120px] max-w-[200px] transition-all bg-slate-50 focus:bg-white focus:border-indigo-400 ${
+                    feedbackState === 'correct' ? '!bg-emerald-100 !border-emerald-400 !text-emerald-800' : 
+                    feedbackState === 'incorrect' ? '!bg-rose-100 !border-rose-400 !text-rose-800' : ''
+                  }`}
+                  placeholder="?"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && feedbackState === 'idle') {
+                      handleCheckAnswer();
+                    }
+                  }}
+                />
+                {parts[1] && <span>{parts[1]}</span>}
+              </div>
+            </div>
+          );
+        })()}
 
         {currentQuestion.type === 'open' && renderOpen()}
 

@@ -786,7 +786,7 @@ export default function App() {
                 onExit={() => setView('dashboard')}
                 onComplete={async (score) => {
                     // 1. Feedback visual inmediato
-                    toast.success("¡Buen trabajo! Guardando nota...");
+                    toast.success("¡Tarea finalizada!");
                     
                     // 2. Enviar a Moodle (Foro 7) con información completa
                     if (currentUser && activeExercise) {
@@ -801,7 +801,7 @@ export default function App() {
                             currentUser.name, 
                             score, 
                             activeExercise.questions.length,
-                            [] // TODO: Pasar respuestas reales si es necesario
+                            [] // TODO: Las respuestas ya se guardan dentro de ExercisePlayer
                         );
                         toast.success("✅ Nota registrada en Moodle");
                         
@@ -827,8 +827,8 @@ export default function App() {
                         }
                     }
                     
-                    // 3. Cambiar vista
-                    setView('correction'); // O volver al dashboard
+                    // ✅ CORRECCIÓN: Volver al dashboard, NO a la vista de corrección
+                    setView('dashboard');
                 }}
             />
         )}

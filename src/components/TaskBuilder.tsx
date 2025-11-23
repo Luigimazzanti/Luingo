@@ -49,7 +49,8 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   const [selectedLevel, setSelectedLevel] = useState(
     initialData?.content_data?.assignment_scope?.targetId || 'A1'
   );
-  const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts || 3);
+  // ✅ CORRECCIÓN: Default a 1 intento (no a 3) para consistencia
+  const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts ?? 1);
 
   const [questions, setQuestions] = useState<QuestionDraft[]>(
     initialData?.content_data?.questions || [{

@@ -69,7 +69,7 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
             {/* TARJETA PERFIL */}
             <div className="bg-white rounded-3xl shadow-lg border border-slate-100 p-5 md:p-6">
                 <div className="flex flex-row gap-5 items-center">
-                    <div className="shrink-0 relative -mt-12 mb-2"> 
+                    <div className="shrink-0 relative -mt-4 mb-2"> 
                         <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-white p-1 shadow-md">
                             <img src={student.avatar_url} alt={student.name} className="w-full h-full object-cover rounded-xl bg-slate-100" />
                         </div>
