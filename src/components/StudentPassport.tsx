@@ -40,7 +40,10 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
   const grammarScore = Math.min(100, (averageGrade * 10) + 10);
 
   const historyLimit = 5;
-  const sortedSubmissions = [...submissions].reverse();
+  // ORDENAMIENTO CRONOLÓGICO: Más reciente primero
+  const sortedSubmissions = [...submissions].sort((a, b) => 
+    new Date(b.submitted_at || 0).getTime() - new Date(a.submitted_at || 0).getTime()
+  );
   const visibleSubmissions = showAllHistory ? sortedSubmissions : sortedSubmissions.slice(0, historyLimit);
 
   return (

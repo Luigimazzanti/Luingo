@@ -106,18 +106,35 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
     setIsFinished(true);
     setShowConfetti(true);
 
-    // Envío silencioso a Moodle al terminar
+    // Calcular nota sobre 10
+    const totalQuestions = exercise.questions.length;
+    const grade = (score / totalQuestions) * 10;
+    
+    // Verificar si hay preguntas abiertas que requieren revisión manual
+    const hasOpenQuestions = exercise.questions.some(q => q.type === 'open');
+    const status = hasOpenQuestions ? 'pending_review' : 'completed';
+
+    // Envío a Moodle con información completa
     if (studentName) {
       toast.loading("Enviando resultados a Moodle...");
       try {
         await submitTaskResult(
+          'task-id-placeholder', // TODO: Pasar ID real de la tarea
           exercise.title, 
+          'student-id-placeholder', // TODO: Pasar ID real del estudiante
           studentName, 
-          score, 
-          exercise.questions.length
+          grade, // Nota sobre 10
+          totalQuestions,
+          allAnswers, // Array con todas las respuestas del estudiante
+          status // 'pending_review' si hay preguntas abiertas, 'completed' si no
         );
         toast.dismiss();
-        toast.success("✅ Tarea guardada en el servidor.");
+        
+        if (hasOpenQuestions) {
+          toast.success("✅ Tarea guardada. Requiere corrección del profesor.");
+        } else {
+          toast.success(`✅ Tarea completada. Nota: ${grade.toFixed(1)}/10`);
+        }
       } catch (e) {
         console.error(e);
         toast.dismiss();

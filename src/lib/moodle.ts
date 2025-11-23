@@ -256,11 +256,11 @@ export const submitTaskResult = async (
   taskTitle: string, 
   studentId: string, 
   studentName: string, 
-  score: number, 
+  grade: number, // Nota sobre 10
   total: number, 
-  answers: any[] = []
+  answers: any[] = [],
+  status: string = 'completed' // 'completed' o 'pending_review'
 ) => {
-  const grade = (score / total) * 10;
   const subject = `Entrega: ${taskTitle} - ${studentName}`;
 
   const jsonPayload = JSON.stringify({
@@ -268,18 +268,24 @@ export const submitTaskResult = async (
     taskTitle,
     studentId,
     studentName,
-    score,
+    grade: grade.toFixed(2), // Nota ya calculada sobre 10
     total,
-    grade,
-    answers
+    answers,
+    status
   });
+
+  const statusBadge = status === 'pending_review' 
+    ? '<span style="background-color: #f59e0b; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">⏳ REQUIERE REVISIÓN</span>'
+    : '<span style="background-color: #10b981; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">✅ COMPLETADA</span>';
 
   const message = `
     <h3>Resultado: ${grade.toFixed(1)} / 10</h3>
     <p>El estudiante <strong>${studentName}</strong> ha completado la tarea.</p>
+    ${statusBadge}
     <ul>
-      <li>Aciertos: ${score}</li>
+      <li>Nota: ${grade.toFixed(1)} / 10</li>
       <li>Total Preguntas: ${total}</li>
+      <li>Estado: ${status === 'pending_review' ? 'Requiere corrección manual' : 'Autocorregida'}</li>
     </ul>
     <hr/>
     <!--JSON:${jsonPayload}-->
