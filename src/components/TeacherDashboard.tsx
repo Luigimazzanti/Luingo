@@ -4,6 +4,7 @@ import { StudentCard } from './StudentCard';
 import { Users, QrCode, Sparkles, Trash2, Edit2, List } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogTrigger } from './ui/dialog';
+import { DialogTitle } from './ui/dialog';
 
 interface TeacherDashboardProps {
   classroom: Classroom;
@@ -59,6 +60,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md border-4 border-indigo-100 rounded-3xl w-[95%] p-6">
+                    {/* ACCESIBILIDAD: Título oculto para lectores de pantalla */}
+                    <DialogTitle className="sr-only">Código de Invitación</DialogTitle>
+                    
                     <div className="text-center">
                         <QrCode className="w-32 h-32 mx-auto mb-4 text-indigo-900" />
                         <p className="font-bold text-indigo-900 text-lg mb-2">Código de Acceso</p>

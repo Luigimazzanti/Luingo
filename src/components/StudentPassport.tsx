@@ -158,62 +158,94 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
          </div>
       </div>
 
-      {/* MODAL DETALLES DE ENTREGA */}
-      <Dialog open={!!selectedSubmission} onOpenChange={(open) => !open && setSelectedSubmission(null)}>
-        <DialogContent className="w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col">
-            <DialogHeader className="p-6 border-b border-slate-100 bg-slate-50/50">
-                <DialogTitle className="text-xl font-black text-slate-800 flex items-center gap-2">
-                    📝 Resumen de Intento
-                </DialogTitle>
-                {selectedSubmission && (
-                    <div className="flex items-center gap-4 mt-2">
-                        <div className="text-sm text-slate-500">{selectedSubmission.task_title}</div>
-                        <div className={`ml-auto font-black px-3 py-1 rounded-lg text-sm ${
-                            ((selectedSubmission.grade && selectedSubmission.grade > 0) 
-                                ? selectedSubmission.grade 
-                                : (selectedSubmission.score && selectedSubmission.total) 
-                                    ? (selectedSubmission.score / selectedSubmission.total) * 10 
-                                    : 0) >= 5 
-                            ? 'bg-emerald-100 text-emerald-700' 
-                            : 'bg-rose-100 text-rose-700'
-                        }`}>
-                            Nota: {((selectedSubmission.grade && selectedSubmission.grade > 0) 
-                                ? selectedSubmission.grade 
-                                : (selectedSubmission.score && selectedSubmission.total) 
-                                    ? (selectedSubmission.score / selectedSubmission.total) * 10 
-                                    : 0).toFixed(1)}
-                        </div>
-                    </div>
-                )}
-            </DialogHeader>
-            
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {selectedSubmission?.answers && Array.isArray(selectedSubmission.answers) && selectedSubmission.answers.length > 0 ? (
-                    selectedSubmission.answers.map((ans: any, idx: number) => (
-                        <div key={idx} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                            <p className="font-bold text-slate-700 text-sm mb-2">{idx + 1}. {ans.questionText}</p>
-                            <div className={`p-3 rounded-lg text-sm font-medium flex items-start gap-2 ${ans.isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                                {ans.isCorrect ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 shrink-0 mt-0.5" />}
-                                <div className="flex-1">
-                                    <p>Tu respuesta: <span className="font-bold">{ans.studentAnswer || "(Sin responder)"}</span></p>
-                                    {!ans.isCorrect && ans.correctAnswer && (
-                                        <p className="mt-1 text-xs">Correcta: <span className="font-bold">{ans.correctAnswer}</span></p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="text-center text-slate-400 py-8">
-                        <p className="mb-2">No hay detalles de respuestas guardados para esta tarea.</p>
-                        <p className="text-xs">Puntuación: {selectedSubmission?.score || 0}/{selectedSubmission?.total || 0}</p>
-                    </div>
-                )}
+      {/* MODAL DE REVISIÓN (Reescrito con Tabla y Feedback del Profesor) */}
+      <Dialog open={!!selectedSubmission} onOpenChange={(o) => !o && setSelectedSubmission(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl p-0 bg-slate-50">
+          {/* ACCESIBILIDAD: Título oculto para lectores de pantalla */}
+          <DialogTitle className="sr-only">
+            Detalle de Entrega: {selectedSubmission?.task_title}
+          </DialogTitle>
+          
+          <div className="bg-white p-6 border-b sticky top-0 z-10 shadow-sm">
+            <div className="flex justify-between items-center">
+              <h3 className="font-black text-xl text-slate-800">{selectedSubmission?.task_title}</h3>
+              <span className={`px-4 py-1 rounded-full text-sm font-black ${
+                (selectedSubmission?.grade || 0) >= 5 
+                  ? 'bg-emerald-100 text-emerald-700' 
+                  : 'bg-rose-100 text-rose-700'
+              }`}>
+                Nota: {(selectedSubmission?.grade || 0).toFixed(1)}
+              </span>
             </div>
-            
-            <div className="p-4 border-t border-slate-100 bg-white">
-                <Button onClick={() => setSelectedSubmission(null)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold h-12 rounded-xl">Cerrar Detalle</Button>
-            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Entregado el: {new Date(selectedSubmission?.submitted_at || '').toLocaleString()}
+            </p>
+          </div>
+          
+          <div className="p-6 space-y-6">
+            {selectedSubmission?.answers && Array.isArray(selectedSubmission.answers) && selectedSubmission.answers.length > 0 ? (
+              selectedSubmission.answers.map((ans: any, i: number) => (
+                <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                  <p className="font-bold text-slate-700 mb-3 flex gap-2">
+                    <span className="bg-slate-100 text-slate-500 w-6 h-6 rounded flex items-center justify-center text-xs">
+                      {i + 1}
+                    </span>
+                    {ans.q || ans.questionText || "Pregunta sin texto"}
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className={`p-3 rounded-xl border-l-4 ${
+                      ans.correct || ans.isCorrect 
+                        ? 'bg-emerald-50 border-emerald-400' 
+                        : 'bg-rose-50 border-rose-400'
+                    }`}>
+                      <p className="text-xs font-bold uppercase mb-1 opacity-50">Respuesta Alumno</p>
+                      <p className="font-medium text-slate-800">
+                        {String(ans.a || ans.studentAnswer || "---")}
+                      </p>
+                    </div>
+                    
+                    {(!ans.correct && !ans.isCorrect) && (
+                      <div className="p-3 rounded-xl bg-slate-50 border-l-4 border-slate-300">
+                        <p className="text-xs font-bold uppercase mb-1 opacity-50">Solución Correcta</p>
+                        <p className="font-medium text-slate-600">
+                          {String(ans.correctAnswer || "Consultar manual")}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* CAMPO DE FEEDBACK DEL PROFESOR (Visual por ahora, preparado para implementación futura) */}
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <textarea 
+                      placeholder="Escribe un comentario para el alumno..." 
+                      className="w-full text-sm p-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-indigo-300 outline-none resize-none h-16"
+                      disabled
+                      title="Función de feedback en desarrollo"
+                    />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-10 text-slate-400">
+                ⚠️ No se guardaron las respuestas detalladas para esta entrega.
+                <p className="text-xs mt-2">
+                  {selectedSubmission?.score 
+                    ? `Puntuación: ${selectedSubmission.score}/${selectedSubmission.total}` 
+                    : "Esta tarea se realizó antes de la implementación del sistema de respuestas detalladas."}
+                </p>
+              </div>
+            )}
+          </div>
+          
+          <div className="p-6 border-t border-slate-200 bg-white sticky bottom-0">
+            <Button 
+              onClick={() => setSelectedSubmission(null)} 
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold h-12 rounded-xl"
+            >
+              Cerrar Detalle
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

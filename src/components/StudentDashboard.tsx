@@ -67,18 +67,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     ).length;
   };
 
+  // ✅ LÓGICA CORREGIDA: Solo tareas con intentos restantes
   const pendingTasks = safeTasks.filter(t => {
-    const status = getTaskStatus(t.id);
     const attempts = getAttempts(t.id);
-    const max = t.content_data?.max_attempts || t.max_attempts || 1;
-    return (status === 'assigned' || status === 'in_progress') && attempts < max;
+    const max = t.content_data?.max_attempts ?? 1; // Doble interrogación para 0
+    // Solo mostramos si le quedan intentos
+    return attempts < max;
   });
 
+  // ✅ LÓGICA CORREGIDA: Tareas con al menos un intento
   const completedTasks = safeTasks.filter(t => {
-    const status = getTaskStatus(t.id);
     const attempts = getAttempts(t.id);
-    const max = t.content_data?.max_attempts || t.max_attempts || 1;
-    return (status === 'submitted' || status === 'graded') || attempts >= max;
+    // Mostramos en historial si ya hizo al menos un intento
+    return attempts > 0;
   });
 
   const studentName = student?.name || 'Estudiante';
@@ -262,6 +263,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         key={task.id} 
                         task={task} 
                         status={getTaskStatus(task.id)}
+                        attemptsUsed={getAttempts(task.id)} // ✅ PASAR EL CONTEO REAL AQUÍ
                         onClick={() => onSelectTask && onSelectTask(task)}
                       />
                     ))}
