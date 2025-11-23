@@ -8,7 +8,7 @@ import { toast } from 'sonner@2.0.3';
 
 interface ExercisePlayerProps {
   exercise: Exercise;
-  onComplete: (score: number) => void;
+  onComplete: (score: number, answers: any[]) => void; // ✅ CORRECCIÓN: Añadir parámetro answers
   onExit: () => void;
   studentName?: string;
 }
@@ -148,7 +148,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
           </div>
 
           <Button 
-            onClick={() => { onComplete(score); onExit(); }} 
+            onClick={() => { onComplete(score, allAnswers); onExit(); }} 
             className="w-full h-14 bg-slate-800 text-white font-black rounded-2xl text-lg"
           >
             Volver al Menú

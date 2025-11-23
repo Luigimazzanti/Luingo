@@ -97,8 +97,11 @@ export const getMoodleTasks = async () => {
 };
 
 // GUARDAR ENTREGA (Con Respuestas Detalladas)
+// ✅ CORRECCIÓN: Acepta taskId, studentId y todos los parámetros necesarios
 export const submitTaskResult = async (
+  taskId: string,
   taskTitle: string, 
+  studentId: string,
   studentName: string, 
   score: number, 
   total: number, 
@@ -108,7 +111,9 @@ export const submitTaskResult = async (
   
   // ✅ LOG PARA DEPURAR
   console.log("📤 Enviando a Moodle:", { 
+    taskId,
     taskTitle, 
+    studentId,
     studentName, 
     score,
     total,
@@ -117,15 +122,17 @@ export const submitTaskResult = async (
     answersLength: answers.length 
   });
   
-  // ✅ ESTRUCTURA JSON ROBUSTA
+  // ✅ ESTRUCTURA JSON ROBUSTA CON TODOS LOS DATOS
   const payload = { 
-    score, 
-    total, 
-    grade: Number(grade.toFixed(2)), 
-    answers, // Aquí va el array completo
-    studentName, 
-    taskTitle,
-    timestamp: new Date().toISOString()
+    taskId,      // ✅ Identificador de la tarea
+    taskTitle,   // ✅ Título de la tarea
+    studentId,   // ✅ ID del estudiante
+    studentName, // ✅ Nombre del estudiante
+    score,       // ✅ Puntos obtenidos
+    total,       // ✅ Puntos totales
+    grade: Number(grade.toFixed(2)), // ✅ Nota sobre 10
+    answers,     // ✅ Array de respuestas detalladas
+    timestamp: new Date().toISOString() // ✅ Fecha de entrega
   };
   
   // ✅ Serializamos con cuidado
@@ -137,6 +144,7 @@ export const submitTaskResult = async (
   const message = `
     <h3>Nota: ${grade.toFixed(1)} / 10</h3>
     <p>Alumno: ${studentName}</p>
+    <p>Tarea: ${taskTitle}</p>
     <p>Fecha: ${new Date().toLocaleDateString()}</p>
     <hr/>
     <!--JSON:${jsonString}-->
@@ -160,14 +168,17 @@ export const getMoodleSubmissions = async () => {
     const match = disc.message.match(/<!--JSON:(.*?)-->/);
     const jsonData = match ? JSON.parse(match[1]) : {};
     
+    // ✅ CORRECCIÓN: Recuperar TODOS los campos del payload
     return {
       id: `sub-${disc.discussion}`,
+      task_id: jsonData.taskId || 'unknown', // ✅ Recuperar taskId
       task_title: jsonData.taskTitle || disc.subject,
+      student_id: jsonData.studentId || '', // ✅ Recuperar studentId
       student_name: jsonData.studentName || disc.userfullname,
       grade: jsonData.grade || 0,
       score: jsonData.score || 0,
       total: jsonData.total || 0,
-      answers: jsonData.answers || [], // AQUÍ ESTÁN LAS RESPUESTAS
+      answers: jsonData.answers || [], // ✅ Recuperar respuestas detalladas
       submitted_at: new Date(disc.created * 1000).toISOString(),
       status: 'submitted'
     };

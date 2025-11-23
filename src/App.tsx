@@ -784,9 +784,9 @@ export default function App() {
                 exercise={activeExercise}
                 studentName={currentUser?.name}
                 onExit={() => setView('dashboard')}
-                onComplete={async (score) => {
-                    // 1. Feedback visual inmediato
-                    toast.success("¡Tarea finalizada!");
+                onComplete={async (score, answers) => {
+                    // ✅ CORRECCIÓN: Ahora recibimos el array de respuestas real
+                    toast.loading("Guardando y evaluando...");
                     
                     // 2. Enviar a Moodle (Foro 7) con información completa
                     if (currentUser && activeExercise) {
@@ -794,6 +794,7 @@ export default function App() {
                         const currentTask = tasks.find(t => t.title === activeExercise.title);
                         const taskId = currentTask?.id || 'task-unknown';
                         
+                        // ✅ CORRECCIÓN: Pasar el array de respuestas REAL (no [])
                         await submitTaskResult(
                             taskId,
                             activeExercise.title, 
@@ -801,11 +802,16 @@ export default function App() {
                             currentUser.name, 
                             score, 
                             activeExercise.questions.length,
-                            [] // TODO: Las respuestas ya se guardan dentro de ExercisePlayer
+                            answers // ✅ AQUÍ: Variable real con todas las respuestas
                         );
-                        toast.success("✅ Nota registrada en Moodle");
                         
-                        // Recargar submissions para actualizar el portafolio
+                        // 3. Esperar un poco a Moodle (Hack de latencia)
+                        await new Promise(r => setTimeout(r, 1000));
+                        
+                        toast.dismiss();
+                        toast.success("✅ Tarea completada y guardada");
+                        
+                        // 4. Recargar submissions para actualizar el portafolio
                         try {
                             const allSubmissionsData = await getMoodleSubmissions();
                             
