@@ -140,8 +140,21 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
 
-    // 1. Construir Prompt Rico
-    const fullPrompt = `
+    // 1. Obtener Key
+    let apiKey = HARDCODED_GEMINI_KEY;
+    try {
+      // @ts-ignore
+      if (!apiKey && import.meta.env) apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    } catch (e) {}
+    
+    if (!apiKey) {
+      console.warn("⚠️ Sin Key. Usando modo local.");
+      runLocalAI();
+      return;
+    }
+
+    try {
+      const systemPrompt = `
 Actúa como profesor de español (ELE). Crea un examen JSON estricto.
 Tema: "${aiPrompt}". Nivel MCER: ${aiLevel}. Dificultad: ${aiDifficulty}.
 Cantidad: ${aiNumQuestions} preguntas variadas (choice, true_false, fill_blank, open).
@@ -167,16 +180,16 @@ Output SOLO JSON limpio (sin markdown):
     }
   ]
 }
-    `;
+      `;
 
-    try {
+      // USAMOS GEMINI-PRO (ESTÁNDAR)
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${HARDCODED_GEMINI_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: fullPrompt }] }]
+            contents: [{ parts: [{ text: systemPrompt }] }]
           })
         }
       );
@@ -202,40 +215,42 @@ Output SOLO JSON limpio (sin markdown):
         allow_audio: q.type === 'open'
       })));
       
-      toast.success("🎉 ¡Contenido generado con Gemini!");
+      toast.success("✅ Generado con Gemini Pro");
       setShowAiModal(false);
       setAiPrompt('');
     } catch (error) {
       console.error("Gemini Error:", error);
-      toast.error("⚠️ Error de IA. Activando modo de respaldo...");
-      
-      // Fallback Local (Por si acaso)
-      setTimeout(() => {
-        const fallbackQuestions: QuestionDraft[] = [];
-        for (let i = 0; i < aiNumQuestions; i++) {
-          fallbackQuestions.push({
-            id: Date.now() + i,
-            type: i % 2 === 0 ? 'open' : 'fill_blank',
-            question_text: i % 2 === 0 
-              ? `Describe con tus palabras: ${aiPrompt}` 
-              : `Completa la frase sobre ${aiPrompt}: La idea principal es ___.`,
-            options: [],
-            correct_answer: i % 2 === 0 ? '' : aiPrompt.split(' ')[0],
-            explanation: 'Respuesta de práctica libre.',
-            allow_audio: i % 2 === 0
-          });
-        }
-        setTitle(`Actividad: ${aiPrompt}`);
-        setDescription(`Ejercicios de nivel ${aiLevel} sobre ${aiPrompt}`);
-        setQuestions(fallbackQuestions);
-        toast.success("✅ Contenido generado (modo local)");
-        setIsGenerating(false);
-        setShowAiModal(false);
-      }, 1000);
-      return;
+      toast.error("⚠️ Error API. Usando respaldo local.");
+      runLocalAI();
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // Función de respaldo local
+  const runLocalAI = () => {
+    setTimeout(() => {
+      const fallbackQuestions: QuestionDraft[] = [];
+      for (let i = 0; i < aiNumQuestions; i++) {
+        fallbackQuestions.push({
+          id: Date.now() + i,
+          type: i % 2 === 0 ? 'open' : 'fill_blank',
+          question_text: i % 2 === 0 
+            ? `Describe con tus palabras: ${aiPrompt}` 
+            : `Completa la frase sobre ${aiPrompt}: La idea principal es ___.`,
+          options: [],
+          correct_answer: i % 2 === 0 ? '' : aiPrompt.split(' ')[0],
+          explanation: 'Respuesta de práctica libre.',
+          allow_audio: i % 2 === 0
+        });
+      }
+      setTitle(`Actividad: ${aiPrompt}`);
+      setDescription(`Ejercicios de nivel ${aiLevel} sobre ${aiPrompt}`);
+      setQuestions(fallbackQuestions);
+      toast.success("✅ Contenido generado (modo local)");
+      setIsGenerating(false);
+      setShowAiModal(false);
+    }, 1000);
   };
 
   const renderQuestionBody = (q: QuestionDraft, idx: number) => {
