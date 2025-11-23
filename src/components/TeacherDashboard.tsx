@@ -20,6 +20,7 @@ interface TeacherDashboardProps {
   onDeleteTask: (id: string) => void;
   onEditTask?: (task: Task) => void;
   onRefreshSubmissions?: () => void;
+  onLogout?: () => void; // ✅ NUEVO: Para cerrar sesión desde el dashboard
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
@@ -32,6 +33,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onDeleteTask,
   onEditTask,
   onRefreshSubmissions,
+  onLogout,
 }) => {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [viewMode, setViewMode] = useState<'students' | 'tasks' | 'grades'>('students');

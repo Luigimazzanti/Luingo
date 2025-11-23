@@ -469,184 +469,225 @@ export default function App() {
 
   // ========== RENDER ==========
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 overflow-hidden">
+    <div className="h-screen w-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 overflow-hidden flex flex-col">
       <Toaster position="top-right" richColors />
 
-      {/* TASK BUILDER MODAL */}
-      {showTaskBuilder && (
-        <TaskBuilder 
-          onSaveTask={handleSaveNewTask}
-          onCancel={() => {
-            setShowTaskBuilder(false);
-            setTaskToEdit(null);
-            setStartBuilderWithAI(false);
-          }}
-          initialData={taskToEdit || undefined}
-          autoOpenAI={startBuilderWithAI}
-        />
-      )}
-
-      {/* PANTALLA DE CARGA */}
-      {loading && (
-        <div className="h-full w-full flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
-            <p className="text-slate-600 font-medium">Conectando con Moodle...</p>
-          </div>
-        </div>
-      )}
-
-      {/* ERROR DE CONEXIÓN */}
-      {connectionError && !loading && (
-        <div className="h-full w-full flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border-2 border-red-200 text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">⚠️</span>
+      {/* ✅ NAVBAR SUPERIOR GLOBAL (Solo cuando hay usuario logueado) */}
+      {currentUser && view !== 'home' && (
+        <nav className="h-16 bg-white border-b border-slate-200 shadow-sm flex items-center justify-between px-4 md:px-6 shrink-0 z-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+              <span className="text-white font-black text-xl">L</span>
             </div>
-            <h2 className="text-xl font-black text-slate-800 mb-2">Error de Conexión</h2>
-            <p className="text-slate-600 mb-6">{connectionError}</p>
-            <Button onClick={initMoodle} className="w-full">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Reintentar
+            <div>
+              <h1 className="font-black text-slate-800 text-lg leading-none">LuinGo</h1>
+              <p className="text-xs text-slate-500">{currentUser.role === 'teacher' ? 'Profesor' : 'Estudiante'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Nombre del usuario */}
+            <div className="hidden sm:flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg">
+              <img 
+                src={currentUser.avatar_url} 
+                alt={currentUser.name} 
+                className="w-7 h-7 rounded-full"
+              />
+              <span className="text-sm font-bold text-slate-700">{currentUser.name}</span>
+            </div>
+
+            {/* ✅ BOTÓN DE SALIR VISIBLE CON TEXTO */}
+            <Button 
+              variant="ghost" 
+              onClick={handleLogout} 
+              className="text-slate-500 hover:text-rose-600 hover:bg-rose-50 font-bold gap-2 px-3 h-10"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="hidden md:inline">Salir</span>
             </Button>
           </div>
-        </div>
+        </nav>
       )}
 
-      {/* PANTALLA DE LOGIN */}
-      {!loading && !connectionError && !currentUser && view === 'home' && (
-        <div className="h-full w-full flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border-4 border-indigo-100">
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <span className="text-white font-black text-3xl">L</span>
-              </div>
-              <h1 className="text-3xl font-black text-slate-800 mb-2">LuinGo</h1>
-              <p className="text-slate-500">Plataforma LMS con IA</p>
+      {/* CONTENIDO PRINCIPAL */}
+      <div className="flex-1 overflow-hidden">
+        {/* TASK BUILDER MODAL */}
+        {showTaskBuilder && (
+          <TaskBuilder 
+            onSaveTask={handleSaveNewTask}
+            onCancel={() => {
+              setShowTaskBuilder(false);
+              setTaskToEdit(null);
+              setStartBuilderWithAI(false);
+            }}
+            initialData={taskToEdit || undefined}
+            autoOpenAI={startBuilderWithAI}
+          />
+        )}
+
+        {/* PANTALLA DE CARGA */}
+        {loading && (
+          <div className="h-full w-full flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
+              <p className="text-slate-600 font-medium">Conectando con Moodle...</p>
             </div>
+          </div>
+        )}
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">
-                  Usuario de Moodle
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Ingresa tu username"
-                  value={usernameInput}
-                  onChange={(e) => setUsernameInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && usernameInput && initializeUser(usernameInput)}
-                  className="w-full h-12 text-lg"
-                />
+        {/* ERROR DE CONEXIÓN */}
+        {connectionError && !loading && (
+          <div className="h-full w-full flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border-2 border-red-200 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">⚠️</span>
+              </div>
+              <h2 className="text-xl font-black text-slate-800 mb-2">Error de Conexión</h2>
+              <p className="text-slate-600 mb-6">{connectionError}</p>
+              <Button onClick={initMoodle} className="w-full">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reintentar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* PANTALLA DE LOGIN */}
+        {!loading && !connectionError && !currentUser && view === 'home' && (
+          <div className="h-full w-full flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border-4 border-indigo-100">
+              <div className="text-center mb-8">
+                <div className="w-20 h-20 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                  <span className="text-white font-black text-3xl">L</span>
+                </div>
+                <h1 className="text-3xl font-black text-slate-800 mb-2">LuinGo</h1>
+                <p className="text-slate-500">Plataforma LMS con IA</p>
               </div>
 
-              <Button
-                onClick={() => usernameInput && initializeUser(usernameInput)}
-                disabled={!usernameInput}
-                className="w-full h-12 text-lg font-black"
-              >
-                Entrar
-              </Button>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Usuario de Moodle
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Ingresa tu username"
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && usernameInput && initializeUser(usernameInput)}
+                    className="w-full h-12 text-lg"
+                  />
+                </div>
 
-              <div className="text-xs text-slate-400 text-center mt-4">
-                <p>👨‍🏫 Profesor: <code className="bg-slate-100 px-2 py-1 rounded">luigi</code></p>
-                <p>👨‍🎓 Estudiante: <code className="bg-slate-100 px-2 py-1 rounded">admin</code></p>
+                <Button
+                  onClick={() => usernameInput && initializeUser(usernameInput)}
+                  disabled={!usernameInput}
+                  className="w-full h-12 text-lg font-black"
+                >
+                  Entrar
+                </Button>
+
+                <div className="text-xs text-slate-400 text-center mt-4">
+                  <p>👨‍🏫 Profesor: <code className="bg-slate-100 px-2 py-1 rounded">luigi</code></p>
+                  <p>👨‍🎓 Estudiante: <code className="bg-slate-100 px-2 py-1 rounded">admin</code></p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* SELECCIÓN DE CLASE */}
-      {!loading && !connectionError && currentUser && view === 'home' && (
-        <ClassSelection
-          courses={courses}
-          onSelectClass={handleSelectClass}
-          onCreateClass={handleCreateClass}
-          userName={currentUser.name}
-          userRole={currentUser.role}
-        />
-      )}
+        {/* SELECCIÓN DE CLASE */}
+        {!loading && !connectionError && currentUser && view === 'home' && (
+          <ClassSelection
+            courses={courses}
+            onSelectClass={handleSelectClass}
+            onCreateClass={handleCreateClass}
+            userName={currentUser.name}
+            userRole={currentUser.role}
+          />
+        )}
 
-      {/* DASHBOARD DEL PROFESOR */}
-      {view === 'dashboard' && currentUser?.role === 'teacher' && (
-        <>
-          <TeacherDashboard
-            classroom={classroom}
-            students={students}
+        {/* DASHBOARD DEL PROFESOR */}
+        {view === 'dashboard' && currentUser?.role === 'teacher' && (
+          <>
+            <TeacherDashboard
+              classroom={classroom}
+              students={students}
+              tasks={tasks}
+              submissions={realSubmissions}
+              onSelectStudent={handleSelectStudent}
+              onGenerateTask={handleGenerateTask}
+              onDeleteTask={handleDeleteTask}
+              onEditTask={handleEditTask}
+              onRefreshSubmissions={loadSubmissions}
+              onLogout={handleLogout}
+            />
+
+            {/* SHEET: PERFIL DEL ESTUDIANTE */}
+            <Sheet 
+              open={!!selectedStudentId} 
+              onOpenChange={(open) => !open && setSelectedStudentId(null)}
+            >
+              <SheetContent side="right" className="w-full sm:max-w-2xl p-0 border-l-4 border-slate-200 bg-[#F0F4F8] overflow-y-auto">
+                <SheetHeader className="hidden">
+                  <SheetTitle>Perfil del Estudiante</SheetTitle>
+                  <SheetDescription>Detalles y asignación de tareas</SheetDescription>
+                </SheetHeader>
+
+                {selectedStudentId && (
+                  <StudentPassport 
+                    student={students.find(s => s.id === selectedStudentId) || students[0]}
+                    tasks={tasks}
+                    submissions={realSubmissions.filter(s => 
+                      s.student_name === (students.find(st => st.id === selectedStudentId)?.name) ||
+                      s.student_id === selectedStudentId
+                    )}
+                    onBack={() => setSelectedStudentId(null)}
+                    onAssignTask={() => {
+                      setSelectedStudentId(null);
+                      setShowTaskBuilder(true);
+                    }}
+                  />
+                )}
+              </SheetContent>
+            </Sheet>
+          </>
+        )}
+
+        {/* DASHBOARD DEL ESTUDIANTE */}
+        {view === 'dashboard' && currentUser?.role === 'student' && (
+          <StudentDashboard 
+            student={students[0]}
             tasks={tasks}
             submissions={realSubmissions}
-            onSelectStudent={handleSelectStudent}
-            onGenerateTask={handleGenerateTask}
-            onDeleteTask={handleDeleteTask}
-            onEditTask={handleEditTask}
-            onRefreshSubmissions={loadSubmissions}
+            onLogout={handleLogout}
+            onSelectTask={handleSelectTask}
           />
+        )}
 
-          {/* SHEET: PERFIL DEL ESTUDIANTE */}
-          <Sheet 
-            open={!!selectedStudentId} 
-            onOpenChange={(open) => !open && setSelectedStudentId(null)}
-          >
-            <SheetContent side="right" className="w-full sm:max-w-2xl p-0 border-l-4 border-slate-200 bg-[#F0F4F8] overflow-y-auto">
-              <SheetHeader className="hidden">
-                <SheetTitle>Perfil del Estudiante</SheetTitle>
-                <SheetDescription>Detalles y asignación de tareas</SheetDescription>
-              </SheetHeader>
+        {/* REPRODUCTOR DE EJERCICIOS */}
+        {view === 'exercise' && activeExercise && (
+          <ExercisePlayer 
+            exercise={activeExercise}
+            studentName={currentUser?.name}
+            onExit={handleExerciseExit}
+            onComplete={handleExerciseComplete}
+          />
+        )}
 
-              {selectedStudentId && (
-                <StudentPassport 
-                  student={students.find(s => s.id === selectedStudentId) || students[0]}
-                  tasks={tasks}
-                  submissions={realSubmissions.filter(s => 
-                    s.student_name === (students.find(st => st.id === selectedStudentId)?.name) ||
-                    s.student_id === selectedStudentId
-                  )}
-                  onBack={() => setSelectedStudentId(null)}
-                  onAssignTask={() => {
-                    setSelectedStudentId(null);
-                    setShowTaskBuilder(true);
-                  }}
-                />
-              )}
-            </SheetContent>
-          </Sheet>
-        </>
-      )}
-
-      {/* DASHBOARD DEL ESTUDIANTE */}
-      {view === 'dashboard' && currentUser?.role === 'student' && (
-        <StudentDashboard 
-          student={students[0]}
-          tasks={tasks}
-          submissions={realSubmissions}
-          onLogout={handleLogout}
-          onSelectTask={handleSelectTask}
-        />
-      )}
-
-      {/* REPRODUCTOR DE EJERCICIOS */}
-      {view === 'exercise' && activeExercise && (
-        <ExercisePlayer 
-          exercise={activeExercise}
-          studentName={currentUser?.name}
-          onExit={handleExerciseExit}
-          onComplete={handleExerciseComplete}
-        />
-      )}
-
-      {/* VISOR DE PDF */}
-      {view === 'pdf-viewer' && activePDFTask && (
-        <PDFAnnotator
-          pdfUrl={activePDFTask.content_data?.pdf_url || ''}
-          taskTitle={activePDFTask.title}
-          onBack={() => setView('dashboard')}
-          onSubmit={() => {
-            toast.success("PDF anotado guardado");
-            setView('dashboard');
-          }}
-        />
-      )}
+        {/* VISOR DE PDF */}
+        {view === 'pdf-viewer' && activePDFTask && (
+          <PDFAnnotator
+            pdfUrl={activePDFTask.content_data?.pdf_url || ''}
+            taskTitle={activePDFTask.title}
+            onBack={() => setView('dashboard')}
+            onSubmit={() => {
+              toast.success("PDF anotado guardado");
+              setView('dashboard');
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

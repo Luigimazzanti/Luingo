@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Student, Submission, Task } from '../types';
-import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle } from 'lucide-react';
+import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { LUINGO_LEVELS } from '../lib/mockData';
 import { cn } from '../lib/utils';
+import { deleteMoodlePost, getMoodleSubmissions } from '../lib/moodle';
+import { toast } from 'sonner@2.0.3';
 
 interface StudentPassportProps {
   student: Student;
@@ -23,6 +25,31 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
 }) => {
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+
+  // ✅ FUNCIÓN PARA BORRAR INTENTO
+  const handleDelete = async (postId: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Evitar abrir el modal de detalles
+    
+    if (!window.confirm("¿Estás seguro de que quieres borrar este intento? Esta acción no se puede deshacer.")) {
+      return;
+    }
+    
+    try {
+      toast.loading("Borrando intento...");
+      const cleanId = postId.replace('post-', '');
+      await deleteMoodlePost(cleanId);
+      
+      toast.dismiss();
+      toast.success("Intento borrado correctamente");
+      
+      // Forzar recarga de la página para actualizar datos
+      window.location.reload();
+    } catch (error) {
+      console.error("Error al borrar intento:", error);
+      toast.dismiss();
+      toast.error("Error al borrar el intento");
+    }
+  };
 
   // --- LÓGICA DE DATOS ---
   const totalXP = submissions.length * 15;
@@ -138,8 +165,16 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                                                     <h4 className="font-bold text-slate-700 text-xs truncate group-hover:text-indigo-700">{sub.task_title}</h4>
                                                     <p className="text-[10px] text-slate-400">{new Date(sub.submitted_at || Date.now()).toLocaleDateString()}</p>
                                                 </div>
-                                                <div className="text-right px-2">
-                                                    <span className="text-[10px] font-black text-slate-400 flex items-center gap-1 group-hover:text-indigo-600"><Eye className="w-3 h-3" /> Ver</span>
+                                                {/* ✅ BOTÓN DE BORRAR Y VER */}
+                                                <div className="text-right px-2 flex flex-col items-end gap-1">
+                                                    <span className="text-xs font-black text-slate-500">{sub.score}/{sub.total}</span>
+                                                    <button 
+                                                        onClick={(e) => handleDelete(sub.id, e)} 
+                                                        className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
+                                                        title="Borrar este intento"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </div>
                                         );

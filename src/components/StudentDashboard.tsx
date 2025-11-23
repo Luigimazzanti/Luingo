@@ -159,7 +159,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   );
 
   return (
-    <div className="flex h-screen bg-[#F0F4F8] text-slate-900 font-sans overflow-hidden">
+    <div className="flex h-full bg-[#F0F4F8] text-slate-900 font-sans">
       {/* --- SIDEBAR DESKTOP (Oculto en móvil) --- */}
       <aside className={cn(
         "hidden md:flex bg-white border-r border-slate-200 flex-col transition-all duration-300 z-20",
