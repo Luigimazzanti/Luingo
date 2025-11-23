@@ -6,6 +6,10 @@ import { X, Save, Plus, Trash2, CheckCircle2, AlignLeft, Mic, User, Sparkles, Lo
 import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 
+// --- CONFIGURACIÓN API KEY ---
+// SI EL .ENV FALLA, PEGA TU CLAVE AQUÍ ENTRE LAS COMILLAS:
+const HARDCODED_OPENAI_KEY = "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";
+
 // TIPOS
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
 
@@ -36,7 +40,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   studentName, 
   autoOpenAI 
 }) => {
-  // ESTADOS GENERALES
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [category, setCategory] = useState<'homework' | 'quiz' | 'project'>(initialData?.category || 'homework');
@@ -47,7 +50,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     initialData?.content_data?.assignment_scope?.targetId || 'A1'
   );
   const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts || 3);
-  
+
   const [questions, setQuestions] = useState<QuestionDraft[]>(
     initialData?.content_data?.questions || [{
       id: Date.now(),
@@ -60,7 +63,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     }]
   );
 
-  // ESTADOS DE IA
+  // IA States
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiNumQuestions, setAiNumQuestions] = useState(5);
@@ -72,7 +75,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     if (autoOpenAI && !initialData) setShowAiModal(true);
   }, [autoOpenAI, initialData]);
 
-  // --- HANDLERS CRUD PREGUNTAS ---
+  // HANDLERS
   const addQuestion = () => setQuestions([...questions, {
     id: Date.now(),
     type: 'choice',
@@ -107,7 +110,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     if (q.correct_answer === q.options[idx]) updateQuestion(qId, 'correct_answer', text);
   };
 
-  // --- GUARDADO ---
   const handleSave = () => {
     if (!title.trim()) {
       alert("Falta título");
@@ -133,41 +135,57 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     onSaveTask(taskData);
   };
 
-  // --- GENERACIÓN IA (MEJORADA) ---
+  // --- IA GENERATOR ---
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
 
-    const OPENAI_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-    
-    // FALLBACK: Si no hay API Key configurada, usar el simulador inteligente
-    if (!OPENAI_KEY || OPENAI_KEY.includes('TU_CLAVE')) {
+    // INTENTO DE RECUPERAR KEY (Seguro)
+    let apiKey = HARDCODED_OPENAI_KEY;
+    try {
+      // @ts-ignore
+      if (!apiKey && typeof window !== 'undefined' && (window as any).import?.meta?.env) {
+        // @ts-ignore
+        apiKey = (window as any).import.meta.env.VITE_OPENAI_API_KEY || "";
+      }
+    } catch (e) {
+      console.log("Env var not available, using hardcoded key");
+    }
+
+    // SI NO HAY KEY -> USAR SIMULACIÓN
+    if (!apiKey || !apiKey.startsWith('sk-')) {
       console.warn("⚠️ Usando IA Simulada (Falta API Key)");
       setTimeout(() => {
         const topic = aiPrompt.toLowerCase();
         let newQuestions: QuestionDraft[] = [];
-        // Lógica simulada mejorada
+        
+        // Lógica Simulada Mejorada
         for (let i = 0; i < aiNumQuestions; i++) {
+          const types: QuestionType[] = ['choice', 'true_false', 'fill_blank', 'open'];
+          const type = types[i % types.length];
+          
           newQuestions.push({
             id: Date.now() + i,
-            type: i % 2 === 0 ? 'choice' : 'true_false',
-            question_text: `Pregunta simulada ${i + 1} sobre ${aiPrompt} (${aiLevel})`,
-            options: i % 2 === 0 ? ['Opción A', 'Opción B', 'Opción C'] : [],
-            correct_answer: i % 2 === 0 ? 'Opción A' : 'Verdadero',
-            explanation: `Explicación pedagógica para nivel ${aiLevel} sobre el tema.`,
-            allow_audio: false
+            type: type,
+            question_text: `Pregunta ${i+1} sobre ${aiPrompt} - Nivel ${aiLevel}`,
+            options: type === 'choice' ? ['Opción A', 'Opción B', 'Opción C'] : [],
+            correct_answer: type === 'choice' ? 'Opción A' : type === 'true_false' ? 'Verdadero' : type === 'fill_blank' ? 'respuesta' : '',
+            explanation: `Explicación pedagógica para nivel ${aiLevel} sobre ${aiPrompt}.`,
+            allow_audio: type === 'open'
           });
         }
+        
         setTitle(`Lección: ${aiPrompt} (${aiLevel})`);
         setDescription(`Ejercicios de dificultad ${aiDifficulty} sobre ${aiPrompt}.`);
         setQuestions(newQuestions);
         setIsGenerating(false);
         setShowAiModal(false);
-      }, 2000);
+        setAiPrompt('');
+      }, 1500);
       return;
     }
 
-    // LLAMADA REAL A OPENAI (GPT-3.5 Turbo)
+    // SI HAY KEY -> LLAMADA REAL
     try {
       const systemPrompt = `
 Actúa como un experto profesor de Español como Lengua Extranjera (ELE). 
@@ -206,7 +224,7 @@ FORMATO JSON ESPERADO:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_KEY}`
+          'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: "gpt-3.5-turbo",
@@ -236,15 +254,15 @@ FORMATO JSON ESPERADO:
       
       setShowAiModal(false);
       setAiPrompt('');
-    } catch (error) {
-      console.error("AI Error:", error);
-      alert("Error al generar con IA. Verifica tu API Key.");
+    } catch (e) {
+      console.error("AI Error:", e);
+      alert("Error al generar con IA. Verifica la conexión.");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // RENDERERS VISUALES (Estables y Bonitos)
+  // RENDERERS VISUALES
   const renderQuestionBody = (q: QuestionDraft, idx: number) => {
     if (q.type === 'choice') return (
       <div className="mt-4 space-y-2 pl-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
