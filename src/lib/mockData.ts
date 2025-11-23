@@ -246,10 +246,12 @@ export const mockComments: Comment[] = [
 
 // Legacy exports
 export const LUINGO_LEVELS = [
-  { level: 1, min_xp: 0, max_xp: 100, label: 'Aprendiz de Tierra', icon: '🪨', color: 'from-stone-300 to-stone-500' },
-  { level: 2, min_xp: 101, max_xp: 300, label: 'Adepto de Agua', icon: '💧', color: 'from-blue-300 to-blue-500' },
-  { level: 3, min_xp: 301, max_xp: 600, label: 'Maestro de Fuego', icon: '🔥', color: 'from-orange-300 to-red-500' },
-  { level: 4, min_xp: 601, max_xp: 1000, label: 'Sabio del Aire', icon: '🌪️', color: 'from-sky-200 to-indigo-400' },
-  { level: 5, min_xp: 1001, max_xp: 9999, label: 'Espíritu de Éter', icon: '✨', color: 'from-purple-400 to-pink-600' },
+  { level: 1, min_xp: 0, max_xp: 100, label: 'Aprendiz de Tierra', icon: '🪨', color: 'from-stone-400 to-stone-600' },
+  { level: 2, min_xp: 101, max_xp: 300, label: 'Adepto de Agua', icon: '💧', color: 'from-blue-400 to-cyan-600' },
+  { level: 3, min_xp: 301, max_xp: 600, label: 'Guardián del Bosque', icon: '🍃', color: 'from-emerald-400 to-green-600' },
+  { level: 4, min_xp: 601, max_xp: 1000, label: 'Maestro de Fuego', icon: '🔥', color: 'from-orange-400 to-red-600' },
+  { level: 5, min_xp: 1001, max_xp: 2000, label: 'Sabio del Aire', icon: '🌪️', color: 'from-sky-400 to-indigo-600' },
+  { level: 6, min_xp: 2001, max_xp: 5000, label: 'Espíritu de Éter', icon: '✨', color: 'from-purple-400 to-fuchsia-600' },
+  { level: 7, min_xp: 5001, max_xp: 99999, label: 'Leyenda LuinGo', icon: '👑', color: 'from-yellow-400 to-amber-600' },
 ];
 export const XP_VALUES = {};

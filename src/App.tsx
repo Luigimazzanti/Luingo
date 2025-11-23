@@ -16,6 +16,7 @@ import {
   mockStudents,
   mockTasks,
   mockComments,
+  LUINGO_LEVELS,
 } from './lib/mockData';
 import { Comment, Correction, Notification, User, Task, Student, Exercise, Submission } from './types'; 
 import { Button } from './components/ui/button';
@@ -24,6 +25,44 @@ import { ArrowLeft, MessageCircle, Play, LogOut, Sparkles, Target, Home, Setting
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './components/ui/dialog';
 import { Toaster, toast } from 'sonner@2.0.3';
+
+// ========== LÓGICA DE RACHA (STREAK) ==========
+const checkStreak = (): number => {
+  const lastLogin = localStorage.getItem('last_login_date');
+  const currentStreak = parseInt(localStorage.getItem('streak_count') || '0');
+  const today = new Date().toDateString();
+
+  if (lastLogin !== today) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (lastLogin === yesterday.toDateString()) {
+      // Usuario entró ayer, continúa la racha
+      const newStreak = currentStreak + 1;
+      localStorage.setItem('streak_count', String(newStreak));
+      localStorage.setItem('last_login_date', today);
+      return newStreak;
+    } else {
+      // Se rompió la racha, reiniciar a 1
+      localStorage.setItem('streak_count', '1');
+      localStorage.setItem('last_login_date', today);
+      return 1;
+    }
+  }
+  
+  // Ya entró hoy, devolver la racha actual
+  return currentStreak || 1;
+};
+
+// ========== HELPER: CALCULAR NIVEL DESDE XP ==========
+const calculateLevelFromXP = (xp: number): number => {
+  for (let i = LUINGO_LEVELS.length - 1; i >= 0; i--) {
+    if (xp >= LUINGO_LEVELS[i].min_xp) {
+      return LUINGO_LEVELS[i].level;
+    }
+  }
+  return 1; // Nivel mínimo por defecto
+};
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -229,6 +268,10 @@ export default function App() {
     toast.loading("Cargando estudiantes reales...");
     
     try {
+      // Cargar todos los submissions primero
+      const allSubmissionsData = await getMoodleSubmissions();
+      setAllSubmissions(allSubmissionsData);
+      
       const enrolledUsers = await getEnrolledUsers(Number(courseId));
       
       if (Array.isArray(enrolledUsers)) {
@@ -244,28 +287,60 @@ export default function App() {
               return hasStudentRole;
          });
          
-         const mappedStudents: Student[] = realStudents.map((u: any) => ({
-            id: String(u.id),
-            name: u.fullname,
-            email: u.email,
-            avatar_url: u.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.fullname}`,
-            // Mapeamos campos que Moodle no tiene con valores por defecto para la UI
-            level: 1,
-            xp_points: 0,
-            completed_tasks: 0,
-            total_tasks: tasks.length || 10, // Referencia a las tareas del curso
-            average_grade: 0,
-            joined_at: new Date().toISOString(),
-            materials_viewed: [],
-            current_level_code: 'A1',
-            role: 'student'
-         }));
+         // MAPEO CON CÁLCULO REAL DE ESTADÍSTICAS
+         const mappedStudents: Student[] = realStudents.map((u: any) => {
+            const studentId = String(u.id);
+            const studentName = u.fullname;
+            
+            // Filtrar submissions de este estudiante
+            const studentSubmissions = allSubmissionsData.filter((sub: any) => 
+              sub.student_name === studentName || 
+              sub.student_id === studentId
+            );
+            
+            // Calcular tareas únicas completadas (sin contar repeticiones)
+            const uniqueCompletedTasks = new Set(
+              studentSubmissions.map((s: any) => s.task_title)
+            ).size;
+            
+            // Calcular promedio de notas (solo submissions con nota)
+            const gradesArray = studentSubmissions
+              .map((s: any) => parseFloat(s.grade))
+              .filter((g: number) => !isNaN(g) && g > 0);
+            
+            const averageGrade = gradesArray.length > 0
+              ? gradesArray.reduce((sum: number, g: number) => sum + g, 0) / gradesArray.length
+              : 0;
+            
+            // Calcular XP real basado en tareas únicas completadas (50 XP por tarea)
+            const xp_points = uniqueCompletedTasks * 50;
+            
+            // Calcular nivel basado en XP
+            const level = calculateLevelFromXP(xp_points);
+            
+            return {
+               id: studentId,
+               name: studentName,
+               email: u.email,
+               avatar_url: u.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${studentName}`,
+               level: level,
+               xp_points: xp_points,
+               completed_tasks: uniqueCompletedTasks,
+               total_tasks: tasks.length || 10,
+               average_grade: Math.round(averageGrade * 10) / 10, // Redondear a 1 decimal
+               joined_at: new Date().toISOString(),
+               materials_viewed: [],
+               current_level_code: 'A1', // TODO: Mapear desde Moodle si existe
+               role: 'student'
+            };
+         });
+         
          setStudents(mappedStudents);
          
          if (mappedStudents.length === 0) {
              toast("No se encontraron alumnos en este curso (solo profes/admins).");
          } else {
-             toast.success(`${mappedStudents.length} alumnos cargados.`);
+             toast.success(`${mappedStudents.length} alumnos cargados con estadísticas reales.`);
          }
          
          setSelectedClassId(courseId);
