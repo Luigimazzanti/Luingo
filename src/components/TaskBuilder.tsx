@@ -254,7 +254,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     }, 1000);
   };
 
-  // IA REAL (HUGGING FACE) - CON CORS PROXY
+  // IA REAL (HUGGING FACE) - NUEVO ENDPOINT COMPATIBLE CON OPENAI
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
 
@@ -268,7 +268,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     setIsGenerating(true);
 
     try {
-      const systemPrompt = `[INST] Actúa como profesor de español (ELE). Genera un examen JSON estricto sobre: "${aiPrompt}". 
+      const systemPrompt = `Actúa como profesor de español (ELE). Genera un examen JSON estricto sobre: "${aiPrompt}". 
 Nivel MCER: ${aiLevel}. Dificultad: ${aiDifficulty}. Cantidad: ${aiNumQuestions} preguntas.
 
 TIPOS DE PREGUNTA:
@@ -290,53 +290,46 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
       "explanation": "Feedback pedagógico útil"
     }
   ]
-} [/INST]`;
+}`;
 
-      // USAMOS CORS PROXY PARA EVITAR BLOQUEOS
-      const targetUrl = "https://api-inference.huggingface.co/models/mistralai/Mistral-Nemo-Instruct-2407";
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
-      const response = await fetch(proxyUrl, {
+      // NUEVO ENDPOINT COMPATIBLE CON OPENAI (sin proxy ya que el nuevo endpoint no tiene CORS)
+      const response = await fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-Nemo-Instruct-2407/v1/chat/completions", {
         method: "POST",
         headers: { 
           "Authorization": `Bearer ${userToken}`, 
           "Content-Type": "application/json" 
         },
         body: JSON.stringify({ 
-          inputs: systemPrompt, 
-          parameters: { 
-            max_new_tokens: 2000, 
-            return_full_text: false, 
-            temperature: 0.7,
-            top_p: 0.95
-          } 
+          model: "mistralai/Mistral-Nemo-Instruct-2407",
+          messages: [
+            { role: "user", content: systemPrompt }
+          ],
+          max_tokens: 1500,
+          temperature: 0.7
         })
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error("HF API Error:", errorText);
-        throw new Error(`API Error: ${response.status}`);
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
       
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      let jsonRaw = Array.isArray(result) ? result[0].generated_text : result.generated_text;
+      // Formato OpenAI: result.choices[0].message.content
+      const content = result.choices[0].message.content;
       
       // Limpieza de JSON
-      console.log("Raw AI Response:", jsonRaw);
-      const jsonStart = jsonRaw.indexOf('{');
-      const jsonEnd = jsonRaw.lastIndexOf('}');
+      console.log("Raw AI Response:", content);
+      const jsonStart = content.indexOf('{');
+      const jsonEnd = content.lastIndexOf('}');
       
       if (jsonStart === -1 || jsonEnd === -1) {
-        throw new Error("No se encontró JSON válido");
+        throw new Error("No se encontró JSON válido en la respuesta");
       }
       
-      const jsonStr = jsonRaw.substring(jsonStart, jsonEnd + 1);
+      const jsonStr = content.substring(jsonStart, jsonEnd + 1);
       console.log("Extracted JSON:", jsonStr);
       
       const parsed = JSON.parse(jsonStr);
@@ -355,12 +348,12 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
         allow_audio: q.type === 'open'
       })));
       
-      toast.success("🎉 ¡Generado con IA Real (Mistral)!");
+      toast.success("🎉 ¡Generado con IA Mistral!");
       setShowAiModal(false);
       setAiPrompt('');
     } catch (error) {
       console.error("Error en generación IA:", error);
-      // FALLBACK SILENTIO: Si falla el proxy o la API, usamos modo local
+      // FALLBACK SILENTIO: Si falla la API, usamos modo local
       toast.info("🔄 Usando generador local...");
       runLocalAI();
     } finally {
