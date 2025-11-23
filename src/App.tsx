@@ -531,6 +531,33 @@ export default function App() {
     setNotifications([]);
   };
 
+  const loadSubmissions = async () => {
+    toast.loading("Recargando submissions...");
+    try {
+      const allSubmissionsData = await getMoodleSubmissions();
+      
+      // Si es profesor, actualizar TODAS las submissions
+      if (currentUser?.role === 'teacher') {
+          setAllSubmissions(allSubmissionsData);
+      }
+      
+      // Filtrar las del usuario actual
+      const mySubmissions = allSubmissionsData.filter((sub: any) => 
+        sub.student_name === currentUser?.name || 
+        sub.student_id === currentUser?.id
+      );
+      setRealSubmissions(mySubmissions);
+      
+      console.log(`✅ Submissions actualizadas: ${mySubmissions.length} propias, ${allSubmissionsData.length} totales`);
+      toast.dismiss();
+      toast.success("Submissions actualizadas");
+    } catch (e) {
+      console.error("Error recargando submissions:", e);
+      toast.dismiss();
+      toast.error("Error al recargar submissions");
+    }
+  };
+
   if (loading) {
       return <div className="min-h-screen flex items-center justify-center bg-background">Cargando LuinGo (Moodle)...</div>;
   }
@@ -680,10 +707,12 @@ export default function App() {
                 classroom={classroom}
                 students={students}
                 tasks={tasks}
+                submissions={allSubmissions} // ✅ Pasar todas las submissions
                 onSelectStudent={handleSelectStudent}
                 onGenerateTask={handleGenerateTask}
                 onDeleteTask={handleDeleteTask}
                 onEditTask={handleEditTask}
+                onRefreshSubmissions={loadSubmissions} // ✅ Función para refrescar después de calificar
             />
 
             <Sheet 

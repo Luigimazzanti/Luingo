@@ -1,7 +1,7 @@
 import React from 'react';
 import { Task } from '../types';
 import { Button } from './ui/button';
-import { Clock, FileText, PlayCircle, Award, CheckCircle2, ArrowRight, Lock, RotateCcw } from 'lucide-react';
+import { Clock, PlayCircle, CheckCircle2, RotateCcw, Eye, Award } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface TaskCardProps {
@@ -9,31 +9,33 @@ interface TaskCardProps {
   status: 'assigned' | 'in_progress' | 'submitted' | 'graded' | 'completed';
   onClick: () => void;
   attemptsUsed?: number;
+  bestGrade?: number;
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({ 
   task, 
   status, 
   onClick, 
-  attemptsUsed = 0 
+  attemptsUsed = 0,
+  bestGrade
 }) => {
   // ✅ LEER EL DATO REAL (Si no existe, 1 por defecto para seguridad)
   const maxAttempts = task.content_data?.max_attempts ?? 1;
 
   // ✅ Lógica de Bloqueo: Si ya gastó los intentos, se bloquea.
-  // PERO si el estado es 'graded' (ya corregido), también cuenta como completado.
   const isLocked = attemptsUsed >= maxAttempts;
+  const hasActivity = attemptsUsed > 0;
   const isCompleted = status === 'graded' || (status === 'submitted' && isLocked);
 
   return (
     <div 
-      onClick={!isLocked || isCompleted ? onClick : undefined}
+      onClick={onClick}
       className={cn(
         "group relative flex flex-col p-5 rounded-2xl border transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-1 bg-white",
         isCompleted 
           ? "border-emerald-200 opacity-90" 
           : isLocked 
-            ? "border-slate-200 opacity-60 grayscale cursor-not-allowed" 
+            ? "border-slate-200 opacity-60" 
             : "border-indigo-200"
       )}
     >
@@ -74,6 +76,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         </p>
       </div>
 
+      {/* ✅ MOSTRAR MEJOR NOTA SI EXISTE */}
+      {hasActivity && bestGrade !== undefined && (
+        <div className="mb-3 flex items-center gap-2 bg-gradient-to-r from-amber-50 to-yellow-50 p-2 rounded-xl border border-amber-200">
+          <Award className="w-4 h-4 text-amber-600" />
+          <div className="flex-1">
+            <p className="text-[10px] font-bold text-amber-600 uppercase">Mejor Nota</p>
+            <p className="text-lg font-black text-amber-700">{bestGrade.toFixed(1)} / 10</p>
+          </div>
+        </div>
+      )}
+
       {/* ✅ BOTÓN DE ACCIÓN */}
       <Button 
         size="sm" 
@@ -82,15 +95,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           isCompleted 
             ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200" 
             : isLocked 
-              ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
+              ? "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200" 
               : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
         )}
-        disabled={isLocked && !isCompleted}
+        disabled={false} // ✅ Siempre clickeable
       >
         {isCompleted ? (
           "Ver Resultado"
         ) : isLocked ? (
-          "Sin intentos"
+          <>
+            <Eye className="w-4 h-4 mr-2" /> 
+            Ver Resumen
+          </>
         ) : attemptsUsed > 0 ? (
           <>
             <RotateCcw className="w-4 h-4 mr-2" /> 
@@ -98,7 +114,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </>
         ) : (
           <>
-            <PlayCircle className="w-4 h-4 mr-2" /> 
+            <PlayCircle className="w-4 h-4 mr-2 fill-current" /> 
             Comenzar
           </>
         )}

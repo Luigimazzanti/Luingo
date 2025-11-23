@@ -61,10 +61,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   // Lógica de Intentos y Portafolio
   const getAttempts = (taskId: string) => {
-    return submissions.filter(s => 
+    // ✅ CORRECCIÓN: Leer el campo 'attempts' del JSON, no contar submissions
+    const sub = submissions.find(s => 
       (s.task_id === taskId || s.task_title === tasks.find(t => t.id === taskId)?.title) && 
       s.student_id === student?.id
-    ).length;
+    );
+    return sub?.attempts || 0;
+  };
+
+  // ✅ OBTENER MEJOR NOTA
+  const getBestGrade = (taskId: string) => {
+    const sub = submissions.find(s => 
+      (s.task_id === taskId || s.task_title === tasks.find(t => t.id === taskId)?.title) && 
+      s.student_id === student?.id
+    );
+    return sub?.best_grade || sub?.grade || undefined;
   };
 
   // ✅ LÓGICA CORREGIDA: Solo tareas con intentos restantes
@@ -264,6 +275,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         task={task} 
                         status={getTaskStatus(task.id)}
                         attemptsUsed={getAttempts(task.id)} // ✅ PASAR EL CONTEO REAL AQUÍ
+                        bestGrade={getBestGrade(task.id)} // ✅ PASAR MEJOR NOTA
                         onClick={() => onSelectTask && onSelectTask(task)}
                       />
                     ))}

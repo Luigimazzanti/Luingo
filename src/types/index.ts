@@ -21,21 +21,33 @@ export interface TaskTemplate {
 export interface Assignment {
   id: string;
   task_id: string; // FK -> Tasks_Library
+  task_title?: string; // Título de la tarea
   student_id: string; // FK -> Students
+  student_name?: string; // Nombre del estudiante
   status: 'assigned' | 'in_progress' | 'submitted' | 'graded';
+  
+  // ✅ SISTEMA MULTI-INTENTOS
+  attempts?: number; // Número de intentos realizados
+  best_grade?: number; // Mejor nota obtenida
   
   // Data del Alumno
   submission_data?: any; // Respuestas del alumno
+  answers?: any[]; // Array de respuestas detalladas
   submitted_at?: string;
+  updated_at?: string; // Última actualización
   
   // Data del Profesor (Feedback)
   grade?: number;
+  score?: number; // Puntos obtenidos
+  total?: number; // Puntos totales
   feedback_text?: string;
+  teacher_feedback?: string; // Feedback del profesor
   feedback_audio_url?: string;
   graded_at?: string;
   
   // Metadatos de visualización
   due_date?: string;
+  discussion_id?: string; // ✅ ID de la discusión en Moodle (para buscar replies)
 }
 
 // Alias para compatibilidad con código anterior si es necesario, 
