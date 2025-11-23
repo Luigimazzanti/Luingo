@@ -25,13 +25,14 @@ export const StudentCard: React.FC<StudentCardProps> = ({
 
   const cefr = getCEFRLevel(student.level || 1);
   
-  // SAFE CALCULATIONS (Defensive Programming)
-  const safeCompleted = student.completed_tasks || 0;
-  const safeTotal = student.total_tasks || 0;
+  // LÓGICA BLINDADA (Evitar negativos y porcentajes >100%)
+  const total = student.total_tasks || 1; // Aseguramos que nunca sea 0
+  const completed = Math.min(student.completed_tasks || 0, total); // Nunca mayor al total
+  const pending = Math.max(0, total - completed); // Nunca negativo
+  const percent = Math.round((completed / total) * 100); // Porcentaje limpio
+  
   const safeMaterials = student.materials_viewed?.length || 0;
   const safeAverage = student.average_grade || 0;
-
-  const completionPercentage = safeTotal > 0 ? (safeCompleted / safeTotal) * 100 : 0;
   const materialsViewedPercentage = totalMaterials > 0 ? (safeMaterials / totalMaterials) * 100 : 0;
   
   return (
@@ -49,7 +50,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                     className="w-full h-full object-cover"
                 />
             </div>
-            {completionPercentage === 100 && safeTotal > 0 && (
+            {percent === 100 && total > 0 && (
                 <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-400 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-bounce">
                     <CheckCircle className="w-4 h-4 text-white font-bold" />
                 </div>
@@ -71,12 +72,12 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         <div>
             <div className="flex justify-between text-xs mb-2 font-bold">
                 <span className="text-slate-400 uppercase tracking-wider">Misiones</span>
-                <span className="text-slate-800">{safeCompleted}/{safeTotal}</span>
+                <span className="text-slate-800">{completed}/{total}</span>
             </div>
             <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                 <div 
                     className="h-full bg-amber-400 rounded-full border-r-2 border-amber-200 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]" 
-                    style={{ width: `${completionPercentage}%` }}
+                    style={{ width: `${percent}%` }}
                 />
             </div>
         </div>
@@ -113,7 +114,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         <div className="text-right group-hover:translate-x-[-4px] transition-transform">
             <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Pendientes</p>
             <p className="text-lg font-black text-rose-500 leading-none">
-                {safeTotal - safeCompleted}
+                {pending}
             </p>
         </div>
       </div>

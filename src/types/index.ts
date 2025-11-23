@@ -54,6 +54,9 @@ export interface User {
   avatar_url: string;
   created_at: string;
   updated_at: string;
+  xp_points?: number; // XP acumulado por el usuario
+  level?: number; // Nivel calculado desde XP (1-7)
+  streak_days?: number; // Racha de días consecutivos de login
 }
 
 export interface Student extends User {

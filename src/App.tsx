@@ -207,10 +207,17 @@ export default function App() {
             
             setRealSubmissions(mySubmissions);
             
-            // Calcular XP real basado en entregas (REDUCIDO: 15 XP por tarea)
-            const totalXP = mySubmissions.length * 15; // Gamificación más difícil
+            // ✅ CÁLCULO DE XP REAL: Solo tareas ÚNICAS (no repeticiones)
+            const uniqueTasksCompleted = new Set(mySubmissions.map((s: any) => s.task_title)).size;
+            const totalXP = uniqueTasksCompleted * 50; // 50 XP por tarea única completada
             
-            console.log(`✅ ${mySubmissions.length} entregas tuyas cargadas. XP: ${totalXP}`);
+            // ✅ CALCULAR NIVEL ELEMENTAL desde XP
+            const levelData = LUINGO_LEVELS.slice().reverse().find(l => totalXP >= l.min_xp) || LUINGO_LEVELS[0];
+            
+            // ✅ SISTEMA DE RACHA (Streak) - Detectar login consecutivo
+            const streakDays = checkStreak();
+            
+            console.log(`✅ ${mySubmissions.length} entregas | ${uniqueTasksCompleted} tareas únicas | XP: ${totalXP} | Nivel: ${levelData.level} | Racha: ${streakDays} días`);
             
             const userProfile: User = {
                 id: String(moodleUser.id),
@@ -220,12 +227,15 @@ export default function App() {
                 avatar_url: moodleUser.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
+                xp_points: totalXP, // XP real basado en tareas únicas
+                level: levelData.level, // Nivel calculado desde XP
+                streak_days: streakDays, // Racha de días consecutivos
             };
             
             setCurrentUser(userProfile);
             
             toast.dismiss();
-            toast.success(`¡Hola ${userProfile.name}! ${mySubmissions.length} entregas encontradas.`);
+            toast.success(`¡Hola ${userProfile.name}! ${uniqueTasksCompleted} tareas completadas | ${totalXP} XP | Racha: ${streakDays}🔥`);
         } catch (e) {
             console.error("Error cargando submissions:", e);
             setRealSubmissions([]); // Fallback vacío
