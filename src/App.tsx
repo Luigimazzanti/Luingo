@@ -11,13 +11,7 @@ import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
 import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask, getMoodleSubmissions, createCourse } from './lib/moodle';
-import {
-  mockClassroom,
-  mockStudents,
-  mockTasks,
-  mockComments,
-  LUINGO_LEVELS,
-} from './lib/mockData';
+import { mockClassroom, LUINGO_LEVELS } from './lib/mockData';
 import { Comment, Correction, Notification, User, Task, Student, Exercise, Submission } from './types'; 
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
@@ -37,20 +31,17 @@ const checkStreak = (): number => {
     yesterday.setDate(yesterday.getDate() - 1);
     
     if (lastLogin === yesterday.toDateString()) {
-      // Usuario entró ayer, continúa la racha
       const newStreak = currentStreak + 1;
       localStorage.setItem('streak_count', String(newStreak));
       localStorage.setItem('last_login_date', today);
       return newStreak;
     } else {
-      // Se rompió la racha, reiniciar a 1
       localStorage.setItem('streak_count', '1');
       localStorage.setItem('last_login_date', today);
       return 1;
     }
   }
   
-  // Ya entró hoy, devolver la racha actual
   return currentStreak || 1;
 };
 
@@ -61,7 +52,7 @@ const calculateLevelFromXP = (xp: number): number => {
       return LUINGO_LEVELS[i].level;
     }
   }
-  return 1; // Nivel mínimo por defecto
+  return 1;
 };
 
 export default function App() {
@@ -72,19 +63,13 @@ export default function App() {
   const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer'>('home'); 
   
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null); // Kept for legacy
   const [activeExercise, setActiveExercise] = useState<Exercise | null>(null);
   const [activePDFTask, setActivePDFTask] = useState<Task | null>(null); 
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  
   const [showTaskBuilder, setShowTaskBuilder] = useState(false); 
-  const [targetStudentForTask, setTargetStudentForTask] = useState<string | undefined>(undefined); 
-  const [mockSubmissions, setMockSubmissions] = useState<Submission[]>([]); 
-
-  // Estados para modo edición
   const [taskBuilderMode, setTaskBuilderMode] = useState<'create' | 'edit'>('create');
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
-  
-  // Estado para auto-abrir IA en TaskBuilder
   const [startBuilderWithAI, setStartBuilderWithAI] = useState(false);
 
   const [classroom, setClassroom] = useState(mockClassroom);
@@ -93,60 +78,38 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [realSubmissions, setRealSubmissions] = useState<Submission[]>([]); // Memoria del alumno
-  const [allSubmissions, setAllSubmissions] = useState<Submission[]>([]); // NUEVO: Todas las submissions (para profesor)
+
+  // ✅ ESTADO ÚNICO DE LA VERDAD (Solo datos reales de Moodle)
+  const [realSubmissions, setRealSubmissions] = useState<Submission[]>([]);
   
   const [usernameInput, setUsernameInput] = useState("");
 
+  // ========== INICIALIZACIÓN MOODLE ==========
   const initMoodle = async () => {
     setLoading(true);
     setConnectionError(null);
-    console.log("🔌 Conectando con Moodle...");
     
     try {
       const info = await getSiteInfo();
       if (info && !info.error) {
-        console.log("✅ Conectado a:", info.sitename);
         toast.success(`Conectado a Moodle: ${info.sitename}`);
         
-        // 1. Cargar Cursos de Moodle
         const moodleCourses = await getCourses();
         if (Array.isArray(moodleCourses)) {
           setCourses(moodleCourses);
-          console.log("✅ Cursos cargados:", moodleCourses);
         }
 
-        // 2. Cargar tareas del foro
+        // ✅ Cargar tareas una sola vez - REEMPLAZAR, NO APPEND
         const forumTasks = await getMoodleTasks();
-        if (forumTasks.length > 0) {
-           setTasks(forumTasks);
-           console.log("✅ Tareas cargadas del Foro:", forumTasks);
-           
-           // Auto-assign forum tasks to students locally so they appear in dashboard
-           // This is a temporary bridge since we are not managing assignments in Moodle yet
-           const newAssignments: Submission[] = [];
-           mockStudents.forEach(student => {
-             forumTasks.forEach((task: Task) => {
-                newAssignments.push({
-                  id: `assign-${task.id}-${student.id}`,
-                  task_id: task.id,
-                  student_id: student.id,
-                  status: 'assigned',
-                  due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-                });
-             });
-           });
-           setMockSubmissions(prev => [...prev, ...newAssignments]);
-        }
+        setTasks(forumTasks);
+        
+        console.log("✅ Moodle inicializado correctamente");
       } else {
-        const errorMsg = info?.error || "No se pudo conectar a Moodle.";
-        console.error("Connection failed:", errorMsg);
-        toast.error(errorMsg);
-        setConnectionError(errorMsg);
+        setConnectionError("No se pudo conectar a Moodle.");
       }
     } catch (e) {
-      console.error(e);
-      setConnectionError("Error crítico de conexión");
+      console.error("Error al conectar con Moodle:", e);
+      setConnectionError("Error crítico al inicializar Moodle.");
     } finally {
       setLoading(false);
     }
@@ -156,828 +119,534 @@ export default function App() {
     initMoodle();
   }, []);
 
+  // ========== INICIALIZACIÓN DE USUARIO ==========
   const initializeUser = async (username: string) => {
     setLoading(true);
+    
     try {
       const moodleUser = await getUserByUsername(username);
-
+      
       if (moodleUser) {
-        // Lógica de Roles ESTRICTA según configuración del usuario
         const lowerName = username.toLowerCase();
-        let role: 'teacher' | 'student' = 'student'; // Por defecto estudiante
-
-        if (lowerName === 'luigi') {
-            role = 'teacher'; // Luigi SIEMPRE es Profesor
+        let role: 'teacher' | 'student' = 'student';
+        
+        // Lógica de roles
+        if (lowerName === 'luigi' || lowerName.includes('teacher')) {
+          role = 'teacher';
         } else if (lowerName === 'admin') {
-            role = 'student'; // Admin SIEMPRE es Estudiante (para pruebas)
-        } else if (lowerName.includes('teacher') || lowerName.includes('profesor')) {
-            role = 'teacher';
-        }
-        // Cualquier otro (hans, pedro...) será student por defecto.
-
-        // CARGA REAL DE TAREAS
-        toast.loading("Sincronizando tareas...");
-        try {
-            const realTasks = await getMoodleTasks();
-            setTasks(realTasks);
-            toast.dismiss();
-            toast.success(`Tareas cargadas: ${realTasks.length}`);
-        } catch (e) {
-            console.error(e);
-            setTasks([]); // Fallback vacío
+          role = 'student';
         }
 
-        // ✅ CARGA REAL DE ENTREGAS (Memoria del Alumno)
-        toast.loading("Cargando tu historial...");
-        try {
-            const allSubmissionsData = await getMoodleSubmissions();
-            console.log("📦 Submissions de Moodle:", allSubmissionsData);
-            
-            // Si es profesor, guardar TODAS las submissions para poder verlas en StudentPassport
-            if (role === 'teacher') {
-                setAllSubmissions(allSubmissionsData);
-                console.log(`✅ ${allSubmissionsData.length} submissions totales cargadas (modo profesor)`);
-            }
-            
-            // Filtrar solo las entregas del usuario actual
-            const mySubmissions = allSubmissionsData.filter((sub: any) => 
-              sub.student_name === moodleUser.fullname || 
-              sub.student_id === String(moodleUser.id)
-            );
-            
-            setRealSubmissions(mySubmissions);
-            
-            // ✅ CÁLCULO DE XP REAL: Solo tareas ÚNICAS (no repeticiones)
-            const uniqueTasksCompleted = new Set(mySubmissions.map((s: any) => s.task_title)).size;
-            const totalXP = uniqueTasksCompleted * 50; // 50 XP por tarea única completada
-            
-            // ✅ CALCULAR NIVEL ELEMENTAL desde XP
-            const levelData = LUINGO_LEVELS.slice().reverse().find(l => totalXP >= l.min_xp) || LUINGO_LEVELS[0];
-            
-            // ✅ SISTEMA DE RACHA (Streak) - Detectar login consecutivo
-            const streakDays = checkStreak();
-            
-            console.log(`✅ ${mySubmissions.length} entregas | ${uniqueTasksCompleted} tareas únicas | XP: ${totalXP} | Nivel: ${levelData.level} | Racha: ${streakDays} días`);
-            
-            const userProfile: User = {
-                id: String(moodleUser.id),
-                email: moodleUser.email,
-                name: moodleUser.fullname,
-                role: role,
-                avatar_url: moodleUser.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                xp_points: totalXP, // XP real basado en tareas únicas
-                level: levelData.level, // Nivel calculado desde XP
-                streak_days: streakDays, // Racha de días consecutivos
-            };
-            
-            setCurrentUser(userProfile);
-            
-            toast.dismiss();
-            toast.success(`¡Hola ${userProfile.name}! ${uniqueTasksCompleted} tareas completadas | ${totalXP} XP | Racha: ${streakDays}🔥`);
-        } catch (e) {
-            console.error("Error cargando submissions:", e);
-            setRealSubmissions([]); // Fallback vacío
-            
-            const userProfile: User = {
-                id: String(moodleUser.id),
-                email: moodleUser.email,
-                name: moodleUser.fullname,
-                role: role,
-                avatar_url: moodleUser.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-            };
-            
-            setCurrentUser(userProfile);
+        const userProfile: User = {
+          id: String(moodleUser.id),
+          email: moodleUser.email,
+          name: moodleUser.fullname,
+          role: role,
+          avatar_url: moodleUser.profileimageurl,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        // ✅ CARGAR DATOS REALES Y LIMPIOS - REEMPLAZAR, NO APPEND
+        const [latestTasks, allSubs] = await Promise.all([
+          getMoodleTasks(),
+          getMoodleSubmissions()
+        ]);
+        
+        console.log("📊 Datos cargados:", {
+          tareas: latestTasks.length,
+          submissions: allSubs.length
+        });
+        
+        setTasks(latestTasks); // ✅ Reemplazar completamente
+        
+        // ✅ Filtrar submissions según rol
+        if (role === 'teacher') {
+          // Profesor ve todas las submissions
+          setRealSubmissions(allSubs);
+        } else {
+          // Estudiante solo ve las suyas (match por ID o nombre)
+          const mySubs = allSubs.filter((s: any) => 
+            String(s.student_id) === String(moodleUser.id) || 
+            s.student_name === moodleUser.fullname
+          );
+          setRealSubmissions(mySubs);
+          
+          console.log(`👨‍🎓 Submissions del estudiante "${moodleUser.fullname}":`, mySubs.length);
+          
+          // Calcular XP real basado en submissions
+          const xp = mySubs.length * 15;
+          const level = calculateLevelFromXP(xp);
+          userProfile.xp_points = xp;
+          userProfile.level = level;
         }
         
-        setNotifications([]);
+        setCurrentUser(userProfile);
+        
+        // ✅ Configurar estudiante por defecto si soy alumno
+        if (role === 'student') {
+          const studentProfile: Student = {
+            ...userProfile,
+            level: userProfile.level || 1,
+            current_level_code: 'A1',
+            completed_tasks: 0,
+            total_tasks: latestTasks.length,
+            average_grade: 0,
+            materials_viewed: [],
+            joined_at: new Date().toISOString()
+          } as Student;
+          
+          setStudents([studentProfile]);
+        }
+        
+        const streak = checkStreak();
+        toast.success(`¡Hola ${userProfile.name}! 🔥 Racha: ${streak} días`);
       } else {
         toast.error("Usuario no encontrado en Moodle");
       }
     } catch (error) {
-      console.error("Error initializing data:", error);
-      toast.error("Error al iniciar sesión");
+      console.error("Error al inicializar usuario:", error);
+      toast.error("Error al entrar");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    setCurrentUser(null);
-    setView('home');
-  };
-
-  const handleSelectStudent = (studentId: string) => {
-    setSelectedStudentId(studentId);
-  };
-
+  // ========== GESTIÓN DE CLASES ==========
   const handleSelectClass = async (courseId: string) => {
-    toast.loading("Cargando estudiantes reales...");
+    toast.loading("Cargando clase...");
     
     try {
-      // Cargar todos los submissions primero
-      const allSubmissionsData = await getMoodleSubmissions();
-      setAllSubmissions(allSubmissionsData);
+      const enrolled = await getEnrolledUsers(Number(courseId));
       
-      const enrolledUsers = await getEnrolledUsers(Number(courseId));
-      
-      if (Array.isArray(enrolledUsers)) {
-         // FILTRO DE ESTUDIANTES RELAJADO
-         const realStudents = enrolledUsers.filter((u: any) => {
-              // 1. Excluir al usuario logueado (yo mismo)
-              if (String(u.id) === String(currentUser?.id)) return false;
-              // 2. Verificar si tiene rol de estudiante
-              const roles = u.roles || [];
-              const hasStudentRole = roles.some((r: any) => r.shortname === 'student');
-              
-              // Si tiene rol de estudiante, lo mostramos (aunque tenga otros)
-              return hasStudentRole;
-         });
-         
-         // MAPEO CON CÁLCULO REAL DE ESTADÍSTICAS
-         const mappedStudents: Student[] = realStudents.map((u: any) => {
-            const studentId = String(u.id);
-            const studentName = u.fullname;
-            
-            // Filtrar submissions de este estudiante
-            const studentSubmissions = allSubmissionsData.filter((sub: any) => 
-              sub.student_name === studentName || 
-              sub.student_id === studentId
-            );
-            
-            // Calcular tareas únicas completadas (sin contar repeticiones)
-            const uniqueCompletedTasks = new Set(
-              studentSubmissions.map((s: any) => s.task_title)
-            ).size;
-            
-            // Calcular promedio de notas (solo submissions con nota)
-            const gradesArray = studentSubmissions
-              .map((s: any) => parseFloat(s.grade))
-              .filter((g: number) => !isNaN(g) && g > 0);
-            
-            const averageGrade = gradesArray.length > 0
-              ? gradesArray.reduce((sum: number, g: number) => sum + g, 0) / gradesArray.length
-              : 0;
-            
-            // Calcular XP real basado en tareas únicas completadas (50 XP por tarea)
-            const xp_points = uniqueCompletedTasks * 50;
-            
-            // Calcular nivel basado en XP
-            const level = calculateLevelFromXP(xp_points);
-            
-            return {
-               id: studentId,
-               name: studentName,
-               email: u.email,
-               avatar_url: u.profileimageurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${studentName}`,
-               level: level,
-               xp_points: xp_points,
-               completed_tasks: uniqueCompletedTasks,
-               total_tasks: tasks.length || 10,
-               average_grade: Math.round(averageGrade * 10) / 10, // Redondear a 1 decimal
-               joined_at: new Date().toISOString(),
-               materials_viewed: [],
-               current_level_code: 'A1', // TODO: Mapear desde Moodle si existe
-               role: 'student'
-            };
-         });
-         
-         setStudents(mappedStudents);
-         
-         if (mappedStudents.length === 0) {
-             toast("No se encontraron alumnos en este curso (solo profes/admins).");
-         } else {
-             toast.success(`${mappedStudents.length} alumnos cargados con estadísticas reales.`);
-         }
-         
-         setSelectedClassId(courseId);
-         setView('dashboard');
-         toast.dismiss();
-      }
-    } catch (error) {
-        console.error("Error loading students:", error);
-        toast.dismiss();
-        toast.error("Error al cargar la clase.");
-    }
-  };
+      if (Array.isArray(enrolled)) {
+        // Filtrar solo estudiantes (excluir al profesor actual)
+        const realStudents = enrolled.filter((u: any) => {
+          if (String(u.id) === String(currentUser?.id)) return false;
+          const roles = u.roles || [];
+          return roles.some((r: any) => r.shortname === 'student');
+        });
 
-  const handleCreateClass = async (name: string) => {
-    const shortname = name.substring(0, 10).toLowerCase().replace(/\s/g, '') + Math.floor(Math.random()*100);
-    toast.loading("Creando aula en Moodle...");
-    
-    try {
-      const res = await createCourse(name, shortname);
-      if (res && !res.exception) {
+        console.log(`👥 Estudiantes encontrados: ${realStudents.length}`);
+
+        // ✅ Mapear estudiantes con sus datos reales de entregas
+        const mappedStudents: Student[] = realStudents.map((u: any) => {
+          const userSubs = realSubmissions.filter(s => 
+            s.student_name === u.fullname || 
+            String(s.student_id) === String(u.id)
+          );
+          
+          const xp = userSubs.length * 15;
+          const level = calculateLevelFromXP(xp);
+          
+          return {
+            id: String(u.id),
+            name: u.fullname,
+            email: u.email,
+            avatar_url: u.profileimageurl,
+            level: level,
+            xp_points: xp,
+            completed_tasks: userSubs.length,
+            total_tasks: tasks.length,
+            average_grade: 0,
+            materials_viewed: [],
+            current_level_code: 'A1',
+            role: 'student',
+            joined_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+        });
+
+        setStudents(mappedStudents);
+        setSelectedClassId(courseId);
+        setView('dashboard');
         toast.dismiss();
-        toast.success("Clase creada. Recargando...");
-        const updatedCourses = await getCourses();
-        setCourses(updatedCourses);
-      } else {
-        toast.dismiss();
-        toast.error("Error al crear clase");
+        toast.success("Clase cargada correctamente");
       }
     } catch (error) {
+      console.error("Error al cargar clase:", error);
       toast.dismiss();
-      toast.error("Error al crear clase");
+      toast.error("Error al cargar clase");
     }
   };
 
-  const handleGoHome = () => {
-    setView('home');
-    setSelectedClassId(null);
-    setSelectedStudentId(null);
+  // ========== GESTIÓN DE TAREAS ==========
+  const handleGenerateTask = () => {
+    setTaskToEdit(null);
+    setTaskBuilderMode('create');
+    setStartBuilderWithAI(true);
+    setShowTaskBuilder(true);
   };
 
   const handleSaveNewTask = async (taskData: any) => {
-    // Guardar tarea en Moodle (Foro)
     try {
       if (taskToEdit) {
-        // MODO EDICIÓN
+        // Editar tarea existente
         await updateMoodleTask(
-          taskToEdit.postId || taskToEdit.id, 
-          taskData.title, 
-          taskData.description, 
+          taskToEdit.postId || taskToEdit.id,
+          taskData.title,
+          taskData.description,
           taskData.content_data
         );
-        toast.success("Tarea actualizada exitosamente");
+        toast.success("Tarea actualizada correctamente");
       } else {
-        // MODO CREACIÓN
-        await createMoodleTask(taskData.title, taskData.description, taskData.content_data);
-        toast.success("Tarea creada en Moodle exitosamente");
+        // Crear nueva tarea
+        await createMoodleTask(
+          taskData.title,
+          taskData.description,
+          taskData.content_data
+        );
+        toast.success("Tarea creada correctamente");
       }
-      
-      // Limpieza
+
       setShowTaskBuilder(false);
-      setTargetStudentForTask(undefined);
       setTaskToEdit(null);
-      setTaskBuilderMode('create');
       setStartBuilderWithAI(false);
 
-      // Recargar la lista desde Moodle
-      const updatedTasks = await getMoodleTasks();
-      setTasks(updatedTasks);
-
-      // Actualizar asignaciones locales (Mock) para que aparezcan en la UI
-      // Extraer el assignmentScope de content_data
-      const assignmentScope = taskData.content_data?.assignment_scope;
+      // ✅ RECARGAR TAREAS LIMPIAMENTE - REEMPLAZAR
+      const updated = await getMoodleTasks();
+      setTasks(updated);
       
-      if (updatedTasks.length > 0 && assignmentScope && !taskToEdit) {
-        const newestTask = updatedTasks[0]; // Asumimos que la más nueva es la primera
-        
-        let targetedStudents: Student[] = [];
-        if (assignmentScope.type === 'individual' && assignmentScope.targetId) {
-          const student = students.find(s => s.id === assignmentScope.targetId);
-          if (student) targetedStudents = [student];
-        } else if (assignmentScope.type === 'level' && assignmentScope.targetId) {
-          targetedStudents = students.filter(s => s.current_level_code === assignmentScope.targetId);
-        } else if (assignmentScope.type === 'class') {
-          targetedStudents = students;
-        }
-
-        const newAssignments: Submission[] = targetedStudents.map(student => ({
-          id: `assign-${Date.now()}-${student.id}`,
-          task_id: newestTask.id,
-          student_id: student.id,
-          status: 'assigned',
-          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), 
-        }));
-
-        setMockSubmissions(prev => [...newAssignments, ...prev]);
-      }
+      console.log("✅ Tareas actualizadas:", updated.length);
     } catch (error) {
-      console.error("Error saving task to Moodle:", error);
-      toast.error("Error al guardar en Moodle");
+      console.error("Error al guardar tarea:", error);
+      toast.error("Error al guardar tarea");
     }
   };
 
-  const handleGenerateTask = () => {
-      // Abrir el builder en modo "crear" con IA activada
-      setStartBuilderWithAI(true);
-      setShowTaskBuilder(true);
-  };
-
   const handleDeleteTask = async (taskId: string) => {
-    if (!window.confirm("¿Estás seguro de borrar esta tarea de Moodle?")) return;
-
-    toast.loading("Borrando tarea...");
+    if (!window.confirm("¿Seguro que quieres borrar esta tarea?")) return;
+    
     try {
-      const success = await deleteMoodleTask(taskId);
-      if (success) {
-        // Recargar la lista desde el servidor para asegurar sincronización
-        const updatedTasks = await getMoodleTasks();
-        setTasks(updatedTasks);
-        toast.dismiss();
-        toast.success("Tarea eliminada correctamente");
-      } else {
-        throw new Error("No se pudo borrar");
-      }
+      await deleteMoodleTask(taskId);
+      
+      // ✅ RECARGAR TAREAS - REEMPLAZAR
+      const updated = await getMoodleTasks();
+      setTasks(updated);
+      
+      toast.success("Tarea borrada");
     } catch (error) {
-      toast.dismiss();
-      toast.error("Error al borrar. Verifica permisos de API.");
+      console.error("Error al borrar tarea:", error);
+      toast.error("Error al borrar tarea");
     }
   };
 
   const handleEditTask = (task: Task) => {
     setTaskToEdit(task);
     setTaskBuilderMode('edit');
+    setStartBuilderWithAI(false);
     setShowTaskBuilder(true);
   };
 
-  const handleAddComment = async (content: string, parentId?: string) => {
-    if (!currentUser) return;
-    const newComment: Comment = {
-      id: `comment-${Date.now()}`,
-      material_id: 'material-1',
-      user_id: currentUser.id,
-      user: currentUser,
-      content,
-      is_corrected: false,
-      parent_id: parentId,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    setComments([...comments, newComment]);
-  };
-
-  const handleCorrectComment = async (commentId: string, corrections: Correction[]) => {
-    if (!currentUser) return;
-    const updatedComments = comments.map((comment) => {
-        if (comment.id === commentId) {
-          return {
-            ...comment,
-            corrected_by: currentUser.id,
-            corrections,
-            is_corrected: true,
-            updated_at: new Date().toISOString(),
-          };
-        }
-        return comment;
-      });
-    setComments(updatedComments);
-    toast.success('Comentario corregido');
-  };
-
-  const handleMarkNotificationAsRead = async (notificationId: string) => {
-    if (!currentUser) return;
-    setNotifications(notifications.map((n) =>
-        n.id === notificationId ? { ...n, is_read: true } : n
-    ));
-  };
-
-  const handleClearAllNotifications = async () => {
-    setNotifications([]);
-  };
-
+  // ========== GESTIÓN DE SUBMISSIONS ==========
   const loadSubmissions = async () => {
-    toast.loading("Recargando submissions...");
     try {
-      const allSubmissionsData = await getMoodleSubmissions();
+      const allSubs = await getMoodleSubmissions();
       
-      // Si es profesor, actualizar TODAS las submissions
       if (currentUser?.role === 'teacher') {
-          setAllSubmissions(allSubmissionsData);
+        setRealSubmissions(allSubs);
+      } else {
+        const mySubs = allSubs.filter((s: any) => 
+          s.student_name === currentUser?.name || 
+          String(s.student_id) === String(currentUser?.id)
+        );
+        setRealSubmissions(mySubs);
       }
       
-      // Filtrar las del usuario actual
-      const mySubmissions = allSubmissionsData.filter((sub: any) => 
-        sub.student_name === currentUser?.name || 
-        sub.student_id === currentUser?.id
-      );
-      setRealSubmissions(mySubmissions);
-      
-      console.log(`✅ Submissions actualizadas: ${mySubmissions.length} propias, ${allSubmissionsData.length} totales`);
-      toast.dismiss();
-      toast.success("Submissions actualizadas");
-    } catch (e) {
-      console.error("Error recargando submissions:", e);
-      toast.dismiss();
-      toast.error("Error al recargar submissions");
+      console.log("✅ Submissions recargadas");
+    } catch (error) {
+      console.error("Error al cargar submissions:", error);
     }
   };
 
-  if (loading) {
-      return <div className="min-h-screen flex items-center justify-center bg-background">Cargando LuinGo (Moodle)...</div>;
-  }
+  // ========== GESTIÓN DE EJERCICIOS ==========
+  const handleSelectTask = (task: Task) => {
+    if (task.content_data?.type === 'pdf') {
+      setActivePDFTask(task);
+      setView('pdf-viewer');
+    } else {
+      const exercise: Exercise = {
+        title: task.title,
+        level: task.level_tag || 'A1',
+        banana_reward_total: 100,
+        questions: task.content_data?.questions || []
+      };
+      setActiveExercise(exercise);
+      setView('exercise');
+    }
+  };
 
-  if (!currentUser) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-[#FDFBF7] p-4">
-             <div className="w-full max-w-md text-center space-y-6">
-                 <div className="mx-auto w-20 h-20 rounded-full bg-amber-400 flex items-center justify-center text-4xl shadow-lg">🐵</div>
-                 <h1 className="text-3xl font-bold text-slate-800">LuinGo <span className="text-amber-500">.</span></h1>
-                 <p className="text-slate-500">Conectando con tu Moodle Headless</p>
-                 
-                 {connectionError && (
-                    <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-center justify-center gap-2">
-                        <span>Error: {connectionError}</span>
-                    </div>
-                 )}
+  const handleExerciseComplete = async (score: number, answers: any[]) => {
+    toast.success("¡Tarea finalizada!");
+    
+    if (currentUser && activeExercise) {
+      try {
+        // Buscar ID de la tarea
+        const taskRef = tasks.find(t => t.title === activeExercise.title);
+        
+        if (taskRef) {
+          await submitTaskResult(
+            taskRef.id,
+            activeExercise.title,
+            currentUser.id,
+            currentUser.name,
+            score,
+            activeExercise.questions.length,
+            answers
+          );
+          
+          console.log("✅ Resultado enviado a Moodle");
+          
+          // ✅ RECARGA FORZADA DE SUBMISSIONS - REEMPLAZAR
+          await loadSubmissions();
+          
+          // Actualizar XP del usuario
+          const newSubs = await getMoodleSubmissions();
+          const mySubs = newSubs.filter((s: any) => 
+            s.student_name === currentUser.name || 
+            String(s.student_id) === String(currentUser.id)
+          );
+          
+          const newXP = mySubs.length * 15;
+          const newLevel = calculateLevelFromXP(newXP);
+          
+          setCurrentUser(prev => ({
+            ...prev!,
+            xp_points: newXP,
+            level: newLevel
+          }));
+          
+          toast.success(`+15 XP | Total: ${newXP} XP`);
+        }
+      } catch (error) {
+        console.error("Error al enviar resultado:", error);
+        toast.error("Error al guardar resultado");
+      }
+    }
+    
+    // ✅ VUELTA DIRECTA AL DASHBOARD (Sin pasar por 'correction')
+    setView('dashboard');
+    setActiveExercise(null);
+  };
 
-                 <div className="grid gap-4">
-                    <Input 
-                       placeholder="Nombre de Usuario (ej. hans)" 
-                       value={usernameInput}
-                       onChange={(e) => setUsernameInput(e.target.value)}
-                       className="h-12 text-lg"
-                       onKeyDown={(e) => e.key === 'Enter' && initializeUser(usernameInput)}
-                    />
-                    <Button 
-                       className="h-12 text-lg" 
-                       onClick={() => initializeUser(usernameInput)}
-                       disabled={!usernameInput.trim()}
-                    >
-                       Entrar
-                    </Button>
-                 </div>
+  const handleExerciseExit = () => {
+    // ✅ VUELTA DIRECTA AL DASHBOARD
+    setView('dashboard');
+    setActiveExercise(null);
+  };
 
-                 <Toaster richColors />
-             </div>
-        </div>
-      );
-  }
+  // ========== GESTIÓN DE ESTUDIANTES ==========
+  const handleSelectStudent = (id: string) => {
+    setSelectedStudentId(id);
+  };
 
-  // Reuse the selectedTask logic for legacy detail view
-  const selectedTask = tasks.find((t) => t.id === 'task-1');
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setView('home');
+    setRealSubmissions([]);
+    setTasks([]);
+    setStudents([]);
+    toast.info("Sesión cerrada");
+  };
 
+  // ========== CREAR NUEVA CLASE ==========
+  const handleCreateClass = async (courseName: string, shortName: string) => {
+    try {
+      const result = await createCourse(courseName, shortName);
+      if (result) {
+        toast.success("Clase creada correctamente");
+        const moodleCourses = await getCourses();
+        if (Array.isArray(moodleCourses)) {
+          setCourses(moodleCourses);
+        }
+      }
+    } catch (error) {
+      console.error("Error al crear clase:", error);
+      toast.error("Error al crear clase");
+    }
+  };
+
+  // ========== RENDER ==========
   return (
-    <div className="min-h-screen bg-[#F0F4F8] font-sans text-slate-800 selection:bg-amber-200 selection:text-amber-900">
-      <Toaster richColors />
-      <nav className="bg-white border-b-2 border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 md:gap-4">
-              <div 
-                onClick={handleGoHome}
-                className="relative group cursor-pointer shrink-0 hover:-rotate-6 hover:scale-110 transition-all duration-300"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-amber-400 border-b-4 border-amber-600 flex items-center justify-center">
-                  <span className="text-2xl drop-shadow-sm filter">🐵</span>
-                </div>
+    <div className="h-screen w-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 overflow-hidden">
+      <Toaster position="top-right" richColors />
+
+      {/* TASK BUILDER MODAL */}
+      {showTaskBuilder && (
+        <TaskBuilder 
+          onSaveTask={handleSaveNewTask}
+          onCancel={() => {
+            setShowTaskBuilder(false);
+            setTaskToEdit(null);
+            setStartBuilderWithAI(false);
+          }}
+          initialData={taskToEdit || undefined}
+          autoOpenAI={startBuilderWithAI}
+        />
+      )}
+
+      {/* PANTALLA DE CARGA */}
+      {loading && (
+        <div className="h-full w-full flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
+            <p className="text-slate-600 font-medium">Conectando con Moodle...</p>
+          </div>
+        </div>
+      )}
+
+      {/* ERROR DE CONEXIÓN */}
+      {connectionError && !loading && (
+        <div className="h-full w-full flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border-2 border-red-200 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">⚠️</span>
+            </div>
+            <h2 className="text-xl font-black text-slate-800 mb-2">Error de Conexión</h2>
+            <p className="text-slate-600 mb-6">{connectionError}</p>
+            <Button onClick={initMoodle} className="w-full">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Reintentar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* PANTALLA DE LOGIN */}
+      {!loading && !connectionError && !currentUser && view === 'home' && (
+        <div className="h-full w-full flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border-4 border-indigo-100">
+            <div className="text-center mb-8">
+              <div className="w-20 h-20 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <span className="text-white font-black text-3xl">L</span>
               </div>
-              <div>
-                <h1 className="text-slate-800 font-black text-2xl tracking-tight flex items-center gap-2 cursor-pointer" onClick={handleGoHome}>
-                    LuinGo <span className="text-amber-500 hidden sm:inline-block">.</span>
-                </h1>
-              </div>
+              <h1 className="text-3xl font-black text-slate-800 mb-2">LuinGo</h1>
+              <p className="text-slate-500">Plataforma LMS con IA</p>
             </div>
 
-            <div className="flex items-center gap-3 md:gap-6">
-              {view !== 'home' && (
-                 <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleGoHome}
-                    className="hidden md:flex text-slate-400 font-bold hover:text-slate-600 hover:bg-slate-100 rounded-xl"
-                 >
-                    <Home className="w-4 h-4 mr-2" />
-                    Mis Clases
-                 </Button>
-              )}
-
-              <div className="relative group">
-                 <NotificationBell
-                    notifications={notifications}
-                    onMarkAsRead={handleMarkNotificationAsRead}
-                    onClearAll={handleClearAllNotifications}
-                  />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">
+                  Usuario de Moodle
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Ingresa tu username"
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && usernameInput && initializeUser(usernameInput)}
+                  className="w-full h-12 text-lg"
+                />
               </div>
-              
-              <div className="h-8 w-0.5 bg-slate-100 hidden md:block rounded-full"></div>
 
-              <div className="flex items-center gap-3">
-                <div className="text-right hidden md:block">
-                    <p className="text-sm font-bold text-slate-700">{currentUser.name}</p>
-                    <div className="bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider inline-block">
-                        {currentUser.role}
-                    </div>
-                </div>
-                <div className="p-1 rounded-full bg-indigo-100 border-2 border-white ring-2 ring-indigo-50">
-                    <img
-                    src={currentUser.avatar_url}
-                    alt={currentUser.name}
-                    className="w-9 h-9 rounded-full object-cover"
-                    />
-                </div>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={handleLogout} 
-                title="Cerrar Sesión" 
-                className="text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+              <Button
+                onClick={() => usernameInput && initializeUser(usernameInput)}
+                disabled={!usernameInput}
+                className="w-full h-12 text-lg font-black"
               >
-                <LogOut className="w-6 h-6" />
+                Entrar
               </Button>
+
+              <div className="text-xs text-slate-400 text-center mt-4">
+                <p>👨‍🏫 Profesor: <code className="bg-slate-100 px-2 py-1 rounded">luigi</code></p>
+                <p>👨‍🎓 Estudiante: <code className="bg-slate-100 px-2 py-1 rounded">admin</code></p>
+              </div>
             </div>
           </div>
         </div>
-      </nav>
+      )}
 
-      <main>
-        {showTaskBuilder && (
-            <TaskBuilder 
-                onSaveTask={handleSaveNewTask}
-                onCancel={() => {
-                    setShowTaskBuilder(false);
-                    setTaskToEdit(null);
-                    setTaskBuilderMode('create');
-                    setStartBuilderWithAI(false); // Resetear el flag
-                }}
-                initialStudentId={targetStudentForTask} 
-                studentName={students.find(s => s.id === targetStudentForTask)?.name}
-                initialData={taskToEdit || undefined}
-                autoOpenAI={startBuilderWithAI}
-            />
-        )}
+      {/* SELECCIÓN DE CLASE */}
+      {!loading && !connectionError && currentUser && view === 'home' && (
+        <ClassSelection
+          courses={courses}
+          onSelectClass={handleSelectClass}
+          onCreateClass={handleCreateClass}
+          userName={currentUser.name}
+          userRole={currentUser.role}
+        />
+      )}
 
-        {view === 'home' && (
-            <ClassSelection 
-                courses={courses} 
-                onSelectClass={handleSelectClass} 
-                onCreateClass={handleCreateClass}
-            />
-        )}
+      {/* DASHBOARD DEL PROFESOR */}
+      {view === 'dashboard' && currentUser?.role === 'teacher' && (
+        <>
+          <TeacherDashboard
+            classroom={classroom}
+            students={students}
+            tasks={tasks}
+            submissions={realSubmissions}
+            onSelectStudent={handleSelectStudent}
+            onGenerateTask={handleGenerateTask}
+            onDeleteTask={handleDeleteTask}
+            onEditTask={handleEditTask}
+            onRefreshSubmissions={loadSubmissions}
+          />
 
-        {view === 'dashboard' && currentUser?.role === 'teacher' && (
-           <>
-            <TeacherDashboard
-                classroom={classroom}
-                students={students}
-                tasks={tasks}
-                submissions={allSubmissions} // ✅ Pasar todas las submissions
-                onSelectStudent={handleSelectStudent}
-                onGenerateTask={handleGenerateTask}
-                onDeleteTask={handleDeleteTask}
-                onEditTask={handleEditTask}
-                onRefreshSubmissions={loadSubmissions} // ✅ Función para refrescar después de calificar
-            />
+          {/* SHEET: PERFIL DEL ESTUDIANTE */}
+          <Sheet 
+            open={!!selectedStudentId} 
+            onOpenChange={(open) => !open && setSelectedStudentId(null)}
+          >
+            <SheetContent side="right" className="w-full sm:max-w-2xl p-0 border-l-4 border-slate-200 bg-[#F0F4F8] overflow-y-auto">
+              <SheetHeader className="hidden">
+                <SheetTitle>Perfil del Estudiante</SheetTitle>
+                <SheetDescription>Detalles y asignación de tareas</SheetDescription>
+              </SheetHeader>
 
-            <Sheet 
-                open={!!selectedStudentId} 
-                onOpenChange={(open) => !open && setSelectedStudentId(null)}
-            >
-                <SheetContent side="right" className="w-full sm:max-w-2xl p-0 border-l-4 border-slate-200 bg-[#F0F4F8] overflow-y-auto">
-                <SheetHeader className="hidden">
-                    <SheetTitle>Perfil del Estudiante</SheetTitle>
-                    <SheetDescription>Detalles y asignación de tareas</SheetDescription>
-                </SheetHeader>
-
-                {selectedStudentId && (
-                    <StudentPassport 
-                        student={students.find(s => s.id === selectedStudentId) || students[0]}
-                        // PASAR DATOS REALES: Usar allSubmissions para profesor
-                        tasks={tasks}
-                        submissions={allSubmissions.filter(s => 
-                            s.student_name === (students.find(st => st.id === selectedStudentId)?.name) ||
-                            s.student_id === selectedStudentId
-                        )}
-                        onBack={() => setSelectedStudentId(null)}
-                        onAssignTask={() => {
-                            const currentStudentId = selectedStudentId;
-                            setTargetStudentForTask(currentStudentId);
-                            setSelectedStudentId(null);
-                            setTimeout(() => {
-                                setShowTaskBuilder(true);
-                            }, 150);
-                        }}
-                    />
-                )}
-                </SheetContent>
-            </Sheet>
-           </>
-        )}
-
-        {view === 'dashboard' && currentUser?.role === 'student' && (
-            <StudentDashboard 
-                student={students.find(s => s.id === currentUser.id) as Student || {
-                    ...currentUser, 
-                    // Valores por defecto para evitar crash si faltan datos
-                    total_tasks: tasks.length,
-                    completed_tasks: realSubmissions.length,
-                    average_grade: 0,
-                    xp_points: realSubmissions.length * 15, // REDUCIDO: 15 XP por tarea
-                    level: 1,
-                    current_level_code: 'A1',
-                    materials_viewed: []
-                }}
-                // CORRECCIÓN AQUÍ: Pasamos todas las tareas, sin filtrar por asignación
-                tasks={tasks}
-                submissions={realSubmissions.length > 0 ? realSubmissions : mockSubmissions.filter(sub => sub.student_id === currentUser.id)}
-                onLogout={handleLogout}
-                onSelectTask={(task) => {
-                    if (task.content_data.type === 'pdf') {
-                        setActivePDFTask(task);
-                        setView('pdf-viewer');
-                    } else {
-                        const exercise: Exercise = {
-                            title: task.title,
-                            level: task.level_tag || 'A1',
-                            banana_reward_total: 100,
-                            questions: task.content_data.questions || []
-                        };
-                        setActiveExercise(exercise);
-                        setView('exercise');
-                    }
-                }}
-            />
-        )}
-
-        {view === 'pdf-viewer' && activePDFTask && (
-            <div className="p-4 h-screen bg-slate-100 flex flex-col">
-                 <div className="mb-4 flex justify-between items-center">
-                    <Button variant="ghost" onClick={() => setView('dashboard')}>
-                        <ArrowLeft className="w-5 h-5 mr-2"/> Salir
-                    </Button>
-                    <h2 className="font-black text-xl">{activePDFTask.title}</h2>
-                    <div className="w-20"></div>
-                 </div>
-                 <div className="flex-1 overflow-y-auto">
-                    <PDFAnnotator 
-                        bgUrl={activePDFTask.content_data.resource_url || 'https://placehold.co/600x800/png'}
-                        mode="student"
-                        onSave={(strokes) => {
-                            console.log('Saved strokes:', strokes);
-                            toast.success('Anotaciones guardadas');
-                            setView('dashboard');
-                        }}
-                    />
-                 </div>
-            </div>
-        )}
-
-        {view === 'exercise' && activeExercise && (
-            <ExercisePlayer 
-                exercise={activeExercise}
-                studentName={currentUser?.name}
-                onExit={() => setView('dashboard')}
-                onComplete={async (score, answers) => {
-                    // ✅ CORRECCIÓN: Ahora recibimos el array de respuestas real
-                    toast.loading("Guardando y evaluando...");
-                    
-                    // 2. Enviar a Moodle (Foro 7) con información completa
-                    if (currentUser && activeExercise) {
-                        // Buscar el task_id de la tarea actual
-                        const currentTask = tasks.find(t => t.title === activeExercise.title);
-                        const taskId = currentTask?.id || 'task-unknown';
-                        
-                        // ✅ CORRECCIÓN: Pasar el array de respuestas REAL (no [])
-                        await submitTaskResult(
-                            taskId,
-                            activeExercise.title, 
-                            currentUser.id,
-                            currentUser.name, 
-                            score, 
-                            activeExercise.questions.length,
-                            answers // ✅ AQUÍ: Variable real con todas las respuestas
-                        );
-                        
-                        // 3. Esperar un poco a Moodle (Hack de latencia)
-                        await new Promise(r => setTimeout(r, 1000));
-                        
-                        toast.dismiss();
-                        toast.success("✅ Tarea completada y guardada");
-                        
-                        // 4. Recargar submissions para actualizar el portafolio
-                        try {
-                            const allSubmissionsData = await getMoodleSubmissions();
-                            
-                            // Si es profesor, actualizar TODAS las submissions
-                            if (currentUser.role === 'teacher') {
-                                setAllSubmissions(allSubmissionsData);
-                            }
-                            
-                            // Filtrar las del usuario actual
-                            const mySubmissions = allSubmissionsData.filter((sub: any) => 
-                              sub.student_name === currentUser.name || 
-                              sub.student_id === currentUser.id
-                            );
-                            setRealSubmissions(mySubmissions);
-                            
-                            console.log(`✅ Submissions actualizadas: ${mySubmissions.length} propias, ${allSubmissionsData.length} totales`);
-                        } catch (e) {
-                            console.error("Error recargando submissions:", e);
-                        }
-                    }
-                    
-                    // ✅ CORRECCIÓN: Volver al dashboard, NO a la vista de corrección
-                    setView('dashboard');
-                }}
-            />
-        )}
-
-        {view === 'correction' && activeExercise && (
-            <TaskCorrector 
-                exercise={activeExercise}
-                studentName={students.find(s => s.id === selectedStudentId)?.name || "Ana García"}
-                onBack={() => setView('dashboard')}
-                onSaveCorrection={() => {
-                    setView('dashboard');
-                }}
-            />
-        )}
-
-        {view === 'task-detail' && (
-          <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 pb-24">
-            <div className="mb-8">
-              <Button
-                variant="ghost"
-                onClick={() => setView('dashboard')}
-                className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl font-bold -ml-2"
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Volver al Dashboard
-              </Button>
-            </div>
-
-            {selectedTask && (
-              <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border-b-4 border-slate-200 mb-8">
-                <div className="flex flex-col md:flex-row md:items-start gap-6 mb-6">
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-3 mb-3">
-                      <div
-                        className="w-4 h-4 rounded-full ring-2 ring-offset-2 ring-slate-100"
-                        style={{ backgroundColor: selectedTask.color_tag }}
-                      />
-                      <span className="text-xs font-black px-3 py-1 bg-slate-100 rounded-lg text-slate-600 uppercase tracking-wider">
-                        {selectedTask.category}
-                      </span>
-                      {selectedTask.ai_generated && (
-                        <span className="text-xs font-black px-3 py-1 bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-200 rounded-lg text-purple-700 flex items-center gap-1">
-                          <Sparkles className="w-3 h-3" />
-                          IA GENERATED
-                        </span>
-                      )}
-                    </div>
-                    <h2 className="text-3xl md:text-4xl font-black text-slate-800 mb-4 leading-tight">{selectedTask.title}</h2>
-                    <p className="text-slate-600 text-lg leading-relaxed font-medium">{selectedTask.description}</p>
-                  </div>
-                  {selectedTask.due_date && (
-                    <div className="shrink-0 bg-amber-50 p-4 rounded-2xl border-2 border-amber-100 text-center min-w-[140px]">
-                      <p className="text-xs font-black text-amber-400 uppercase tracking-widest mb-1">Entrega</p>
-                      <p className="text-xl font-black text-amber-900">
-                        {new Date(selectedTask.due_date).toLocaleDateString('es-ES', {
-                          day: 'numeric',
-                          month: 'short',
-                        })}
-                      </p>
-                      <p className="text-sm font-bold text-amber-700/70">
-                         {new Date(selectedTask.due_date).getFullYear()}
-                      </p>
-                    </div>
+              {selectedStudentId && (
+                <StudentPassport 
+                  student={students.find(s => s.id === selectedStudentId) || students[0]}
+                  tasks={tasks}
+                  submissions={realSubmissions.filter(s => 
+                    s.student_name === (students.find(st => st.id === selectedStudentId)?.name) ||
+                    s.student_id === selectedStudentId
                   )}
-                </div>
+                  onBack={() => setSelectedStudentId(null)}
+                  onAssignTask={() => {
+                    setSelectedStudentId(null);
+                    setShowTaskBuilder(true);
+                  }}
+                />
+              )}
+            </SheetContent>
+          </Sheet>
+        </>
+      )}
 
-                {selectedTask.rubric && (
-                  <div className="mt-6 p-6 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl border-2 border-indigo-100">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-indigo-100 rounded-xl text-indigo-600">
-                            <Target className="w-5 h-5" />
-                        </div>
-                        <h4 className="text-xl font-black text-indigo-900">Rúbrica de Evaluación</h4>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {selectedTask.rubric.criteria.map((criterion: any, idx: number) => (
-                        <div key={idx} className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
-                          <div className="flex justify-between items-center mb-2">
-                              <p className="font-bold text-indigo-800">{criterion.name}</p>
-                              <span className="bg-indigo-100 text-indigo-600 text-xs font-bold px-2 py-1 rounded-lg">{criterion.points} pts</span>
-                          </div>
-                          <p className="text-sm text-slate-500">{criterion.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+      {/* DASHBOARD DEL ESTUDIANTE */}
+      {view === 'dashboard' && currentUser?.role === 'student' && (
+        <StudentDashboard 
+          student={students[0]}
+          tasks={tasks}
+          submissions={realSubmissions}
+          onLogout={handleLogout}
+          onSelectTask={handleSelectTask}
+        />
+      )}
 
-                <div className="mt-8 p-6 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 text-center">
-                     <p className="text-slate-400 font-bold mb-4">Contenido de la Tarea</p>
-                     {selectedTask.content_data?.type === 'form' ? (
-                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200 text-slate-600">
-                             <MessageCircle className="w-4 h-4" />
-                             <span>Cuestionario ({selectedTask.content_data.questions?.length || 0} preguntas)</span>
-                         </div>
-                     ) : (
-                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200 text-slate-600">
-                             <Play className="w-4 h-4" />
-                             <span>Recurso Externo / PDF</span>
-                         </div>
-                     )}
-                </div>
-              </div>
-            )}
-            
-            <CommentWall 
-                comments={comments} 
-                currentUser={currentUser}
-                onAddComment={handleAddComment}
-                onCorrectComment={handleCorrectComment}
-            />
-          </div>
-        )}
-      </main>
+      {/* REPRODUCTOR DE EJERCICIOS */}
+      {view === 'exercise' && activeExercise && (
+        <ExercisePlayer 
+          exercise={activeExercise}
+          studentName={currentUser?.name}
+          onExit={handleExerciseExit}
+          onComplete={handleExerciseComplete}
+        />
+      )}
+
+      {/* VISOR DE PDF */}
+      {view === 'pdf-viewer' && activePDFTask && (
+        <PDFAnnotator
+          pdfUrl={activePDFTask.content_data?.pdf_url || ''}
+          taskTitle={activePDFTask.title}
+          onBack={() => setView('dashboard')}
+          onSubmit={() => {
+            toast.success("PDF anotado guardado");
+            setView('dashboard');
+          }}
+        />
+      )}
     </div>
   );
 }
