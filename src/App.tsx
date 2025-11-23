@@ -306,47 +306,66 @@ export default function App() {
     setSelectedStudentId(null);
   };
 
-  const handleSaveNewTask = async (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => {
-      // Guardar tarea en Moodle (Foro)
-      try {
+  const handleSaveNewTask = async (taskData: any) => {
+    // Guardar tarea en Moodle (Foro)
+    try {
+      if (taskToEdit) {
+        // MODO EDICIÓN
+        await updateMoodleTask(
+          taskToEdit.postId || taskToEdit.id, 
+          taskData.title, 
+          taskData.description, 
+          taskData.content_data
+        );
+        toast.success("Tarea actualizada exitosamente");
+      } else {
+        // MODO CREACIÓN
         await createMoodleTask(taskData.title, taskData.description, taskData.content_data);
-        toast.success("Tarea guardada en Moodle exitosamente");
-      } catch (error) {
-        console.error("Error saving task to Moodle:", error);
-        toast.error("Error al guardar en Moodle");
+        toast.success("Tarea creada en Moodle exitosamente");
       }
-
+      
+      // Limpieza
       setShowTaskBuilder(false);
       setTargetStudentForTask(undefined);
+      setTaskToEdit(null);
+      setTaskBuilderMode('create');
+      setStartBuilderWithAI(false);
 
       // Recargar la lista desde Moodle
       const updatedTasks = await getMoodleTasks();
       setTasks(updatedTasks);
 
       // Actualizar asignaciones locales (Mock) para que aparezcan en la UI
-      if (updatedTasks.length > 0) {
-          const newestTask = updatedTasks[0]; // Asumimos que la más nueva es la primera
-          
-          let targetedStudents: Student[] = [];
-          if (assignmentScope.type === 'individual' && assignmentScope.targetId) {
-              const student = students.find(s => s.id === assignmentScope.targetId);
-              if (student) targetedStudents = [student];
-          } else if (assignmentScope.type === 'level' && assignmentScope.targetId) {
-              targetedStudents = students.filter(s => s.current_level_code === assignmentScope.targetId);
-          } else if (assignmentScope.type === 'class') {
-              targetedStudents = students;
-          }
+      // Extraer el assignmentScope de content_data
+      const assignmentScope = taskData.content_data?.assignment_scope;
+      
+      if (updatedTasks.length > 0 && assignmentScope && !taskToEdit) {
+        const newestTask = updatedTasks[0]; // Asumimos que la más nueva es la primera
+        
+        let targetedStudents: Student[] = [];
+        if (assignmentScope.type === 'individual' && assignmentScope.targetId) {
+          const student = students.find(s => s.id === assignmentScope.targetId);
+          if (student) targetedStudents = [student];
+        } else if (assignmentScope.type === 'level' && assignmentScope.targetId) {
+          targetedStudents = students.filter(s => s.current_level_code === assignmentScope.targetId);
+        } else if (assignmentScope.type === 'class') {
+          targetedStudents = students;
+        }
 
-          const newAssignments: Submission[] = targetedStudents.map(student => ({
-              id: `assign-${Date.now()}-${student.id}`,
-              task_id: newestTask.id,
-              student_id: student.id,
-              status: 'assigned',
-              due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), 
-          }));
+        const newAssignments: Submission[] = targetedStudents.map(student => ({
+          id: `assign-${Date.now()}-${student.id}`,
+          task_id: newestTask.id,
+          student_id: student.id,
+          status: 'assigned',
+          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), 
+        }));
 
-          setMockSubmissions(prev => [...newAssignments, ...prev]);
+        setMockSubmissions(prev => [...newAssignments, ...prev]);
       }
+    } catch (error) {
+      console.error("Error saving task to Moodle:", error);
+      toast.error("Error al guardar en Moodle");
+    }
   };
 
   const handleGenerateTask = () => {
@@ -380,37 +399,6 @@ export default function App() {
     setTaskToEdit(task);
     setTaskBuilderMode('edit');
     setShowTaskBuilder(true);
-  };
-
-  const handleUpdateTask = async (taskData: any, assignmentScope: { type: 'individual' | 'level' | 'class', targetId?: string }) => {
-    if (!taskToEdit) return;
-
-    toast.loading("Actualizando tarea...");
-    try {
-      // Llamar a la API de actualización
-      await updateMoodleTask(
-        taskToEdit.postId || taskToEdit.id, 
-        taskData.title, 
-        taskData.description, 
-        taskData.content_data
-      );
-      
-      toast.dismiss();
-      toast.success("Tarea actualizada exitosamente");
-      
-      // Recargar tareas desde Moodle
-      const updatedTasks = await getMoodleTasks();
-      setTasks(updatedTasks);
-      
-      // Cerrar el builder y resetear estados
-      setShowTaskBuilder(false);
-      setTaskToEdit(null);
-      setTaskBuilderMode('create');
-    } catch (error) {
-      console.error("Error updating task:", error);
-      toast.dismiss();
-      toast.error("Error al actualizar la tarea");
-    }
   };
 
   const handleAddComment = async (content: string, parentId?: string) => {
@@ -580,7 +568,6 @@ export default function App() {
         {showTaskBuilder && (
             <TaskBuilder 
                 onSaveTask={handleSaveNewTask}
-                onUpdateTask={handleUpdateTask}
                 onCancel={() => {
                     setShowTaskBuilder(false);
                     setTaskToEdit(null);
@@ -589,9 +576,8 @@ export default function App() {
                 }}
                 initialStudentId={targetStudentForTask} 
                 studentName={students.find(s => s.id === targetStudentForTask)?.name}
-                mode={taskBuilderMode}
                 initialData={taskToEdit || undefined}
-                autoOpenAI={startBuilderWithAI} // Prop correcta
+                autoOpenAI={startBuilderWithAI}
             />
         )}
 

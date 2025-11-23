@@ -22,6 +22,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onSelectStudent,
   onGenerateTask,
   onDeleteTask,
+  onEditTask,
 }) => {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [viewMode, setViewMode] = useState<'students' | 'tasks'>('students');
@@ -128,7 +129,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             <p className="text-xs text-slate-400 truncate">{task.description}</p>
                         </div>
                         <div className="flex gap-2 shrink-0">
-                            <Button variant="ghost" size="icon" className="text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl">
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
+                                onClick={() => onEditTask && onEditTask(task)}
+                            >
                                 <Edit2 className="w-5 h-5" />
                             </Button>
                             <Button onClick={() => onDeleteTask(task.id)} variant="ghost" size="icon" className="text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl">
