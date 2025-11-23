@@ -2,13 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { X, Save, Plus, Trash2, CheckCircle2, AlignLeft, Mic, User, Sparkles, Loader2 } from 'lucide-react';
+import { X, Save, Plus, Trash2, CheckCircle2, AlignLeft, Mic, User, Sparkles, Loader2, Settings2, KeyRound } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
-
-// --- TOKEN HUGGING FACE (REAL) ---
-const HARDCODED_HF_TOKEN = "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";
 
 // TIPOS
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -40,6 +37,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   studentName, 
   autoOpenAI 
 }) => {
+  // ESTADOS PRINCIPALES
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [category, setCategory] = useState<'homework' | 'quiz' | 'project'>(initialData?.category || 'homework');
@@ -63,18 +61,32 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     }]
   );
 
+  // IA & SETTINGS - API KEY SEGURA DESDE LOCALSTORAGE
   const [showAiModal, setShowAiModal] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiNumQuestions, setAiNumQuestions] = useState(3);
   const [aiLevel, setAiLevel] = useState('A1');
   const [aiDifficulty, setAiDifficulty] = useState('Básico');
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // RECUPERAR CLAVE SEGURA DEL NAVEGADOR (LOCALSTORAGE)
+  const [userToken, setUserToken] = useState(localStorage.getItem('hf_token') || '');
+
   useEffect(() => {
     if (autoOpenAI && !initialData) setShowAiModal(true);
   }, [autoOpenAI, initialData]);
 
-  // HANDLERS
+  // HANDLER DE CONFIGURACIÓN - GUARDAR TOKEN
+  const saveToken = (token: string) => {
+    const cleanToken = token.trim();
+    localStorage.setItem('hf_token', cleanToken);
+    setUserToken(cleanToken);
+    setShowKeyModal(false);
+    toast.success("🔒 API Key guardada en tu navegador");
+  };
+
+  // HANDLERS CRUD
   const addQuestion = () => setQuestions([...questions, {
     id: Date.now(),
     type: 'choice',
@@ -134,60 +146,65 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     onSaveTask(taskData);
   };
 
-  // --- MOTOR LOCAL (RESPALDO) ---
+  // MODO LOCAL (FALLBACK)
   const runLocalAI = () => {
     setTimeout(() => {
       const topic = aiPrompt.toLowerCase();
       let newQs: QuestionDraft[] = [];
-      let newTitle = `Actividad: ${aiPrompt}`;
+      let newTitle = `Lección: ${aiPrompt}`;
+      let newDesc = `Ejercicios prácticos sobre ${aiPrompt}.`;
 
-      // Base de datos de emergencia inteligente
       if (topic.includes('verbo') || topic.includes('gramática')) {
-        newTitle = "Práctica de Verbos";
+        newTitle = "Práctica Verbal";
         newQs = [
-          { id: Date.now(), type: 'fill_blank', question_text: 'Nosotros ___ (vivir) en Madrid.', options: [], correct_answer: 'vivimos', explanation: 'Presente de indicativo.', allow_audio: false },
-          { id: Date.now()+1, type: 'choice', question_text: 'Participio de "Escribir":', options: ['Escribido', 'Escrito', 'Escribo'], correct_answer: 'Escrito', explanation: 'Irregular.', allow_audio: false },
-          { id: Date.now()+2, type: 'true_false', question_text: 'Los verbos regulares nunca cambian su raíz.', options: [], correct_answer: 'Verdadero', explanation: 'Por eso se llaman regulares.', allow_audio: false }
+          { id: Date.now(), type: 'fill_blank', question_text: 'Yo ___ (cantar) bien.', options: [], correct_answer: 'canto', explanation: 'Presente de indicativo.', allow_audio: false },
+          { id: Date.now()+1, type: 'choice', question_text: '¿Cuál es el pretérito de "hacer"?', options: ['hice', 'hacé', 'hací'], correct_answer: 'hice', explanation: 'Verbo irregular.', allow_audio: false },
+          { id: Date.now()+2, type: 'true_false', question_text: 'Los verbos en -ar tienen terminación -ado en participio.', options: [], correct_answer: 'Verdadero', explanation: 'Ej: cantar → cantado.', allow_audio: false }
         ];
       } else if (topic.includes('comida')) {
         newTitle = "Vocabulario: Comida";
         newQs = [
-          { id: Date.now(), type: 'true_false', question_text: 'El gazpacho se sirve caliente.', options: [], correct_answer: 'Falso', explanation: 'Es una sopa fría de tomate.', allow_audio: false },
-          { id: Date.now()+1, type: 'open', question_text: '¿Cuál es tu comida favorita?', options: [], correct_answer: '', explanation: 'Respuesta libre.', allow_audio: true },
-          { id: Date.now()+2, type: 'choice', question_text: '¿Qué ingrediente lleva la paella valenciana?', options: ['Chorizo', 'Arroz', 'Pasta'], correct_answer: 'Arroz', explanation: 'El arroz es la base.', allow_audio: false }
+          { id: Date.now(), type: 'choice', question_text: '¿Qué es una "tapa"?', options: ['Postre', 'Aperitivo', 'Bebida'], correct_answer: 'Aperitivo', explanation: 'Tradición española.', allow_audio: false },
+          { id: Date.now()+1, type: 'open', question_text: '¿Cuál es tu plato español favorito?', options: [], correct_answer: '', explanation: 'Respuesta libre.', allow_audio: true }
         ];
       } else {
         // Genérico
         for (let i = 0; i < aiNumQuestions; i++) {
           newQs.push({
             id: Date.now() + i,
-            type: i % 3 === 0 ? 'open' : i % 3 === 1 ? 'fill_blank' : 'true_false',
-            question_text: i % 3 === 0 
-              ? `Escribe una frase sobre: ${aiPrompt}` 
-              : i % 3 === 1 
-              ? `Completa: ${aiPrompt} es ___.`
-              : `¿${aiPrompt} es importante en español?`,
+            type: i % 2 === 0 ? 'open' : 'fill_blank',
+            question_text: i % 2 === 0 
+              ? `Opina sobre: ${aiPrompt}` 
+              : `Completa: ${aiPrompt} es ___.`,
             options: [],
-            correct_answer: i % 3 === 2 ? 'Verdadero' : i % 3 === 1 ? aiPrompt.split(' ')[0] : '',
+            correct_answer: i % 2 === 1 ? aiPrompt.split(' ')[0] : '',
             explanation: 'Práctica libre.',
-            allow_audio: i % 3 === 0
+            allow_audio: i % 2 === 0
           });
         }
       }
 
       setTitle(newTitle);
-      setDescription(`Ejercicios de nivel ${aiLevel} sobre ${aiPrompt}`);
+      setDescription(newDesc);
       setQuestions(newQs);
       setIsGenerating(false);
       setShowAiModal(false);
       setAiPrompt('');
-      toast.success("✅ Generado (Modo Offline)");
-    }, 1500);
+      toast.success("✅ Generado (Modo Local)");
+    }, 1000);
   };
 
-  // --- MOTOR IA: HUGGING FACE (MISTRAL) ---
+  // IA REAL (HUGGING FACE) - USA TOKEN DEL USUARIO
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
+
+    // VALIDAR QUE EXISTE TOKEN
+    if (!userToken) {
+      toast.error("⚠️ Falta tu API Key de Hugging Face");
+      setShowKeyModal(true); // Abrir modal de configuración
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
@@ -230,7 +247,7 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
       const response = await fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-Nemo-Instruct-2407", {
         method: "POST",
         headers: { 
-          "Authorization": `Bearer ${HARDCODED_HF_TOKEN}`, 
+          "Authorization": `Bearer ${userToken}`, 
           "Content-Type": "application/json" 
         },
         body: JSON.stringify({ 
@@ -251,17 +268,20 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
       }
 
       const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
       let jsonRaw = Array.isArray(result) ? result[0].generated_text : result.generated_text;
       
-      // Limpieza agresiva de JSON (Mistral a veces es hablador)
+      // Limpieza de JSON
       console.log("Raw AI Response:", jsonRaw);
-      
-      // Buscar el JSON entre llaves
       const jsonStart = jsonRaw.indexOf('{');
       const jsonEnd = jsonRaw.lastIndexOf('}');
       
       if (jsonStart === -1 || jsonEnd === -1) {
-        throw new Error("No se encontró JSON válido en la respuesta");
+        throw new Error("No se encontró JSON válido");
       }
       
       const jsonStr = jsonRaw.substring(jsonStart, jsonEnd + 1);
@@ -287,8 +307,8 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
       setShowAiModal(false);
       setAiPrompt('');
     } catch (error) {
-      console.error("HF Error:", error);
-      toast.error("⚠️ IA ocupada, usando respaldo local...");
+      console.error("AI Error:", error);
+      toast.error("⚠️ Error de conexión. Usando modo local...");
       runLocalAI();
     } finally {
       setIsGenerating(false);
@@ -393,7 +413,7 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
     <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in">
       <div className="bg-[#F8FAFC] w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl sm:rounded-3xl shadow-2xl border-2 sm:border-4 border-white overflow-hidden">
         
-        {/* HEADER */}
+        {/* HEADER CON BOTÓN DE CONFIGURACIÓN */}
         <div className="px-6 sm:px-8 py-4 sm:py-6 border-b border-slate-200 bg-white flex justify-between items-center sticky top-0 z-20">
           <div>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
@@ -405,6 +425,13 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
                 className="bg-gradient-to-r from-orange-500 to-pink-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-md hover:from-orange-600 hover:to-pink-700 transition-all"
               >
                 <Sparkles className="w-3 h-3"/> MISTRAL IA
+              </button>
+              <button 
+                onClick={() => setShowKeyModal(true)} 
+                className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-1.5 rounded-full transition-all" 
+                title="Configurar API Key"
+              >
+                <Settings2 className="w-4 h-4"/>
               </button>
             </div>
           </div>
@@ -663,6 +690,67 @@ Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
                   <>✨ GENERAR CON MISTRAL</>
                 )}
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* MODAL CONFIGURACIÓN TOKEN */}
+        <Dialog open={showKeyModal} onOpenChange={setShowKeyModal}>
+          <DialogContent className="w-[90%] max-w-md rounded-2xl p-6 border-2 border-slate-200">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-indigo-600" /> Configurar API Key
+              </DialogTitle>
+              <DialogDescription className="text-slate-600">
+                Introduce tu Hugging Face Token (hf_...) para usar la generación con IA.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">Hugging Face Token</label>
+                <Input 
+                  value={userToken} 
+                  onChange={e => setUserToken(e.target.value)} 
+                  placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+                  className="font-mono text-sm"
+                  type="password"
+                />
+                <p className="text-xs text-slate-500">
+                  💡 Consigue tu token gratis en{' '}
+                  <a 
+                    href="https://huggingface.co/settings/tokens" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-indigo-600 font-bold hover:underline"
+                  >
+                    huggingface.co/settings/tokens
+                  </a>
+                </p>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setShowKeyModal(false)} 
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={() => saveToken(userToken)} 
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  disabled={!userToken.trim()}
+                >
+                  Guardar Llave
+                </Button>
+              </div>
+              
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <p className="text-xs text-amber-800">
+                  🔒 <span className="font-bold">Seguridad:</span> Tu API Key se guarda solo en tu navegador (localStorage). Nunca se envía a nuestros servidores.
+                </p>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
