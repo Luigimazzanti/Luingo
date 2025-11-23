@@ -7,8 +7,8 @@ import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
 
-// --- CLAVE API GEMINI ---
-const HARDCODED_GEMINI_KEY = "AIzaSyC_3XyoYa1UGD2qTpRh97DhrsiDI-aZqqY";
+// --- TOKEN HUGGING FACE (REAL) ---
+const HARDCODED_HF_TOKEN = "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";
 
 // TIPOS
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -63,7 +63,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     }]
   );
 
-  // IA States
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiNumQuestions, setAiNumQuestions] = useState(3);
@@ -135,40 +134,75 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     onSaveTask(taskData);
   };
 
-  // --- MOTOR IA: GEMINI ---
+  // --- MOTOR LOCAL (RESPALDO) ---
+  const runLocalAI = () => {
+    setTimeout(() => {
+      const topic = aiPrompt.toLowerCase();
+      let newQs: QuestionDraft[] = [];
+      let newTitle = `Actividad: ${aiPrompt}`;
+
+      // Base de datos de emergencia inteligente
+      if (topic.includes('verbo') || topic.includes('gramática')) {
+        newTitle = "Práctica de Verbos";
+        newQs = [
+          { id: Date.now(), type: 'fill_blank', question_text: 'Nosotros ___ (vivir) en Madrid.', options: [], correct_answer: 'vivimos', explanation: 'Presente de indicativo.', allow_audio: false },
+          { id: Date.now()+1, type: 'choice', question_text: 'Participio de "Escribir":', options: ['Escribido', 'Escrito', 'Escribo'], correct_answer: 'Escrito', explanation: 'Irregular.', allow_audio: false },
+          { id: Date.now()+2, type: 'true_false', question_text: 'Los verbos regulares nunca cambian su raíz.', options: [], correct_answer: 'Verdadero', explanation: 'Por eso se llaman regulares.', allow_audio: false }
+        ];
+      } else if (topic.includes('comida')) {
+        newTitle = "Vocabulario: Comida";
+        newQs = [
+          { id: Date.now(), type: 'true_false', question_text: 'El gazpacho se sirve caliente.', options: [], correct_answer: 'Falso', explanation: 'Es una sopa fría de tomate.', allow_audio: false },
+          { id: Date.now()+1, type: 'open', question_text: '¿Cuál es tu comida favorita?', options: [], correct_answer: '', explanation: 'Respuesta libre.', allow_audio: true },
+          { id: Date.now()+2, type: 'choice', question_text: '¿Qué ingrediente lleva la paella valenciana?', options: ['Chorizo', 'Arroz', 'Pasta'], correct_answer: 'Arroz', explanation: 'El arroz es la base.', allow_audio: false }
+        ];
+      } else {
+        // Genérico
+        for (let i = 0; i < aiNumQuestions; i++) {
+          newQs.push({
+            id: Date.now() + i,
+            type: i % 3 === 0 ? 'open' : i % 3 === 1 ? 'fill_blank' : 'true_false',
+            question_text: i % 3 === 0 
+              ? `Escribe una frase sobre: ${aiPrompt}` 
+              : i % 3 === 1 
+              ? `Completa: ${aiPrompt} es ___.`
+              : `¿${aiPrompt} es importante en español?`,
+            options: [],
+            correct_answer: i % 3 === 2 ? 'Verdadero' : i % 3 === 1 ? aiPrompt.split(' ')[0] : '',
+            explanation: 'Práctica libre.',
+            allow_audio: i % 3 === 0
+          });
+        }
+      }
+
+      setTitle(newTitle);
+      setDescription(`Ejercicios de nivel ${aiLevel} sobre ${aiPrompt}`);
+      setQuestions(newQs);
+      setIsGenerating(false);
+      setShowAiModal(false);
+      setAiPrompt('');
+      toast.success("✅ Generado (Modo Offline)");
+    }, 1500);
+  };
+
+  // --- MOTOR IA: HUGGING FACE (MISTRAL) ---
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
 
-    // 1. Obtener Key
-    let apiKey = HARDCODED_GEMINI_KEY;
     try {
-      // @ts-ignore
-      if (!apiKey && import.meta.env) apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    } catch (e) {}
-    
-    if (!apiKey) {
-      console.warn("⚠️ Sin Key. Usando modo local.");
-      runLocalAI();
-      return;
-    }
+      const systemPrompt = `[INST] Actúa como profesor de español (ELE). Genera un examen JSON estricto sobre: "${aiPrompt}". 
+Nivel MCER: ${aiLevel}. Dificultad: ${aiDifficulty}. Cantidad: ${aiNumQuestions} preguntas.
 
-    try {
-      const systemPrompt = `
-Actúa como profesor de español (ELE). Crea un examen JSON estricto.
-Tema: "${aiPrompt}". Nivel MCER: ${aiLevel}. Dificultad: ${aiDifficulty}.
-Cantidad: ${aiNumQuestions} preguntas variadas (choice, true_false, fill_blank, open).
+TIPOS DE PREGUNTA:
+- "choice": Pregunta con 3-4 opciones (array "options"), marca "correct_answer"
+- "true_false": Afirmación, "correct_answer" debe ser "Verdadero" o "Falso"
+- "fill_blank": Frase con hueco marcado como ___, "correct_answer" con la palabra
+- "open": Pregunta abierta, "correct_answer" vacío
 
-REQUISITOS:
-- Distribuye los tipos de pregunta de manera equilibrada
-- Para "choice": incluye 3-4 opciones plausibles
-- Para "fill_blank": usa ___ en question_text para marcar el hueco
-- Para "open": marca allow_audio como true
-- El campo "explanation" debe ser pedagógico y útil
-
-Output SOLO JSON limpio (sin markdown):
+Responde SOLO con JSON válido (sin markdown ni texto extra). Estructura:
 {
-  "title": "Título creativo en español",
+  "title": "Título pedagógico corto",
   "description": "Instrucciones breves para el alumno",
   "questions": [
     {
@@ -176,83 +210,92 @@ Output SOLO JSON limpio (sin markdown):
       "question_text": "¿Pregunta?",
       "options": ["Opción A", "Opción B", "Opción C"],
       "correct_answer": "Opción A",
-      "explanation": "Feedback gramatical útil para nivel ${aiLevel}"
+      "explanation": "Feedback pedagógico útil"
+    },
+    {
+      "type": "true_false",
+      "question_text": "Afirmación sobre el tema.",
+      "correct_answer": "Verdadero",
+      "explanation": "Explicación gramatical"
+    },
+    {
+      "type": "fill_blank",
+      "question_text": "La palabra correcta es ___.",
+      "correct_answer": "ejemplo",
+      "explanation": "Contexto gramatical"
     }
   ]
-}
-      `;
+} [/INST]`;
 
-      // USAMOS GEMINI-PRO (ESTÁNDAR)
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: systemPrompt }] }]
-          })
-        }
-      );
+      const response = await fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-Nemo-Instruct-2407", {
+        method: "POST",
+        headers: { 
+          "Authorization": `Bearer ${HARDCODED_HF_TOKEN}`, 
+          "Content-Type": "application/json" 
+        },
+        body: JSON.stringify({ 
+          inputs: systemPrompt, 
+          parameters: { 
+            max_new_tokens: 2000, 
+            return_full_text: false, 
+            temperature: 0.7,
+            top_p: 0.95
+          } 
+        })
+      });
 
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error.message);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("HF API Error:", errorText);
+        throw new Error(`API Error: ${response.status}`);
       }
 
-      // 2. Parsear Respuesta de Gemini
-      const textResponse = data.candidates[0].content.parts[0].text;
-      const jsonStr = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-      const result = JSON.parse(jsonStr);
-
-      // 3. Aplicar Datos
-      setTitle(result.title);
-      setDescription(result.description);
-      setQuestions(result.questions.map((q: any, i: number) => ({
+      const result = await response.json();
+      let jsonRaw = Array.isArray(result) ? result[0].generated_text : result.generated_text;
+      
+      // Limpieza agresiva de JSON (Mistral a veces es hablador)
+      console.log("Raw AI Response:", jsonRaw);
+      
+      // Buscar el JSON entre llaves
+      const jsonStart = jsonRaw.indexOf('{');
+      const jsonEnd = jsonRaw.lastIndexOf('}');
+      
+      if (jsonStart === -1 || jsonEnd === -1) {
+        throw new Error("No se encontró JSON válido en la respuesta");
+      }
+      
+      const jsonStr = jsonRaw.substring(jsonStart, jsonEnd + 1);
+      console.log("Extracted JSON:", jsonStr);
+      
+      const parsed = JSON.parse(jsonStr);
+      
+      // Validar estructura
+      if (!parsed.title || !parsed.description || !Array.isArray(parsed.questions)) {
+        throw new Error("Estructura JSON inválida");
+      }
+      
+      setTitle(parsed.title);
+      setDescription(parsed.description);
+      setQuestions(parsed.questions.map((q: any, i: number) => ({
         ...q,
         id: Date.now() + i,
         options: q.options || [],
         allow_audio: q.type === 'open'
       })));
       
-      toast.success("✅ Generado con Gemini Pro");
+      toast.success("🎉 ¡Generado con IA Mistral!");
       setShowAiModal(false);
       setAiPrompt('');
     } catch (error) {
-      console.error("Gemini Error:", error);
-      toast.error("⚠️ Error API. Usando respaldo local.");
+      console.error("HF Error:", error);
+      toast.error("⚠️ IA ocupada, usando respaldo local...");
       runLocalAI();
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Función de respaldo local
-  const runLocalAI = () => {
-    setTimeout(() => {
-      const fallbackQuestions: QuestionDraft[] = [];
-      for (let i = 0; i < aiNumQuestions; i++) {
-        fallbackQuestions.push({
-          id: Date.now() + i,
-          type: i % 2 === 0 ? 'open' : 'fill_blank',
-          question_text: i % 2 === 0 
-            ? `Describe con tus palabras: ${aiPrompt}` 
-            : `Completa la frase sobre ${aiPrompt}: La idea principal es ___.`,
-          options: [],
-          correct_answer: i % 2 === 0 ? '' : aiPrompt.split(' ')[0],
-          explanation: 'Respuesta de práctica libre.',
-          allow_audio: i % 2 === 0
-        });
-      }
-      setTitle(`Actividad: ${aiPrompt}`);
-      setDescription(`Ejercicios de nivel ${aiLevel} sobre ${aiPrompt}`);
-      setQuestions(fallbackQuestions);
-      toast.success("✅ Contenido generado (modo local)");
-      setIsGenerating(false);
-      setShowAiModal(false);
-    }, 1000);
-  };
-
+  // RENDERERS VISUALES
   const renderQuestionBody = (q: QuestionDraft, idx: number) => {
     if (q.type === 'choice') return (
       <div className="mt-4 space-y-2 pl-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
@@ -359,9 +402,9 @@ Output SOLO JSON limpio (sin markdown):
             <div className="flex gap-2 mt-1">
               <button 
                 onClick={() => setShowAiModal(true)} 
-                className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-md hover:from-purple-600 hover:to-indigo-700 transition-all"
+                className="bg-gradient-to-r from-orange-500 to-pink-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-md hover:from-orange-600 hover:to-pink-700 transition-all"
               >
-                <Sparkles className="w-3 h-3"/> GEMINI IA
+                <Sparkles className="w-3 h-3"/> MISTRAL IA
               </button>
             </div>
           </div>
@@ -541,36 +584,36 @@ Output SOLO JSON limpio (sin markdown):
           </div>
         </div>
 
-        {/* MODAL IA GEMINI */}
+        {/* MODAL IA MISTRAL */}
         <Dialog open={showAiModal} onOpenChange={setShowAiModal}>
-          <DialogContent className="w-[90%] max-w-lg rounded-3xl p-6 border-4 border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50">
+          <DialogContent className="w-[90%] max-w-lg rounded-3xl p-6 border-4 border-orange-200 bg-gradient-to-br from-orange-50 to-pink-50">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-black text-purple-900 flex items-center gap-2">
-                <Sparkles className="w-6 h-6 fill-purple-500 text-purple-600" /> Gemini IA
+              <DialogTitle className="text-2xl font-black text-orange-900 flex items-center gap-2">
+                <Sparkles className="w-6 h-6 fill-orange-500 text-orange-600" /> Mistral IA
               </DialogTitle>
-              <DialogDescription className="text-purple-800/60">
-                Genera ejercicios pedagógicos con inteligencia artificial.
+              <DialogDescription className="text-orange-800/60">
+                Genera ejercicios pedagógicos con Hugging Face (Mistral).
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-5 mt-2">
               <div className="space-y-2">
-                <label className="text-xs font-black text-purple-800 uppercase tracking-wider">Tema</label>
+                <label className="text-xs font-black text-orange-800 uppercase tracking-wider">Tema</label>
                 <Textarea 
                   value={aiPrompt} 
                   onChange={e => setAiPrompt(e.target.value)} 
                   placeholder="Ej: Verbos irregulares en pretérito, Vocabulario de viajes..." 
-                  className="h-20 text-lg bg-white border-purple-200 rounded-xl focus:border-purple-400" 
+                  className="h-20 text-lg bg-white border-orange-200 rounded-xl focus:border-orange-400" 
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-purple-800 uppercase">Nivel MCER</label>
+                  <label className="text-[10px] font-black text-orange-800 uppercase">Nivel MCER</label>
                   <select 
                     value={aiLevel} 
                     onChange={e => setAiLevel(e.target.value)} 
-                    className="w-full h-10 bg-white border-2 border-purple-200 rounded-lg font-bold text-purple-900 px-2"
+                    className="w-full h-10 bg-white border-2 border-orange-200 rounded-lg font-bold text-orange-900 px-2"
                   >
                     <option>A1</option>
                     <option>A2</option>
@@ -581,11 +624,11 @@ Output SOLO JSON limpio (sin markdown):
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-purple-800 uppercase">Dificultad</label>
+                  <label className="text-[10px] font-black text-orange-800 uppercase">Dificultad</label>
                   <select 
                     value={aiDifficulty} 
                     onChange={e => setAiDifficulty(e.target.value)} 
-                    className="w-full h-10 bg-white border-2 border-purple-200 rounded-lg font-bold text-purple-900 px-2"
+                    className="w-full h-10 bg-white border-2 border-orange-200 rounded-lg font-bold text-orange-900 px-2"
                   >
                     <option>Básico</option>
                     <option>Medio</option>
@@ -596,8 +639,8 @@ Output SOLO JSON limpio (sin markdown):
 
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <label className="text-[10px] font-black text-purple-800 uppercase">Cantidad de Preguntas</label>
-                  <span className="text-xs font-black text-purple-600">{aiNumQuestions}</span>
+                  <label className="text-[10px] font-black text-orange-800 uppercase">Cantidad de Preguntas</label>
+                  <span className="text-xs font-black text-orange-600">{aiNumQuestions}</span>
                 </div>
                 <input 
                   type="range" 
@@ -605,19 +648,19 @@ Output SOLO JSON limpio (sin markdown):
                   max="8" 
                   value={aiNumQuestions} 
                   onChange={e => setAiNumQuestions(Number(e.target.value))} 
-                  className="w-full accent-purple-500" 
+                  className="w-full accent-orange-500" 
                 />
               </div>
 
               <Button 
                 onClick={handleAiGenerate} 
                 disabled={isGenerating || !aiPrompt.trim()} 
-                className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-black h-12 rounded-xl shadow-lg border-b-4 border-purple-800 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-orange-500 to-pink-600 hover:from-orange-600 hover:to-pink-700 text-white font-black h-12 rounded-xl shadow-lg border-b-4 border-orange-800 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isGenerating ? (
                   <><Loader2 className="animate-spin mr-2"/> Generando...</>
                 ) : (
-                  <>✨ GENERAR CON GEMINI</>
+                  <>✨ GENERAR CON MISTRAL</>
                 )}
               </Button>
             </div>
