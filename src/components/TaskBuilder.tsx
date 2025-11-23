@@ -7,8 +7,8 @@ import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
 
-// CLAVE GEMINI HARDCODED (DESARROLLO)
-const GEMINI_KEY = "AIzaSyC_3XyoYa1UGD2qTpRh97DhrsiDI-aZqqY";
+// --- CLAVE API GROQ (REAL) ---
+const GROQ_API_KEY = "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";
 
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
 
@@ -116,7 +116,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       return;
     }
     
-    // ESTRUCTURA ROBUSTA PARA MOODLE
     const taskData = {
       ...initialData,
       title,
@@ -126,7 +125,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         type: 'form',
         questions,
         max_attempts: maxAttempts,
-        // ASIGNACIÓN CRÍTICA
         assignment_scope: {
           type: assignType,
           targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
@@ -139,180 +137,137 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     onSaveTask(taskData);
   };
 
-  // MOTOR LOCAL INTELIGENTE (FALLBACK GARANTIZADO)
-  const runLocalAI = () => {
-    const topic = aiPrompt.toLowerCase();
-    let newQs: QuestionDraft[] = [];
-    let newTitle = `Actividad: ${aiPrompt}`;
-    let newDesc = `Ejercicios prácticos sobre ${aiPrompt}`;
-
-    // BASE DE DATOS LOCAL MEJORADA
-    if (topic.includes('verbo') || topic.includes('gramática')) {
-      newTitle = "Taller de Gramática";
-      newDesc = "Practica tiempos verbales y conjugaciones";
-      newQs = [
-        { id: Date.now(), type: 'fill_blank', question_text: 'Ayer mis padres ___ (ir) al cine.', options: [], correct_answer: 'fueron', explanation: 'Pretérito indefinido plural de ir.', allow_audio: false },
-        { id: Date.now()+1, type: 'choice', question_text: '¿Cuál es el participio de "Escribir"?', options: ['Escribido', 'Escrito', 'Escribiendo'], correct_answer: 'Escrito', explanation: 'Es un participio irregular.', allow_audio: false },
-        { id: Date.now()+2, type: 'true_false', question_text: 'El verbo "Gustar" necesita pronombres (me, te, le...).', options: [], correct_answer: 'Verdadero', explanation: 'Siempre se conjuga con el objeto indirecto.', allow_audio: false },
-        { id: Date.now()+3, type: 'open', question_text: 'Conjuga el verbo "hablar" en pretérito perfecto.', options: [], correct_answer: '', explanation: 'He hablado, has hablado, ha hablado...', allow_audio: true }
-      ];
-    } else if (topic.includes('comida') || topic.includes('fruta') || topic.includes('restaurante')) {
-      newTitle = "Vocabulario: Alimentos";
-      newDesc = "Aprende palabras sobre comida y bebida";
-      newQs = [
-        { id: Date.now(), type: 'choice', question_text: 'Es una fruta amarilla y curva:', options: ['Manzana', 'Plátano', 'Uva'], correct_answer: 'Plátano', explanation: 'El plátano es amarillo y tiene forma curva.', allow_audio: false },
-        { id: Date.now()+1, type: 'open', question_text: 'Describe tu plato favorito usando adjetivos.', options: [], correct_answer: '', explanation: 'Usa adjetivos de sabor, color y textura.', allow_audio: true },
-        { id: Date.now()+2, type: 'true_false', question_text: 'El gazpacho es una sopa caliente.', options: [], correct_answer: 'Falso', explanation: 'El gazpacho es una sopa fría de tomate.', allow_audio: false },
-        { id: Date.now()+3, type: 'fill_blank', question_text: 'En España, el desayuno típico incluye café con ___.', options: [], correct_answer: 'leche', explanation: 'Café con leche es muy popular en España.', allow_audio: false }
-      ];
-    } else if (topic.includes('viaje') || topic.includes('ciudad') || topic.includes('turismo')) {
-      newTitle = "De Viaje";
-      newDesc = "Vocabulario útil para viajar";
-      newQs = [
-        { id: Date.now(), type: 'fill_blank', question_text: 'Necesito comprar un ___ de tren.', options: [], correct_answer: 'billete', explanation: 'Sinónimo de ticket o boleto.', allow_audio: false },
-        { id: Date.now()+1, type: 'choice', question_text: '¿Dónde se factura el equipaje?', options: ['Hotel', 'Aeropuerto', 'Taxi'], correct_answer: 'Aeropuerto', explanation: 'El check-in se hace en el aeropuerto.', allow_audio: false },
-        { id: Date.now()+2, type: 'true_false', question_text: 'El DNI sirve para viajar fuera de Europa.', options: [], correct_answer: 'Falso', explanation: 'Necesitas pasaporte para salir de la UE.', allow_audio: false },
-        { id: Date.now()+3, type: 'open', question_text: 'Cuenta una experiencia de viaje memorable.', options: [], correct_answer: '', explanation: 'Usa pretérito e imperfecto.', allow_audio: true }
-      ];
-    } else if (topic.includes('casa') || topic.includes('hogar') || topic.includes('familia')) {
-      newTitle = "Vida Cotidiana";
-      newDesc = "Vocabulario de casa y familia";
-      newQs = [
-        { id: Date.now(), type: 'choice', question_text: '¿Dónde cocinas?', options: ['Baño', 'Cocina', 'Salón'], correct_answer: 'Cocina', explanation: 'La cocina es donde se prepara la comida.', allow_audio: false },
-        { id: Date.now()+1, type: 'fill_blank', question_text: 'El hijo de mi hermano es mi ___.', options: [], correct_answer: 'sobrino', explanation: 'Relación familiar.', allow_audio: false },
-        { id: Date.now()+2, type: 'true_false', question_text: 'El dormitorio es donde duermes.', options: [], correct_answer: 'Verdadero', explanation: 'También se llama habitación o cuarto.', allow_audio: false }
-      ];
-    } else {
-      // GENÉRICO ADAPTATIVO
-      newTitle = `Explorando: ${aiPrompt}`;
-      newDesc = `Ejercicios variados sobre ${aiPrompt}`;
-      newQs = [
-        { id: Date.now(), type: 'open', question_text: `Explica con tus palabras qué significa: ${aiPrompt}`, options: [], correct_answer: '', explanation: 'Respuesta libre. Evalúa comprensión.', allow_audio: true },
-        { id: Date.now()+1, type: 'true_false', question_text: `¿Es ${aiPrompt} relevante para aprender español?`, options: [], correct_answer: 'Verdadero', explanation: 'Pregunta de opinión y reflexión.', allow_audio: false },
-        { id: Date.now()+2, type: 'fill_blank', question_text: `Una palabra clave relacionada con ${aiPrompt} es ___.`, options: [], correct_answer: aiPrompt.split(' ')[0], explanation: 'Completa según el contexto.', allow_audio: false }
-      ];
-    }
-
-    // RELLENAR SI FALTAN PREGUNTAS PARA LLEGAR A LA CANTIDAD SOLICITADA
-    while (newQs.length < aiNumQuestions) {
-      const extra = newQs.length + 1;
-      newQs.push({
-        id: Date.now() + extra,
-        type: extra % 2 === 0 ? 'true_false' : 'fill_blank',
-        question_text: extra % 2 === 0 ? `Pregunta ${extra} sobre ${aiPrompt}` : `Completa: ${aiPrompt} es ___.`,
-        options: [],
-        correct_answer: extra % 2 === 0 ? 'Verdadero' : 'importante',
-        explanation: 'Pregunta adicional generada automáticamente.',
-        allow_audio: false
-      });
-    }
-
-    // RECORTAR SI HAY MÁS DE LAS SOLICITADAS
-    if (newQs.length > aiNumQuestions) {
-      newQs = newQs.slice(0, aiNumQuestions);
-    }
-
-    setTitle(newTitle);
-    setDescription(newDesc);
-    setQuestions(newQs);
-    setIsGenerating(false);
-    setShowAiModal(false);
-    setAiPrompt('');
-    toast.success("✅ Tarea Generada Exitosamente");
-  };
-
-  // MOTOR GEMINI CON FALLBACK AUTOMÁTICO (ZERO ERROR POLICY)
+  // ========== MOTOR GROQ (LLAMA 3 70B) - SIN FALLBACK ==========
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
 
     try {
-      const systemPrompt = `Eres un profesor experto de español (ELE). Crea un examen JSON estricto sobre: "${aiPrompt}". 
-Nivel MCER: ${aiLevel}. Dificultad: ${aiDifficulty}. Cantidad: ${aiNumQuestions} preguntas.
+      const systemPrompt = `Eres un profesor experto de Español como Lengua Extranjera (ELE).
+Tu misión es crear ejercicios gramaticales y de vocabulario de ALTA CALIDAD PEDAGÓGICA.
 
-TIPOS PERMITIDOS:
-- "choice": Pregunta con 3-4 opciones. Campo "options" debe ser array, "correct_answer" una de las opciones.
-- "true_false": Afirmación. "correct_answer" debe ser exactamente "Verdadero" o "Falso".
-- "fill_blank": Frase con hueco marcado como ___. "correct_answer" es la palabra que falta.
-- "open": Pregunta abierta. "correct_answer" vacío.
+CONFIGURACIÓN:
+- Tema: "${aiPrompt}"
+- Nivel MCER: ${aiLevel} (Marco Común Europeo de Referencia)
+- Dificultad: ${aiDifficulty}
+- Cantidad exacta: ${aiNumQuestions} preguntas
 
-Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
+REGLAS DE GENERACIÓN:
+1. Las preguntas deben ser educativas, claras y pedagógicamente correctas.
+2. El campo "explanation" debe explicar la regla gramatical, el uso correcto o el razonamiento lingüístico. Es el feedback que verá el alumno.
+3. Usa variedad de tipos según el tema:
+   - "choice": Pregunta con 3-4 opciones. Array "options" obligatorio. "correct_answer" debe ser exactamente una de las opciones.
+   - "true_false": Afirmación para evaluar. "correct_answer" debe ser exactamente "Verdadero" o "Falso".
+   - "fill_blank": Frase con hueco marcado como ___. "correct_answer" es la palabra correcta.
+   - "open": Pregunta de desarrollo. "correct_answer" debe estar vacío "".
+4. Las explicaciones deben ser útiles para un estudiante que está aprendiendo.
+5. Varía la dificultad según el nivel MCER indicado.
+
+FORMATO JSON ESTRICTO (Responde ÚNICAMENTE el JSON válido):
 {
-  "title": "Título pedagógico corto y atractivo",
-  "description": "Instrucciones breves para el alumno",
+  "title": "Título motivador y descriptivo de la actividad",
+  "description": "Instrucciones claras y breves para el alumno",
   "questions": [
     {
       "type": "choice",
-      "question_text": "¿Pregunta clara?",
-      "options": ["Opción A", "Opción B", "Opción C"],
+      "question_text": "Enunciado claro y preciso",
+      "options": ["Opción A", "Opción B", "Opción C", "Opción D"],
       "correct_answer": "Opción A",
-      "explanation": "Feedback pedagógico útil"
+      "explanation": "Explicación pedagógica que ayuda al alumno a entender por qué esta es la respuesta correcta"
     },
     {
       "type": "true_false",
-      "question_text": "Afirmación sobre el tema.",
+      "question_text": "Afirmación para evaluar",
       "correct_answer": "Verdadero",
-      "explanation": "Explicación gramatical"
+      "explanation": "Razonamiento gramatical o lingüístico"
+    },
+    {
+      "type": "fill_blank",
+      "question_text": "Frase con ___ que el alumno debe completar",
+      "correct_answer": "palabra",
+      "explanation": "Explicación de la regla aplicable"
+    },
+    {
+      "type": "open",
+      "question_text": "Pregunta de desarrollo o expresión escrita",
+      "correct_answer": "",
+      "explanation": "Criterios de evaluación para el profesor"
     }
   ]
 }`;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: systemPrompt }] }]
-          })
-        }
-      );
+      console.log("🚀 Enviando request a Groq con Llama 3 70B...");
+      
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${GROQ_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messages: [{ 
+            role: "system", 
+            content: systemPrompt 
+          }],
+          model: "llama-3.3-70b-versatile", // Modelo actualizado y estable
+          temperature: 0.5,
+          max_tokens: 2000,
+          response_format: { type: "json_object" }
+        })
+      });
 
       if (!response.ok) {
-        throw new Error(`Gemini API Error: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `HTTP ${response.status}: Error de Groq`);
       }
 
       const data = await response.json();
+      console.log("✅ Respuesta de Groq recibida:", data);
       
-      if (!data.candidates || !data.candidates[0]) {
-        throw new Error("Respuesta inválida de Gemini");
+      const content = data.choices[0]?.message?.content;
+      
+      if (!content) {
+        throw new Error("Groq no devolvió contenido en la respuesta");
       }
 
-      const textResponse = data.candidates[0].content.parts[0].text;
+      console.log("📝 Contenido JSON raw:", content);
       
-      // Limpieza agresiva de markdown
-      const jsonStr = textResponse
-        .replace(/```json/g, '')
-        .replace(/```/g, '')
-        .trim();
-      
-      console.log("Gemini Raw Response:", textResponse);
-      console.log("Cleaned JSON:", jsonStr);
-      
-      const parsed = JSON.parse(jsonStr);
+      const result = JSON.parse(content);
       
       // Validación estricta
-      if (!parsed.title || !parsed.description || !Array.isArray(parsed.questions)) {
-        throw new Error("JSON con estructura inválida");
+      if (!result.title || !result.description || !Array.isArray(result.questions)) {
+        throw new Error("La estructura JSON devuelta por Groq es inválida");
       }
 
-      setTitle(parsed.title);
-      setDescription(parsed.description);
-      setQuestions(parsed.questions.map((q: any, i: number) => ({
+      if (result.questions.length === 0) {
+        throw new Error("Groq no generó ninguna pregunta");
+      }
+
+      console.log("✨ Preguntas generadas:", result.questions.length);
+
+      setTitle(result.title);
+      setDescription(result.description);
+      setQuestions(result.questions.map((q: any, i: number) => ({
         ...q,
         id: Date.now() + i,
         options: q.options || [],
         allow_audio: q.type === 'open'
       })));
       
-      toast.success("🎉 Generado con IA (Gemini)");
+      toast.success(`🎉 ¡Tarea generada con Llama 3 (Groq)! ${result.questions.length} preguntas creadas`);
       setShowAiModal(false);
       setAiPrompt('');
-      setIsGenerating(false);
     } catch (error) {
-      // FALLBACK SILENCIOSO - NUNCA MUESTRA ERROR AL USUARIO
-      console.warn("⚠️ Gemini falló, activando modo local:", error);
-      runLocalAI(); // <--- EL SALVAVIDAS QUE GARANTIZA CONTENIDO
+      console.error("❌ Groq Error:", error);
+      
+      // MOSTRAR ERROR REAL AL USUARIO - SIN FALLBACK FALSO
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido al conectar con Groq";
+      toast.error(`Error de IA: ${errorMessage}`, {
+        duration: 5000,
+        description: "Revisa la consola para más detalles"
+      });
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -335,17 +290,17 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
             <Input
               value={opt}
               onChange={(e) => updateOptionText(q.id, i, e.target.value)}
-              className="flex-1 bg-white h-10 text-sm"
+              className="flex-1 bg-white h-10 text-sm border-2"
               placeholder={`Opción ${i + 1}`}
             />
             {q.options.length > 2 && (
               <button onClick={() => removeOption(q.id, i)}>
-                <Trash2 className="w-4 h-4 text-slate-300" />
+                <Trash2 className="w-4 h-4 text-slate-300 hover:text-rose-500" />
               </button>
             )}
           </div>
         ))}
-        <Button variant="ghost" size="sm" onClick={() => addOption(q.id)} className="text-indigo-600 text-xs font-bold">
+        <Button variant="ghost" size="sm" onClick={() => addOption(q.id)} className="text-indigo-600 text-xs font-bold ml-10">
           + Añadir Opción
         </Button>
       </div>
@@ -360,10 +315,10 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
               key={option}
               onClick={() => updateQuestion(q.id, 'correct_answer', option)}
               className={cn(
-                "flex-1 py-3 rounded-xl font-bold text-sm transition-all",
+                "flex-1 py-4 rounded-xl border-2 font-bold text-sm transition-all bg-white",
                 q.correct_answer === option
-                  ? "bg-emerald-500 text-white"
-                  : "bg-white border-2 border-slate-200 text-slate-600"
+                  ? "bg-emerald-100 border-emerald-500 text-emerald-700"
+                  : "border-slate-200 text-slate-600"
               )}
             >
               {option}
@@ -379,7 +334,7 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
         <Input
           value={q.correct_answer}
           onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)}
-          className="bg-white h-10 text-sm"
+          className="bg-white h-12 text-sm border-2 border-amber-200 text-amber-900 font-bold"
           placeholder="Escribe la respuesta correcta..."
         />
         <p className="text-xs text-slate-400">💡 Usa ___ en la pregunta para marcar el hueco</p>
@@ -390,20 +345,19 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
       <div className="mt-4 space-y-2 pl-1 bg-amber-50/50 p-3 rounded-xl border border-amber-200">
         <div className="flex items-center gap-2">
           <AlignLeft className="w-4 h-4 text-amber-600" />
-          <label className="text-[10px] font-black text-amber-600 uppercase">Respuesta Abierta</label>
+          <label className="text-[10px] font-black text-amber-600 uppercase">Respuesta Libre</label>
         </div>
         <p className="text-xs text-slate-500">El alumno podrá escribir o grabar audio. Requiere corrección manual.</p>
-        <div className="flex items-center gap-2 mt-3">
-          <input
-            type="checkbox"
-            checked={q.allow_audio || false}
-            onChange={(e) => updateQuestion(q.id, 'allow_audio', e.target.checked)}
-            className="w-4 h-4 rounded border-slate-300"
-          />
-          <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
-            <Mic className="w-3 h-3" /> Permitir respuesta por voz
-          </label>
-        </div>
+        <button 
+          onClick={() => updateQuestion(q.id, 'allow_audio', !q.allow_audio)} 
+          className={cn(
+            "px-4 py-2 rounded-xl text-sm font-bold border-2 flex items-center gap-2 transition-all",
+            q.allow_audio ? "bg-indigo-100 border-indigo-500 text-indigo-700" : "bg-white border-slate-200 text-slate-600"
+          )}
+        >
+          <Mic className="w-3 h-3" />
+          {q.allow_audio ? '🎤 Audio Permitido' : '📝 Solo Texto'}
+        </button>
       </div>
     );
 
@@ -423,9 +377,9 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
             <div className="flex gap-2 mt-1">
               <button 
                 onClick={() => setShowAiModal(true)} 
-                className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-md hover:from-purple-600 hover:to-indigo-700 transition-all"
+                className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-md hover:from-orange-600 hover:to-red-700 transition-all"
               >
-                <Sparkles className="w-3 h-3"/> GEMINI IA
+                <Sparkles className="w-3 h-3"/> LLAMA 3 IA
               </button>
             </div>
           </div>
@@ -545,7 +499,6 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200 w-full md:w-auto">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 hidden lg:block">Asignar a:</span>
             
-            {/* SELECTOR 1: TIPO DE ASIGNACIÓN */}
             <div className="relative min-w-[140px] flex-1 sm:flex-none">
               <select 
                 value={assignType} 
@@ -559,7 +512,6 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
               <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">▼</div>
             </div>
 
-            {/* SELECTOR 2: NIVEL (SOLO SI ES 'LEVEL') */}
             {assignType === 'level' && (
               <div className="relative min-w-[100px] animate-in slide-in-from-left-2 flex-1 sm:flex-none">
                 <select 
@@ -578,7 +530,6 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
               </div>
             )}
 
-            {/* BADGE: INDIVIDUAL (SOLO SI ES 'INDIVIDUAL') */}
             {assignType === 'individual' && studentName && (
               <div className="bg-emerald-100 text-emerald-700 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 border border-emerald-200 animate-in slide-in-from-left-2 shadow-sm whitespace-nowrap">
                 <User className="w-4 h-4" /> {studentName}
@@ -605,36 +556,36 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
           </div>
         </div>
 
-        {/* MODAL IA GEMINI */}
+        {/* MODAL IA LLAMA 3 (GROQ) */}
         <Dialog open={showAiModal} onOpenChange={setShowAiModal}>
-          <DialogContent className="w-[90%] max-w-lg rounded-3xl p-6 border-4 border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50">
+          <DialogContent className="w-[90%] max-w-lg rounded-3xl p-6 border-4 border-orange-200 bg-gradient-to-br from-orange-50 to-red-50">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-black text-purple-900 flex items-center gap-2">
-                <Sparkles className="w-6 h-6 fill-purple-500 text-purple-600" /> Gemini IA
+              <DialogTitle className="text-2xl font-black text-orange-900 flex items-center gap-2">
+                <Sparkles className="w-6 h-6 fill-orange-500 text-orange-600" /> Llama 3 IA (Groq)
               </DialogTitle>
-              <DialogDescription className="text-purple-800/60">
-                Genera ejercicios pedagógicos con Google Gemini.
+              <DialogDescription className="text-orange-800/60">
+                Genera ejercicios pedagógicos de alta calidad con Llama 3 70B. Velocidad extrema.
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-5 mt-2">
               <div className="space-y-2">
-                <label className="text-xs font-black text-purple-800 uppercase tracking-wider">Tema</label>
+                <label className="text-xs font-black text-orange-800 uppercase tracking-wider">Tema de la Actividad</label>
                 <Textarea 
                   value={aiPrompt} 
                   onChange={e => setAiPrompt(e.target.value)} 
-                  placeholder="Ej: Verbos irregulares en pretérito, Vocabulario de viajes..." 
-                  className="h-20 text-lg bg-white border-purple-200 rounded-xl focus:border-purple-400" 
+                  placeholder="Ej: Verbos irregulares en pretérito, Vocabulario de viajes por España, Ser vs Estar..." 
+                  className="h-20 text-lg bg-white border-orange-200 rounded-xl focus:border-orange-400" 
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-purple-800 uppercase">Nivel MCER</label>
+                  <label className="text-[10px] font-black text-orange-800 uppercase">Nivel MCER</label>
                   <select 
                     value={aiLevel} 
                     onChange={e => setAiLevel(e.target.value)} 
-                    className="w-full h-10 bg-white border-2 border-purple-200 rounded-lg font-bold text-purple-900 px-2"
+                    className="w-full h-10 bg-white border-2 border-orange-200 rounded-lg font-bold text-orange-900 px-2"
                   >
                     <option>A1</option>
                     <option>A2</option>
@@ -645,11 +596,11 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-purple-800 uppercase">Dificultad</label>
+                  <label className="text-[10px] font-black text-orange-800 uppercase">Dificultad</label>
                   <select 
                     value={aiDifficulty} 
                     onChange={e => setAiDifficulty(e.target.value)} 
-                    className="w-full h-10 bg-white border-2 border-purple-200 rounded-lg font-bold text-purple-900 px-2"
+                    className="w-full h-10 bg-white border-2 border-orange-200 rounded-lg font-bold text-orange-900 px-2"
                   >
                     <option>Básico</option>
                     <option>Medio</option>
@@ -660,8 +611,8 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
 
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <label className="text-[10px] font-black text-purple-800 uppercase">Cantidad de Preguntas</label>
-                  <span className="text-xs font-black text-purple-600">{aiNumQuestions}</span>
+                  <label className="text-[10px] font-black text-orange-800 uppercase">Cantidad de Preguntas</label>
+                  <span className="text-xs font-black text-orange-600">{aiNumQuestions}</span>
                 </div>
                 <input 
                   type="range" 
@@ -669,21 +620,27 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin explicaciones extra):
                   max="8" 
                   value={aiNumQuestions} 
                   onChange={e => setAiNumQuestions(Number(e.target.value))} 
-                  className="w-full accent-purple-500" 
+                  className="w-full accent-orange-500" 
                 />
               </div>
 
               <Button 
                 onClick={handleAiGenerate} 
                 disabled={isGenerating || !aiPrompt.trim()} 
-                className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-black h-12 rounded-xl shadow-lg border-b-4 border-purple-800 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-black h-12 rounded-xl shadow-lg border-b-4 border-orange-800 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isGenerating ? (
-                  <><Loader2 className="animate-spin mr-2"/> Generando...</>
+                  <><Loader2 className="animate-spin mr-2"/> Generando con IA...</>
                 ) : (
-                  <>✨ GENERAR CON GEMINI</>
+                  <>⚡ GENERAR CON LLAMA 3</>
                 )}
               </Button>
+
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                <p className="text-xs text-orange-800">
+                  <span className="font-bold">⚡ Velocidad extrema:</span> Groq procesa con llama3-70b-8192 a velocidades récord. Calidad pedagógica garantizada.
+                </p>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
