@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import { Material, Student, User } from '../../types';
+import { Material, Student } from '../../types';
 import { SocialCard } from './SocialCard';
 import { ArticleReader } from './ArticleReader';
-import { Button } from '../ui/button';
 import { Filter, Globe, Lock } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { mockComments } from '../../lib/mockData'; // Simplified for demo
 
 interface CommunityFeedProps {
   materials: Material[];
@@ -16,11 +14,14 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ materials, student
   const [filterMode, setFilterMode] = useState<'my_level' | 'all'>('my_level');
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
 
+  // ✅ SAFE GUARDS: Si student es undefined, usamos un fallback para no romper la app
+  const safeLevel = student?.current_level_code || 'A1';
+
   // --- SMART FILTERING LOGIC ---
   const filteredMaterials = materials.filter(mat => {
       if (filterMode === 'all') return true;
       // Logic: Show if targeted to student's level code OR 'ALL'
-      return mat.target_levels.includes(student.current_level_code) || mat.target_levels.includes('ALL');
+      return mat.target_levels.includes(safeLevel) || mat.target_levels.includes('ALL');
   });
 
   const handleMaterialClick = (mat: Material) => {
@@ -58,7 +59,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ materials, student
                 )}
               >
                   <Lock className="w-4 h-4" />
-                  Mi Nivel ({student.current_level_code})
+                  Mi Nivel ({safeLevel})
               </button>
               <button
                 onClick={() => setFilterMode('all')}
@@ -81,7 +82,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ materials, student
               <SocialCard 
                 key={material.id} 
                 material={material} 
-                studentLevel={student.current_level_code}
+                studentLevel={safeLevel}
                 onClick={() => handleMaterialClick(material)}
               />
           ))}

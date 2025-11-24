@@ -177,114 +177,134 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-10 w-full max-w-3xl border-b-8 border-indigo-200">
-        {/* Progress Bar */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-sm font-black text-indigo-600">Pregunta {currentIndex + 1} de {exercise.questions.length}</span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onExit}
-              className="text-slate-500 hover:text-slate-800 font-bold"
-            >
-              Salir
-            </Button>
-          </div>
-          <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500 ease-out"
-              style={{ width: `${((currentIndex + 1) / exercise.questions.length) * 100}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          <h2 className="text-2xl md:text-3xl font-black text-slate-800 mb-8 mt-4 text-center leading-tight">
-            {currentQuestion.type === 'fill_blank' ? 'Completa la frase:' : currentQuestion.question_text.replace('[...]', '_____')}
-          </h2>
-          
-          {currentQuestion.type === 'choice' && (
-            <div className="grid gap-3">
-              {currentQuestion.options?.map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => setSelectedOption(opt)}
-                  disabled={feedbackState !== 'idle'}
-                  className={`p-5 rounded-2xl border-2 text-left font-bold text-lg transition-all ${
-                    selectedOption === opt 
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-800 ring-2 ring-indigo-200' 
-                      : 'border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          )}
-          
-          {currentQuestion.type === 'true_false' && (
-            <div className="grid grid-cols-2 gap-4 md:gap-6">
-              {['Verdadero', 'Falso'].map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => setSelectedOption(opt)}
-                  disabled={feedbackState !== 'idle'}
-                  className={`py-8 rounded-2xl border-b-4 font-black text-xl md:text-2xl transition-all ${
-                    selectedOption === opt 
-                      ? (opt === 'Verdadero' 
-                        ? 'bg-emerald-500 text-white border-emerald-700' 
-                        : 'bg-rose-500 text-white border-rose-700')
-                      : 'bg-white border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          )}
-          
-          {currentQuestion.type === 'fill_blank' && renderFillBlank()}
-          
-          {currentQuestion.type === 'open' && renderOpen()}
-
-          {feedbackState !== 'idle' && (
-            <div className={`mt-6 p-4 rounded-2xl flex items-center gap-3 ${
-              feedbackState === 'correct' ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'
-            }`}>
-              {feedbackState === 'correct' ? <CheckCircle className="w-6 h-6"/> : <AlertCircle className="w-6 h-6"/>}
-              <div>
-                <p className="font-bold">{feedbackState === 'correct' ? '¡Correcto!' : 'Respuesta Incorrecta'}</p>
-                {currentQuestion.explanation && (
-                  <p className="text-xs opacity-80">{currentQuestion.explanation}</p>
-                )}
+    <div className="fixed inset-0 z-50 bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+      {/* ✅ CONTENEDOR SCROLLABLE */}
+      <div className="h-full w-full overflow-y-auto">
+        <div className="min-h-full flex items-center justify-center p-4 pb-20">
+          <div className="w-full max-w-3xl flex flex-col items-center">
+            
+            {/* Header (X y Progreso) */}
+            <div className="w-full max-w-3xl mb-6 flex items-center justify-between shrink-0">
+              <button 
+                onClick={onExit} 
+                className="p-2 bg-white rounded-xl shadow-sm text-slate-400 hover:text-rose-500 transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+              <div className="flex-1 mx-4 h-3 bg-white rounded-full overflow-hidden border border-slate-200">
+                <div 
+                  className="h-full bg-indigo-500 transition-all duration-500" 
+                  style={{ width: `${((currentIndex + 1) / exercise.questions.length) * 100}%` }}
+                />
+              </div>
+              <div className="bg-white px-3 py-1 rounded-xl font-black text-indigo-600 shadow-sm text-sm">
+                {currentIndex + 1} / {exercise.questions.length}
               </div>
             </div>
-          )}
-        </div>
 
-        <div className="mt-6 pt-4 border-t border-slate-100 shrink-0">
-          {feedbackState === 'idle' ? (
-            <Button 
-              onClick={handleCheckAnswer} 
-              disabled={!selectedOption && !textInput} 
-              className="w-full h-14 text-xl font-black rounded-2xl bg-indigo-600 text-white border-b-4 border-indigo-800 active:translate-y-1 active:border-b-0 transition-all disabled:opacity-50"
-            >
-              COMPROBAR
-            </Button>
-          ) : (
-            <Button 
-              onClick={handleNext} 
-              className={`w-full h-14 text-xl font-black rounded-2xl text-white border-b-4 active:translate-y-1 active:border-b-0 transition-all ${
-                feedbackState === 'correct' 
-                  ? 'bg-emerald-500 border-emerald-700' 
-                  : 'bg-slate-700 border-slate-900'
-              }`}
-            >
-              CONTINUAR <ArrowRight className="ml-2 w-6 h-6" />
-            </Button>
-          )}
+            {/* TARJETA DE PREGUNTA */}
+            <div className="w-full max-w-3xl bg-white rounded-[2rem] p-6 md:p-10 shadow-xl border-b-8 border-slate-200 relative overflow-hidden">
+              
+              {/* Título Pregunta */}
+              <h2 className="text-xl md:text-3xl font-black text-slate-800 mb-6 md:mb-8 text-center leading-tight">
+                {currentQuestion.type === 'fill_blank' 
+                  ? 'Completa la frase:' 
+                  : currentQuestion.question_text.replace('[...]', '_____')
+                }
+              </h2>
+              
+              {/* Renderizadores */}
+              {currentQuestion.type === 'choice' && (
+                <div className="grid gap-3">
+                  {currentQuestion.options.map(opt => (
+                    <button 
+                      key={opt} 
+                      onClick={() => setSelectedOption(opt)} 
+                      disabled={feedbackState !== 'idle'}
+                      className={`p-4 md:p-5 rounded-2xl border-2 text-left font-bold text-base md:text-lg transition-all active:scale-98 ${
+                        selectedOption === opt 
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-800 ring-2 ring-indigo-200' 
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {currentQuestion.type === 'true_false' && (
+                <div className="grid grid-cols-2 gap-3 md:gap-6">
+                  {['Verdadero', 'Falso'].map(opt => (
+                    <button 
+                      key={opt} 
+                      onClick={() => setSelectedOption(opt)} 
+                      disabled={feedbackState !== 'idle'}
+                      className={`py-6 md:py-8 rounded-2xl border-b-4 font-black text-lg md:text-2xl transition-all active:translate-y-1 active:border-b-0 ${
+                        selectedOption === opt 
+                          ? (opt === 'Verdadero' 
+                              ? 'bg-emerald-500 text-white border-emerald-700' 
+                              : 'bg-rose-500 text-white border-rose-700'
+                            )
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {currentQuestion.type === 'fill_blank' && renderFillBlank()}
+              
+              {currentQuestion.type === 'open' && renderOpen()}
+
+              {/* Feedback Message */}
+              {feedbackState !== 'idle' && (
+                <div className={`mt-6 p-4 rounded-2xl flex items-start gap-3 animate-in slide-in-from-bottom-2 ${
+                  feedbackState === 'correct' ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'
+                }`}>
+                  {feedbackState === 'correct' ? (
+                    <CheckCircle className="w-6 h-6 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-6 h-6 shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <p className="font-bold">
+                      {feedbackState === 'correct' ? '¡Correcto!' : 'Respuesta Incorrecta'}
+                    </p>
+                    {currentQuestion.explanation && (
+                      <p className="text-sm opacity-90 mt-1">{currentQuestion.explanation}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* BOTÓN DE ACCIÓN */}
+            <div className="w-full max-w-3xl mt-6 md:mt-8">
+              {feedbackState === 'idle' ? (
+                <Button 
+                  onClick={handleCheckAnswer} 
+                  disabled={!selectedOption && !textInput}
+                  className="w-full h-14 md:h-16 text-lg md:text-xl font-black rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white border-b-4 border-indigo-800 active:translate-y-1 active:border-b-0 transition-all disabled:opacity-50 shadow-xl"
+                >
+                  COMPROBAR
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleNext} 
+                  className={`w-full h-14 md:h-16 text-lg md:text-xl font-black rounded-2xl text-white border-b-4 active:translate-y-1 active:border-b-0 transition-all shadow-xl ${
+                    feedbackState === 'correct' 
+                      ? 'bg-emerald-500 border-emerald-700 hover:bg-emerald-600' 
+                      : 'bg-slate-700 border-slate-900 hover:bg-slate-800'
+                  }`}
+                >
+                  CONTINUAR <ArrowRight className="ml-2 w-6 h-6" />
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

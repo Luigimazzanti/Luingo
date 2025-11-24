@@ -2,14 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { X, Save, Plus, Trash2, CheckCircle2, AlignLeft, Mic, User, Sparkles, Loader2 } from 'lucide-react';
+import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
 
-// --- CLAVE API GROQ (REAL) ---
-const GROQ_API_KEY = "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";
-
+// ========== TIPOS ==========
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
 
 interface QuestionDraft {
@@ -23,7 +21,7 @@ interface QuestionDraft {
 }
 
 interface TaskBuilderProps {
-  onSaveTask: (taskData: any) => void;
+  onSaveTask: (data: any) => void;
   onCancel: () => void;
   initialData?: any;
   initialStudentId?: string;
@@ -31,92 +29,130 @@ interface TaskBuilderProps {
   autoOpenAI?: boolean;
 }
 
-export const TaskBuilder: React.FC<TaskBuilderProps> = ({ 
-  onSaveTask, 
-  onCancel, 
-  initialData, 
-  initialStudentId, 
-  studentName, 
-  autoOpenAI 
+export const TaskBuilder: React.FC<TaskBuilderProps> = ({
+  onSaveTask,
+  onCancel,
+  initialData,
+  initialStudentId,
+  studentName,
+  autoOpenAI
 }) => {
-  // ESTADOS PRINCIPALES
+  // ========== ESTADOS BÁSICOS ==========
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [category, setCategory] = useState<'homework' | 'quiz' | 'project'>(initialData?.category || 'homework');
-  const [assignType, setAssignType] = useState<'individual' | 'level' | 'class'>(
+  const [assignType, setAssignType] = useState(
     initialData?.content_data?.assignment_scope?.type || (initialStudentId ? 'individual' : 'class')
   );
-  const [selectedLevel, setSelectedLevel] = useState(
-    initialData?.content_data?.assignment_scope?.targetId || 'A1'
-  );
-  // ✅ CORRECCIÓN: Default a 1 intento (no a 3) para consistencia
-  const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts ?? 1);
+  const [selectedLevel, setSelectedLevel] = useState(initialData?.content_data?.assignment_scope?.targetId || 'A1');
+  const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts || 3);
 
   const [questions, setQuestions] = useState<QuestionDraft[]>(
-    initialData?.content_data?.questions || [{
-      id: Date.now(),
-      type: 'choice',
-      question_text: '',
-      options: ['', ''],
-      correct_answer: '',
-      explanation: '',
-      allow_audio: false
-    }]
+    initialData?.content_data?.questions || [
+      {
+        id: Date.now(),
+        type: 'choice',
+        question_text: '',
+        options: ['', ''],
+        correct_answer: '',
+        explanation: '',
+        allow_audio: false
+      }
+    ]
   );
 
-  // IA STATES
+  // ========== 🔒 ESTADOS IA & SEGURIDAD ==========
   const [showAiModal, setShowAiModal] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiNumQuestions, setAiNumQuestions] = useState(3);
   const [aiLevel, setAiLevel] = useState('A1');
   const [aiDifficulty, setAiDifficulty] = useState('Básico');
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // ✅ RECUPERAR CLAVE DEL NAVEGADOR (NO HARDCODEADA)
+  const [apiKey, setApiKey] = useState(localStorage.getItem('groq_key') || '');
+
   useEffect(() => {
-    if (autoOpenAI && !initialData) setShowAiModal(true);
+    if (autoOpenAI && !initialData) {
+      setShowAiModal(true);
+    }
   }, [autoOpenAI, initialData]);
 
-  // HANDLERS CRUD
-  const addQuestion = () => setQuestions([...questions, {
-    id: Date.now(),
-    type: 'choice',
-    question_text: '',
-    options: ['', ''],
-    correct_answer: '',
-    explanation: '',
-    allow_audio: false
-  }]);
+  // ========== HANDLERS DE CLAVE API ==========
+  const handleSaveKey = (key: string) => {
+    const cleanKey = key.trim();
+    if (!cleanKey) {
+      toast.error("La clave no puede estar vacía");
+      return;
+    }
+    localStorage.setItem('groq_key', cleanKey);
+    setApiKey(cleanKey);
+    setShowKeyModal(false);
+    toast.success("🔒 Clave guardada de forma segura en tu navegador");
+  };
 
-  const removeQuestion = (id: number) => questions.length > 1 && setQuestions(questions.filter(q => q.id !== id));
+  // ========== HANDLERS DE PREGUNTAS ==========
+  const addQuestion = () => {
+    setQuestions([
+      ...questions,
+      {
+        id: Date.now(),
+        type: 'choice',
+        question_text: '',
+        options: ['', ''],
+        correct_answer: '',
+        explanation: '',
+        allow_audio: false
+      }
+    ]);
+  };
 
-  const updateQuestion = (id: number, field: keyof QuestionDraft, value: any) => 
-    setQuestions(questions.map(q => q.id === id ? { ...q, [field]: value } : q));
+  const removeQuestion = (id: number) => {
+    if (questions.length > 1) {
+      setQuestions(questions.filter(q => q.id !== id));
+    }
+  };
+
+  const updateQuestion = (id: number, field: keyof QuestionDraft, value: any) => {
+    setQuestions(questions.map(q => (q.id === id ? { ...q, [field]: value } : q)));
+  };
 
   const addOption = (qId: number) => {
     const q = questions.find(x => x.id === qId);
-    if (q) updateQuestion(qId, 'options', [...q.options, '']);
+    if (q) {
+      updateQuestion(qId, 'options', [...q.options, '']);
+    }
   };
 
   const removeOption = (qId: number, idx: number) => {
     const q = questions.find(x => x.id === qId);
-    if (q && q.options.length > 2) updateQuestion(qId, 'options', q.options.filter((_, i) => i !== idx));
+    if (q && q.options.length > 2) {
+      updateQuestion(qId, 'options', q.options.filter((_, i) => i !== idx));
+    }
   };
 
-  const updateOptionText = (qId: number, idx: number, text: string) => {
+  const updateOptionText = (qId: number, idx: number, val: string) => {
     const q = questions.find(x => x.id === qId);
     if (!q) return;
-    const newOptions = [...q.options];
-    newOptions[idx] = text;
-    updateQuestion(qId, 'options', newOptions);
-    if (q.correct_answer === q.options[idx]) updateQuestion(qId, 'correct_answer', text);
+    
+    const opts = [...q.options];
+    opts[idx] = val;
+    updateQuestion(qId, 'options', opts);
+    
+    // Si la respuesta correcta era la opción modificada, actualizarla
+    if (q.correct_answer === q.options[idx]) {
+      updateQuestion(qId, 'correct_answer', val);
+    }
   };
 
+  // ========== GUARDAR TAREA ==========
   const handleSave = () => {
     if (!title.trim()) {
-      alert("Falta título");
+      toast.error("❌ El título es obligatorio");
       return;
     }
-    
+
     const taskData = {
       ...initialData,
       title,
@@ -134,517 +170,502 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       },
       color_tag: '#A8D8FF'
     };
-    
+
     onSaveTask(taskData);
   };
 
-  // ========== MOTOR GROQ (LLAMA 3 70B) - SIN FALLBACK ==========
+  // ========== ✅ GENERACIÓN IA (GROQ SECURE) ==========
   const handleAiGenerate = async () => {
-    if (!aiPrompt.trim()) return;
-    setIsGenerating(true);
-
-    try {
-      const systemPrompt = `Eres un profesor experto de Español como Lengua Extranjera (ELE).
-Tu misión es crear ejercicios gramaticales y de vocabulario de ALTA CALIDAD PEDAGÓGICA.
-
-CONFIGURACIÓN:
-- Tema: "${aiPrompt}"
-- Nivel MCER: ${aiLevel} (Marco Común Europeo de Referencia)
-- Dificultad: ${aiDifficulty}
-- Cantidad exacta: ${aiNumQuestions} preguntas
-
-REGLAS DE GENERACIÓN:
-1. Las preguntas deben ser educativas, claras y pedagógicamente correctas.
-2. El campo "explanation" debe explicar la regla gramatical, el uso correcto o el razonamiento lingüístico. Es el feedback que verá el alumno.
-3. Usa variedad de tipos según el tema:
-   - "choice": Pregunta con 3-4 opciones. Array "options" obligatorio. "correct_answer" debe ser exactamente una de las opciones.
-   - "true_false": Afirmación para evaluar. "correct_answer" debe ser exactamente "Verdadero" o "Falso".
-   - "fill_blank": Frase con hueco marcado como ___. "correct_answer" es la palabra correcta.
-   - "open": Pregunta de desarrollo. "correct_answer" debe estar vacío "".
-4. Las explicaciones deben ser útiles para un estudiante que está aprendiendo.
-5. Varía la dificultad según el nivel MCER indicado.
-
-FORMATO JSON ESTRICTO (Responde ÚNICAMENTE el JSON válido):
-{
-  "title": "Título motivador y descriptivo de la actividad",
-  "description": "Instrucciones claras y breves para el alumno",
-  "questions": [
-    {
-      "type": "choice",
-      "question_text": "Enunciado claro y preciso",
-      "options": ["Opción A", "Opción B", "Opción C", "Opción D"],
-      "correct_answer": "Opción A",
-      "explanation": "Explicación pedagógica que ayuda al alumno a entender por qué esta es la respuesta correcta"
-    },
-    {
-      "type": "true_false",
-      "question_text": "Afirmación para evaluar",
-      "correct_answer": "Verdadero",
-      "explanation": "Razonamiento gramatical o lingüístico"
-    },
-    {
-      "type": "fill_blank",
-      "question_text": "Frase con ___ que el alumno debe completar",
-      "correct_answer": "palabra",
-      "explanation": "Explicación de la regla aplicable"
-    },
-    {
-      "type": "open",
-      "question_text": "Pregunta de desarrollo o expresión escrita",
-      "correct_answer": "",
-      "explanation": "Criterios de evaluación para el profesor"
+    if (!aiPrompt.trim()) {
+      toast.error("Escribe un tema para generar");
+      return;
     }
-  ]
-}`;
 
-      console.log("🚀 Enviando request a Groq con Llama 3 70B...");
-      
+    // ✅ 1. VERIFICAR SI HAY CLAVE
+    if (!apiKey) {
+      toast.error("⚠️ Necesitas configurar tu API Key de Groq primero");
+      setShowKeyModal(true);
+      return;
+    }
+
+    setIsGenerating(true);
+    
+    try {
+      const systemPrompt = `
+        Actúa como un experto profesor de Español (ELE).
+        Crea una actividad educativa en formato JSON estricto.
+        
+        Tema: "${aiPrompt}"
+        Nivel: ${aiLevel}
+        Dificultad: ${aiDifficulty}
+        Cantidad de preguntas: ${aiNumQuestions}
+        
+        REGLAS ESTRICTAS:
+        1. Genera preguntas variadas: choice (opción múltiple), true_false (verdadero/falso), fill_blank (completar), open (abierta).
+        2. Para "choice": mínimo 2 opciones, máximo 4.
+        3. Para "true_false": opciones fijas ["Verdadero", "Falso"].
+        4. Para "fill_blank" y "open": correct_answer puede ser texto libre.
+        5. TODAS las preguntas DEBEN tener un campo "explanation" educativo.
+        6. Responde ÚNICAMENTE el JSON, sin texto adicional.
+        
+        FORMATO JSON EXACTO:
+        {
+          "title": "Título de la actividad",
+          "description": "Instrucciones claras para el alumno",
+          "questions": [
+            {
+              "type": "choice",
+              "question_text": "¿Pregunta aquí?",
+              "options": ["Opción A", "Opción B", "Opción C"],
+              "correct_answer": "Opción A",
+              "explanation": "Explicación educativa de por qué es correcta"
+            }
+          ]
+        }
+      `;
+
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${GROQ_API_KEY}`,
+          "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          messages: [{ 
-            role: "system", 
-            content: systemPrompt 
-          }],
-          model: "llama-3.3-70b-versatile", // Modelo actualizado y estable
+          messages: [
+            { role: "system", content: systemPrompt }
+          ],
+          model: "llama-3.3-70b-versatile",
           temperature: 0.5,
-          max_tokens: 2000,
           response_format: { type: "json_object" }
         })
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `HTTP ${response.status}: Error de Groq`);
+        const errData = await response.json();
+        throw new Error(errData.error?.message || "Error de API Groq");
       }
 
       const data = await response.json();
-      console.log("✅ Respuesta de Groq recibida:", data);
-      
-      const content = data.choices[0]?.message?.content;
-      
-      if (!content) {
-        throw new Error("Groq no devolvió contenido en la respuesta");
-      }
-
-      console.log("📝 Contenido JSON raw:", content);
-      
+      const content = data.choices[0]?.message?.content || "{}";
       const result = JSON.parse(content);
-      
-      // Validación estricta
-      if (!result.title || !result.description || !Array.isArray(result.questions)) {
-        throw new Error("La estructura JSON devuelta por Groq es inválida");
-      }
 
-      if (result.questions.length === 0) {
-        throw new Error("Groq no generó ninguna pregunta");
-      }
-
-      console.log("✨ Preguntas generadas:", result.questions.length);
-
+      // Aplicar resultados
       setTitle(result.title);
       setDescription(result.description);
-      setQuestions(result.questions.map((q: any, i: number) => ({
-        ...q,
-        id: Date.now() + i,
-        options: q.options || [],
-        allow_audio: q.type === 'open'
-      })));
-      
-      toast.success(`🎉 ¡Tarea generada con Llama 3 (Groq)! ${result.questions.length} preguntas creadas`);
+      setQuestions(
+        result.questions.map((q: any, i: number) => ({
+          ...q,
+          id: Date.now() + i,
+          allow_audio: q.type === 'open'
+        }))
+      );
+
+      toast.success("✨ ¡Contenido generado con éxito!");
       setShowAiModal(false);
       setAiPrompt('');
-    } catch (error) {
-      console.error("❌ Groq Error:", error);
       
-      // MOSTRAR ERROR REAL AL USUARIO - SIN FALLBACK FALSO
-      const errorMessage = error instanceof Error ? error.message : "Error desconocido al conectar con Groq";
-      toast.error(`Error de IA: ${errorMessage}`, {
-        duration: 5000,
-        description: "Revisa la consola para más detalles"
-      });
+    } catch (error) {
+      console.error("Groq Error:", error);
+      toast.error(`❌ Error: ${error instanceof Error ? error.message : "Fallo de conexión"}`);
+      
+      // Si el error es de autenticación, abrir modal para corregir
+      if (String(error).includes("401") || String(error).includes("key") || String(error).includes("Invalid API")) {
+        toast.error("⚠️ API Key inválida o revocada");
+        setShowKeyModal(true);
+      }
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // RENDERERS VISUALES
+  // ========== RENDERIZADO DE PREGUNTAS ==========
   const renderQuestionBody = (q: QuestionDraft, idx: number) => {
-    if (q.type === 'choice') return (
-      <div className="mt-4 space-y-2 pl-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-        <label className="text-[10px] font-black text-slate-400 uppercase">Opciones</label>
-        {q.options.map((opt, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <button
-              onClick={() => updateQuestion(q.id, 'correct_answer', opt)}
-              className={cn(
-                "w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0",
-                q.correct_answer === opt && opt !== '' ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-300"
-              )}
-            >
-              {q.correct_answer === opt && opt !== '' && <CheckCircle2 className="w-4 h-4" />}
-            </button>
-            <Input
-              value={opt}
-              onChange={(e) => updateOptionText(q.id, i, e.target.value)}
-              className="flex-1 bg-white h-10 text-sm border-2"
-              placeholder={`Opción ${i + 1}`}
-            />
-            {q.options.length > 2 && (
-              <button onClick={() => removeOption(q.id, i)}>
-                <Trash2 className="w-4 h-4 text-slate-300 hover:text-rose-500" />
+    if (q.type === 'choice') {
+      return (
+        <div className="space-y-3">
+          {q.options.map((opt, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <button
+                onClick={() => updateQuestion(q.id, 'correct_answer', opt)}
+                className={cn(
+                  "w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 bg-white",
+                  q.correct_answer === opt ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300"
+                )}
+              >
+                {q.correct_answer === opt && <CheckCircle2 className="w-5 h-5" />}
               </button>
-            )}
-          </div>
-        ))}
-        <Button variant="ghost" size="sm" onClick={() => addOption(q.id)} className="text-indigo-600 text-xs font-bold ml-10">
-          + Añadir Opción
-        </Button>
-      </div>
-    );
+              <Input
+                value={opt}
+                onChange={e => updateOptionText(q.id, i, e.target.value)}
+                className="flex-1 bg-white border-2"
+                placeholder={`Opción ${i + 1}`}
+              />
+              {q.options.length > 2 && (
+                <button onClick={() => removeOption(q.id, i)}>
+                  <Trash2 className="w-4 h-4 text-rose-400" />
+                </button>
+              )}
+            </div>
+          ))}
+          <Button variant="ghost" size="sm" onClick={() => addOption(q.id)} className="text-indigo-600 font-bold ml-10">
+            <Plus className="w-4 h-4 mr-1" /> Añadir opción
+          </Button>
+        </div>
+      );
+    }
 
-    if (q.type === 'true_false') return (
-      <div className="mt-4 space-y-2 pl-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-        <label className="text-[10px] font-black text-slate-400 uppercase">Respuesta Correcta</label>
+    if (q.type === 'true_false') {
+      return (
         <div className="flex gap-3">
-          {['Verdadero', 'Falso'].map((option) => (
+          {['Verdadero', 'Falso'].map(val => (
             <button
-              key={option}
-              onClick={() => updateQuestion(q.id, 'correct_answer', option)}
+              key={val}
+              onClick={() => updateQuestion(q.id, 'correct_answer', val)}
               className={cn(
-                "flex-1 py-4 rounded-xl border-2 font-bold text-sm transition-all bg-white",
-                q.correct_answer === option
-                  ? "bg-emerald-100 border-emerald-500 text-emerald-700"
-                  : "border-slate-200 text-slate-600"
+                "flex-1 py-4 rounded-xl border-2 font-bold bg-white",
+                q.correct_answer === val ? "bg-emerald-100 border-emerald-500 text-emerald-700" : "border-slate-200"
               )}
             >
-              {option}
+              {val}
             </button>
           ))}
         </div>
-      </div>
-    );
+      );
+    }
 
-    if (q.type === 'fill_blank') return (
-      <div className="mt-4 space-y-2 pl-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-        <label className="text-[10px] font-black text-slate-400 uppercase">Respuesta Correcta</label>
-        <Input
-          value={q.correct_answer}
-          onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)}
-          className="bg-white h-12 text-sm border-2 border-amber-200 text-amber-900 font-bold"
-          placeholder="Escribe la respuesta correcta..."
-        />
-        <p className="text-xs text-slate-400">💡 Usa ___ en la pregunta para marcar el hueco</p>
-      </div>
-    );
-
-    if (q.type === 'open') return (
-      <div className="mt-4 space-y-2 pl-1 bg-amber-50/50 p-3 rounded-xl border border-amber-200">
-        <div className="flex items-center gap-2">
-          <AlignLeft className="w-4 h-4 text-amber-600" />
-          <label className="text-[10px] font-black text-amber-600 uppercase">Respuesta Libre</label>
+    if (q.type === 'fill_blank') {
+      return (
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-amber-700 uppercase">Respuesta Oculta:</label>
+          <Input
+            value={q.correct_answer}
+            onChange={e => updateQuestion(q.id, 'correct_answer', e.target.value)}
+            className="bg-white border-2 border-amber-200 text-amber-900 font-bold h-12"
+            placeholder="Respuesta correcta"
+          />
         </div>
-        <p className="text-xs text-slate-500">El alumno podrá escribir o grabar audio. Requiere corrección manual.</p>
-        <button 
-          onClick={() => updateQuestion(q.id, 'allow_audio', !q.allow_audio)} 
-          className={cn(
-            "px-4 py-2 rounded-xl text-sm font-bold border-2 flex items-center gap-2 transition-all",
-            q.allow_audio ? "bg-indigo-100 border-indigo-500 text-indigo-700" : "bg-white border-slate-200 text-slate-600"
-          )}
-        >
-          <Mic className="w-3 h-3" />
-          {q.allow_audio ? '🎤 Audio Permitido' : '📝 Solo Texto'}
-        </button>
-      </div>
-    );
+      );
+    }
+
+    if (q.type === 'open') {
+      return (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500 italic">Respuesta Libre (Sin calificación automática)</p>
+          <button
+            onClick={() => updateQuestion(q.id, 'allow_audio', !q.allow_audio)}
+            className={cn(
+              "px-4 py-2 rounded-xl text-sm font-bold border-2 flex gap-2 items-center",
+              q.allow_audio ? "bg-indigo-100 border-indigo-500 text-indigo-700" : "bg-white border-slate-200"
+            )}
+          >
+            <Mic className="w-4 h-4" />
+            {q.allow_audio ? '🎤 Audio Activado' : 'Solo Texto'}
+          </button>
+        </div>
+      );
+    }
 
     return null;
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in">
-      <div className="bg-[#F8FAFC] w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl sm:rounded-3xl shadow-2xl border-2 sm:border-4 border-white overflow-hidden">
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-gradient-to-br from-slate-50 to-slate-100 w-full max-w-4xl h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border-4 border-white">
         
-        {/* HEADER */}
-        <div className="px-6 sm:px-8 py-4 sm:py-6 border-b border-slate-200 bg-white flex justify-between items-center sticky top-0 z-20">
-          <div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
-              {initialData ? '✏️ Editar Tarea' : '🎨 Diseñador'}
-            </h2>
-            <div className="flex gap-2 mt-1">
-              <button 
-                onClick={() => setShowAiModal(true)} 
-                className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-3 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-md hover:from-orange-600 hover:to-red-700 transition-all"
-              >
-                <Sparkles className="w-3 h-3"/> LLAMA 3 IA
-              </button>
+        {/* ========== HEADER ========== */}
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 shrink-0 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+              <Save className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white tracking-tight">
+                {initialData ? 'Editar Tarea' : 'Nueva Tarea'}
+              </h2>
+              <p className="text-indigo-100 text-sm">Construye tu actividad paso a paso</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onCancel}>
-            <X className="w-6 sm:w-8 h-6 sm:h-8 text-slate-400" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* ✅ BOTÓN DE CONFIGURACIÓN DE API KEY */}
+            <button
+              onClick={() => setShowKeyModal(true)}
+              className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md hover:bg-white/20 flex items-center justify-center transition-all"
+              title="Configurar API Key"
+            >
+              <Settings2 className="w-5 h-5 text-white" />
+            </button>
+            <button
+              onClick={onCancel}
+              className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md hover:bg-white/20 flex items-center justify-center transition-all"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+          </div>
         </div>
 
-        {/* BODY */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-10 scroll-smooth bg-slate-50/50">
-          {/* CONFIGURACIÓN */}
-          <div className="bg-white p-6 sm:p-8 rounded-[2rem] border border-slate-200 shadow-sm mb-6 sm:mb-10">
-            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Configuración</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700">Título</label>
-                <Input 
-                  value={title} 
-                  onChange={(e) => setTitle(e.target.value)} 
-                  placeholder="Ej: Verbos en presente" 
-                  className="font-bold text-lg sm:text-xl h-12 sm:h-14 border-2 border-slate-200 rounded-xl" 
+        {/* ========== BODY (SCROLLABLE) ========== */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          
+          {/* META INFO */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+            <div>
+              <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Título</label>
+              <Input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                className="bg-slate-50 border-2 border-slate-200 h-12 font-bold text-lg"
+                placeholder="Ej: Verbos en Presente"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Descripción</label>
+              <Textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                className="bg-slate-50 border-2 border-slate-200 h-20 resize-none"
+                placeholder="Instrucciones claras para el alumno..."
+              />
+            </div>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Intentos Máx.</label>
+                <Input
+                  type="number"
+                  value={maxAttempts}
+                  onChange={e => setMaxAttempts(Number(e.target.value))}
+                  className="bg-slate-50 border-2 border-slate-200 h-10"
+                  min={1}
+                  max={10}
                 />
               </div>
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700">Intentos Permitidos</label>
-                <div className="relative">
-                  <select 
-                    value={maxAttempts} 
-                    onChange={(e) => setMaxAttempts(Number(e.target.value))} 
-                    className="w-full h-12 sm:h-14 pl-5 pr-12 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-base sm:text-lg appearance-none cursor-pointer"
-                  >
-                    <option value={1}>1 Intento</option>
-                    <option value={2}>2 Intentos</option>
-                    <option value={3}>3 Intentos</option>
-                    <option value={5}>5 Intentos</option>
-                    <option value={99}>Ilimitados</option>
-                  </select>
-                  <div className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">▼</div>
-                </div>
-              </div>
-              <div className="col-span-1 md:col-span-2 space-y-3">
-                <label className="text-sm font-bold text-slate-700">Instrucciones</label>
-                <Textarea 
-                  value={description} 
-                  onChange={(e) => setDescription(e.target.value)} 
-                  placeholder="Describe qué deben hacer los estudiantes..." 
-                  className="bg-slate-50 border-2 border-slate-200 resize-none h-20 sm:h-24 rounded-xl p-4" 
-                />
-              </div>
+              <Button
+                onClick={() => setShowAiModal(true)}
+                className="bg-gradient-to-r from-orange-500 to-pink-500 text-white font-black px-6 rounded-xl h-10 mt-6 shadow-lg hover:shadow-xl transition-all"
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Generar con IA
+              </Button>
             </div>
           </div>
 
           {/* PREGUNTAS */}
-          <div className="space-y-6 sm:space-y-8">
-            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest px-2">Preguntas</h3>
+          <div className="space-y-4">
             {questions.map((q, idx) => (
-              <div key={q.id} className="bg-white p-6 sm:p-8 rounded-[2rem] border-2 border-slate-200 shadow-sm relative overflow-hidden">
-                <div className="absolute -left-4 top-0 bottom-0 w-12 sm:w-16 bg-indigo-500 flex items-start justify-center pt-6 sm:pt-8 font-black text-white text-xl sm:text-2xl">
-                  {idx+1}
-                </div>
-                <div className="pl-8 sm:pl-12">
-                  <div className="flex flex-col md:flex-row gap-4 sm:gap-6 mb-4 sm:mb-6">
-                    <div className="relative min-w-[180px]">
-                      <select 
-                        value={q.type} 
-                        onChange={(e) => updateQuestion(q.id, 'type', e.target.value as QuestionType)} 
-                        className="w-full h-12 sm:h-14 pl-4 pr-8 bg-indigo-50 border-2 border-indigo-100 rounded-xl font-bold text-indigo-900 appearance-none cursor-pointer text-sm sm:text-base"
-                      >
-                        <option value="choice">📝 Test</option>
-                        <option value="true_false">✓/✗ V/F</option>
-                        <option value="fill_blank">📝 Huecos</option>
-                        <option value="open">💬 Abierta</option>
-                      </select>
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none">▼</div>
+              <div key={q.id} className="bg-white p-6 rounded-2xl shadow-sm border-2 border-slate-200 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 font-black flex items-center justify-center shrink-0">
+                      {idx + 1}
                     </div>
-                    <Input 
-                      value={q.question_text} 
-                      onChange={(e) => updateQuestion(q.id, 'question_text', e.target.value)} 
-                      placeholder="Escribe la pregunta..." 
-                      className="flex-1 font-bold text-base sm:text-xl h-12 sm:h-14 border-0 border-b-4 border-slate-100 rounded-none px-0 focus:ring-0" 
-                    />
-                    <button 
-                      onClick={() => removeQuestion(q.id)} 
-                      className="p-3 sm:p-4 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-2xl transition-all shrink-0"
+                    <select
+                      value={q.type}
+                      onChange={e => updateQuestion(q.id, 'type', e.target.value as QuestionType)}
+                      className="px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg font-bold text-sm"
                     >
-                      <Trash2 className="w-5 sm:w-6 h-5 sm:h-6" />
-                    </button>
+                      <option value="choice">Opción Múltiple</option>
+                      <option value="true_false">Verdadero/Falso</option>
+                      <option value="fill_blank">Completar</option>
+                      <option value="open">Abierta</option>
+                    </select>
                   </div>
-                  {renderQuestionBody(q, idx)}
-                  
-                  {/* Campo de Explicación */}
-                  <div className="mt-4 space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase">Explicación (Feedback)</label>
-                    <Input
-                      value={q.explanation}
-                      onChange={(e) => updateQuestion(q.id, 'explanation', e.target.value)}
-                      placeholder="Feedback pedagógico para el alumno..."
-                      className="bg-slate-50 border border-slate-200 h-10 text-sm italic"
-                    />
-                  </div>
+                  <button onClick={() => removeQuestion(q.id)} className="text-rose-400 hover:text-rose-600">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Pregunta</label>
+                  <Textarea
+                    value={q.question_text}
+                    onChange={e => updateQuestion(q.id, 'question_text', e.target.value)}
+                    className="bg-slate-50 border-2 border-slate-200 h-16 resize-none"
+                    placeholder="Escribe tu pregunta aquí..."
+                  />
+                </div>
+
+                {renderQuestionBody(q, idx)}
+
+                <div>
+                  <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Explicación</label>
+                  <Textarea
+                    value={q.explanation}
+                    onChange={e => updateQuestion(q.id, 'explanation', e.target.value)}
+                    className="bg-amber-50 border-2 border-amber-200 h-16 resize-none text-amber-900"
+                    placeholder="Explica por qué es correcta..."
+                  />
                 </div>
               </div>
             ))}
-            <Button 
-              onClick={addQuestion} 
-              className="w-full py-6 sm:py-8 border-4 border-dashed border-slate-200 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-300 text-slate-400 font-black text-lg sm:text-xl h-auto gap-3 rounded-[2rem]"
+
+            <Button
+              onClick={addQuestion}
+              variant="outline"
+              className="w-full border-2 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 h-12 font-bold rounded-xl"
             >
-              <Plus className="w-6 sm:w-8 h-6 sm:h-8"/> Nueva Pregunta
+              <Plus className="w-5 h-5 mr-2" />
+              Añadir Pregunta
             </Button>
           </div>
         </div>
 
-        {/* FOOTER (LÓGICA DE ASIGNACIÓN) */}
-        <div className="p-4 sm:p-6 border-t border-slate-200 bg-white flex flex-col md:flex-row justify-between items-center z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] gap-4">
-          
-          {/* ZONA DE ASIGNACIÓN */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200 w-full md:w-auto">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 hidden lg:block">Asignar a:</span>
-            
-            <div className="relative min-w-[140px] flex-1 sm:flex-none">
-              <select 
-                value={assignType} 
-                onChange={(e) => setAssignType(e.target.value as any)} 
-                className="h-12 pl-4 pr-8 w-full bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 appearance-none cursor-pointer hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm"
+        {/* ========== FOOTER ========== */}
+        <div className="p-6 border-t border-slate-200 bg-white shrink-0 flex gap-4 items-center">
+          <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-200 flex-1">
+            <span className="text-xs font-black text-slate-400 uppercase ml-2 hidden md:block">Asignar:</span>
+            <div className="relative flex-1">
+              <select
+                value={assignType}
+                onChange={e => setAssignType(e.target.value as any)}
+                className="h-10 pl-3 pr-8 bg-white border rounded-lg font-bold text-sm w-full"
               >
-                <option value="class">🏫 Toda la Clase</option>
-                <option value="level">📊 Por Nivel</option>
-                {initialStudentId && <option value="individual">👤 Individual</option>}
+                <option value="class">Toda la Clase</option>
+                <option value="level">Por Nivel</option>
+                {initialStudentId && <option value="individual">Individual</option>}
               </select>
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">▼</div>
             </div>
-
             {assignType === 'level' && (
-              <div className="relative min-w-[100px] animate-in slide-in-from-left-2 flex-1 sm:flex-none">
-                <select 
-                  value={selectedLevel} 
-                  onChange={(e) => setSelectedLevel(e.target.value)} 
-                  className="h-12 pl-4 pr-8 w-full bg-indigo-50 border border-indigo-200 rounded-xl text-sm font-bold text-indigo-700 appearance-none cursor-pointer hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm"
+              <div className="relative w-24">
+                <select
+                  value={selectedLevel}
+                  onChange={e => setSelectedLevel(e.target.value)}
+                  className="h-10 pl-3 bg-indigo-50 border-indigo-200 text-indigo-700 rounded-lg font-bold text-sm w-full"
                 >
-                  <option value="A1">A1 - Principiante</option>
-                  <option value="A2">A2 - Elemental</option>
-                  <option value="B1">B1 - Intermedio</option>
-                  <option value="B2">B2 - Intermedio Alto</option>
-                  <option value="C1">C1 - Avanzado</option>
-                  <option value="C2">C2 - Maestría</option>
+                  <option>A1</option>
+                  <option>A2</option>
+                  <option>B1</option>
+                  <option>B2</option>
+                  <option>C1</option>
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-400 text-xs">▼</div>
-              </div>
-            )}
-
-            {assignType === 'individual' && studentName && (
-              <div className="bg-emerald-100 text-emerald-700 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 border border-emerald-200 animate-in slide-in-from-left-2 shadow-sm whitespace-nowrap">
-                <User className="w-4 h-4" /> {studentName}
               </div>
             )}
           </div>
-
-          {/* BOTONES DE ACCIÓN */}
-          <div className="flex gap-3 sm:gap-4 w-full md:w-auto">
-            <Button 
-              variant="ghost" 
-              onClick={onCancel} 
-              className="text-slate-500 font-bold hover:bg-slate-100 rounded-xl h-12 sm:h-14 px-4 sm:px-6 flex-1 md:flex-none"
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleSave} 
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 sm:px-10 rounded-xl shadow-xl shadow-indigo-200 border-b-4 border-indigo-800 active:border-b-0 active:translate-y-1 h-12 sm:h-14 text-base sm:text-lg transition-all flex items-center gap-2 flex-1 md:flex-none justify-center"
-            >
-              <Save className="w-5 sm:w-6 h-5 sm:h-6" /> 
-              {initialData ? 'ACTUALIZAR' : 'GUARDAR'}
-            </Button>
-          </div>
+          <Button
+            onClick={handleSave}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 rounded-xl h-12 text-lg shadow-lg"
+          >
+            {initialData ? 'ACTUALIZAR' : 'GUARDAR'}
+          </Button>
         </div>
 
-        {/* MODAL IA LLAMA 3 (GROQ) */}
+        {/* ========== MODAL IA ========== */}
         <Dialog open={showAiModal} onOpenChange={setShowAiModal}>
-          <DialogContent className="w-[90%] max-w-lg rounded-3xl p-6 border-4 border-orange-200 bg-gradient-to-br from-orange-50 to-red-50">
+          <DialogContent className="w-[90%] max-w-lg rounded-2xl p-6 border-4 border-orange-200">
             <DialogHeader>
               <DialogTitle className="text-2xl font-black text-orange-900 flex items-center gap-2">
-                <Sparkles className="w-6 h-6 fill-orange-500 text-orange-600" /> Llama 3 IA (Groq)
+                <Sparkles className="w-6 h-6" />
+                Generador Groq AI
               </DialogTitle>
-              <DialogDescription className="text-orange-800/60">
-                Genera ejercicios pedagógicos de alta calidad con Llama 3 70B. Velocidad extrema.
+              <DialogDescription>
+                Describe el tema y deja que la IA cree las preguntas por ti.
               </DialogDescription>
             </DialogHeader>
-            
-            <div className="space-y-5 mt-2">
-              <div className="space-y-2">
-                <label className="text-xs font-black text-orange-800 uppercase tracking-wider">Tema de la Actividad</label>
-                <Textarea 
-                  value={aiPrompt} 
-                  onChange={e => setAiPrompt(e.target.value)} 
-                  placeholder="Ej: Verbos irregulares en pretérito, Vocabulario de viajes por España, Ser vs Estar..." 
-                  className="h-20 text-lg bg-white border-orange-200 rounded-xl focus:border-orange-400" 
+            <Textarea
+              value={aiPrompt}
+              onChange={e => setAiPrompt(e.target.value)}
+              placeholder="Ej: Verbos irregulares en pasado, Vocabulario de la familia, etc."
+              className="h-24 text-lg bg-orange-50 border-orange-200 rounded-xl mb-4"
+            />
+            <div className="flex gap-4 mb-4">
+              <div className="space-y-1 flex-1">
+                <label className="text-[10px] font-black text-orange-800 uppercase">
+                  Cantidad: {aiNumQuestions}
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  value={aiNumQuestions}
+                  onChange={e => setAiNumQuestions(Number(e.target.value))}
+                  className="w-full accent-orange-500"
                 />
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-orange-800 uppercase">Nivel MCER</label>
-                  <select 
-                    value={aiLevel} 
-                    onChange={e => setAiLevel(e.target.value)} 
-                    className="w-full h-10 bg-white border-2 border-orange-200 rounded-lg font-bold text-orange-900 px-2"
-                  >
-                    <option>A1</option>
-                    <option>A2</option>
-                    <option>B1</option>
-                    <option>B2</option>
-                    <option>C1</option>
-                    <option>C2</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-orange-800 uppercase">Dificultad</label>
-                  <select 
-                    value={aiDifficulty} 
-                    onChange={e => setAiDifficulty(e.target.value)} 
-                    className="w-full h-10 bg-white border-2 border-orange-200 rounded-lg font-bold text-orange-900 px-2"
-                  >
-                    <option>Básico</option>
-                    <option>Medio</option>
-                    <option>Reto</option>
-                  </select>
-                </div>
+              <div className="space-y-1 w-24">
+                <label className="text-[10px] font-black text-orange-800 uppercase">Nivel</label>
+                <select
+                  value={aiLevel}
+                  onChange={e => setAiLevel(e.target.value)}
+                  className="w-full h-8 bg-white border border-orange-200 rounded font-bold text-xs"
+                >
+                  <option>A1</option>
+                  <option>A2</option>
+                  <option>B1</option>
+                  <option>B2</option>
+                  <option>C1</option>
+                </select>
               </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <label className="text-[10px] font-black text-orange-800 uppercase">Cantidad de Preguntas</label>
-                  <span className="text-xs font-black text-orange-600">{aiNumQuestions}</span>
-                </div>
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="8" 
-                  value={aiNumQuestions} 
-                  onChange={e => setAiNumQuestions(Number(e.target.value))} 
-                  className="w-full accent-orange-500" 
-                />
+              <div className="space-y-1 w-24">
+                <label className="text-[10px] font-black text-orange-800 uppercase">Dificultad</label>
+                <select
+                  value={aiDifficulty}
+                  onChange={e => setAiDifficulty(e.target.value)}
+                  className="w-full h-8 bg-white border border-orange-200 rounded font-bold text-xs"
+                >
+                  <option>Básico</option>
+                  <option>Medio</option>
+                  <option>Reto</option>
+                </select>
               </div>
+            </div>
+            <Button
+              onClick={handleAiGenerate}
+              disabled={isGenerating}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black h-12 rounded-xl shadow-lg"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  GENERAR
+                </>
+              )}
+            </Button>
+          </DialogContent>
+        </Dialog>
 
-              <Button 
-                onClick={handleAiGenerate} 
-                disabled={isGenerating || !aiPrompt.trim()} 
-                className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-black h-12 rounded-xl shadow-lg border-b-4 border-orange-800 active:border-b-0 active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        {/* ========== ✅ MODAL CONFIGURACIÓN DE API KEY ========== */}
+        <Dialog open={showKeyModal} onOpenChange={setShowKeyModal}>
+          <DialogContent className="w-[90%] max-w-md rounded-2xl p-6">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl font-black">
+                <KeyRound className="w-6 h-6 text-indigo-600" />
+                Configurar Groq API
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-600 mt-2">
+                Pega tu clave de API de Groq aquí. Se guardará de forma segura en tu navegador.
+                <br />
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 font-bold hover:underline mt-2 inline-block"
+                >
+                  → Obtener clave en console.groq.com
+                </a>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <Input
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder="gsk_..."
+                type="password"
+                className="bg-slate-50 border-2 h-12 font-mono"
+              />
+              <Button
+                onClick={() => handleSaveKey(apiKey)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black h-12 rounded-xl"
               >
-                {isGenerating ? (
-                  <><Loader2 className="animate-spin mr-2"/> Generando con IA...</>
-                ) : (
-                  <>⚡ GENERAR CON LLAMA 3</>
-                )}
+                <KeyRound className="w-4 h-4 mr-2" />
+                Guardar Clave
               </Button>
-
-              <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
-                <p className="text-xs text-orange-800">
-                  <span className="font-bold">⚡ Velocidad extrema:</span> Groq procesa con llama3-70b-8192 a velocidades récord. Calidad pedagógica garantizada.
-                </p>
-              </div>
             </div>
           </DialogContent>
         </Dialog>
+
       </div>
     </div>
   );
