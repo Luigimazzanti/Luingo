@@ -9,6 +9,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { gradeSubmission } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
+import { TextAnnotator, Annotation } from './TextAnnotator';
 
 interface TeacherDashboardProps {
   classroom: Classroom;
@@ -41,6 +42,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [gradeInput, setGradeInput] = useState('');
   const [feedbackInput, setFeedbackInput] = useState('');
   const [isGrading, setIsGrading] = useState(false);
+  
+  // ✅ ESTADO PARA ANOTACIONES DE TEXTO (WRITING)
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
   // ========== LOG DE DEPURACIÓN ==========
   console.log('👨‍🏫 TeacherDashboard recibió:', submissions?.length || 0, 'entregas');
@@ -392,66 +396,105 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
                   {/* Respuestas del Estudiante */}
                   <div className="space-y-3">
-                    <h4 className="font-bold text-slate-700 flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" />
-                      Respuestas del Estudiante
-                    </h4>
-                    
-                    {att.answers && att.answers.length > 0 ? (
-                      att.answers.map((ans: any, k: number) => (
-                        <div
-                          key={k}
-                          className={`p-4 rounded-xl border-2 ${
-                            ans.isCorrect
-                              ? 'bg-emerald-50 border-emerald-200'
-                              : 'bg-rose-50 border-rose-200'
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="bg-white text-slate-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
-                              {k + 1}
-                            </span>
-                            <div className="flex-1">
-                              <p className="font-bold text-sm text-slate-700 mb-2">
-                                {ans.questionText}
-                              </p>
-                              <div className="space-y-2">
-                                <div>
-                                  <p className="text-xs font-bold text-slate-500 uppercase mb-1">
-                                    Respuesta del Estudiante:
+                    {/* ✅ BLOQUE DE REDACCIÓN CON TEXT ANNOTATOR (Si existe textContent) */}
+                    {att.textContent && att.textContent.length > 0 ? (
+                      <div className="mb-6">
+                        <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-3">
+                          <Eye className="w-4 h-4" />
+                          Texto de Redacción con Correcciones
+                        </h4>
+                        <TextAnnotator 
+                          text={att.textContent}
+                          annotations={att.corrections || []}
+                          onAddAnnotation={(annotation) => {
+                            // Actualizar localmente (temporal hasta guardar)
+                            const updatedCorrections = [...(att.corrections || []), annotation];
+                            att.corrections = updatedCorrections;
+                            setAnnotations(updatedCorrections);
+                            toast.success('✅ Corrección añadida');
+                          }}
+                          onRemoveAnnotation={(id) => {
+                            const updatedCorrections = (att.corrections || []).filter((a: Annotation) => a.id !== id);
+                            att.corrections = updatedCorrections;
+                            setAnnotations(updatedCorrections);
+                            toast.success('🗑️ Corrección eliminada');
+                          }}
+                          readOnly={false}
+                        />
+                        <div className="mt-3 flex items-center justify-between text-xs px-2">
+                          <span className="text-slate-500 font-bold">
+                            Palabras: {att.textContent.split(/\s+/).filter((w: string) => w.length > 0).length}
+                          </span>
+                          <span className="text-slate-500 font-bold">
+                            Caracteres: {att.textContent.length}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* ✅ BLOQUE DE RESPUESTAS (Solo si NO hay textContent) */}
+                        <h4 className="font-bold text-slate-700 flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" />
+                          Respuestas del Estudiante
+                        </h4>
+                        
+                        {att.answers && att.answers.length > 0 ? (
+                          att.answers.map((ans: any, k: number) => (
+                            <div
+                              key={k}
+                              className={`p-4 rounded-xl border-2 ${
+                                ans.isCorrect
+                                  ? 'bg-emerald-50 border-emerald-200'
+                                  : 'bg-rose-50 border-rose-200'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="bg-white text-slate-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
+                                  {k + 1}
+                                </span>
+                                <div className="flex-1">
+                                  <p className="font-bold text-sm text-slate-700 mb-2">
+                                    {ans.questionText}
                                   </p>
-                                  <p
-                                    className={`font-bold ${
-                                      ans.isCorrect ? 'text-emerald-700' : 'text-rose-700'
-                                    }`}
-                                  >
-                                    {String(ans.studentAnswer)}
-                                  </p>
-                                </div>
-                                {!ans.isCorrect && ans.correctAnswer && (
-                                  <div>
-                                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">
-                                      Respuesta Correcta:
-                                    </p>
-                                    <p className="text-slate-600 font-medium">
-                                      {ans.correctAnswer}
-                                    </p>
+                                  <div className="space-y-2">
+                                    <div>
+                                      <p className="text-xs font-bold text-slate-500 uppercase mb-1">
+                                        Respuesta del Estudiante:
+                                      </p>
+                                      <p
+                                        className={`font-bold ${
+                                          ans.isCorrect ? 'text-emerald-700' : 'text-rose-700'
+                                        }`}
+                                      >
+                                        {String(ans.studentAnswer)}
+                                      </p>
+                                    </div>
+                                    {!ans.isCorrect && ans.correctAnswer && (
+                                      <div>
+                                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">
+                                          Respuesta Correcta:
+                                        </p>
+                                        <p className="text-slate-600 font-medium">
+                                          {ans.correctAnswer}
+                                        </p>
+                                      </div>
+                                    )}
                                   </div>
+                                </div>
+                                {ans.isCorrect ? (
+                                  <CheckCircle className="w-5 h-5 text-emerald-600" />
+                                ) : (
+                                  <Clock className="w-5 h-5 text-rose-600" />
                                 )}
                               </div>
                             </div>
-                            {ans.isCorrect ? (
-                              <CheckCircle className="w-5 h-5 text-emerald-600" />
-                            ) : (
-                              <Clock className="w-5 h-5 text-rose-600" />
-                            )}
+                          ))
+                        ) : (
+                          <div className="text-center py-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
+                            No hay respuestas detalladas para este intento
                           </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-8 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
-                        No hay respuestas detalladas para este intento
-                      </div>
+                        )}
+                      </>
                     )}
                   </div>
 

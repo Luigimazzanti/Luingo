@@ -9,6 +9,7 @@ import { LUINGO_LEVELS } from '../lib/mockData';
 import { cn } from '../lib/utils';
 import { deleteMoodlePost, gradeSubmission } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
+import { TextAnnotator } from './TextAnnotator';
 
 interface StudentPassportProps {
   student: Student;
@@ -332,45 +333,74 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
               </div>
             )}
 
-            {/* ✅ RESPUESTAS (MISMO DISEÑO QUE DASHBOARD) */}
-            {selectedSubmission?.answers && selectedSubmission.answers.length > 0 ? (
-              selectedSubmission.answers.map((ans: any, i: number) => (
-                <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <p className="font-bold text-slate-700 text-sm mb-3">
-                    {i + 1}. {ans.questionText}
-                  </p>
-                  
-                  <div className="space-y-2">
-                    {/* Respuesta del Estudiante */}
-                    <div className={cn(
-                      "p-3 rounded-lg text-sm border-l-4",
-                      ans.isCorrect 
-                        ? "bg-emerald-50 border-emerald-400 text-emerald-900" 
-                        : "bg-rose-50 border-rose-400 text-rose-900"
-                    )}>
-                      <span className="text-[10px] font-black opacity-60 uppercase block mb-1">
-                        Respuesta del Alumno:
-                      </span>
-                      {String(ans.studentAnswer || '---')}
-                    </div>
-                    
-                    {/* Solución Correcta (solo si es incorrecta) */}
-                    {!ans.isCorrect && (
-                      <div className="p-3 rounded-lg text-sm bg-slate-50 border-l-4 border-slate-300 text-slate-600">
-                        <span className="text-[10px] font-black opacity-60 uppercase block mb-1">
-                          Solución Correcta:
-                        </span>
-                        {String(ans.correctAnswer || 'Consultar profesor')}
-                      </div>
-                    )}
-                  </div>
+            {/* ✅ BLOQUE DE REDACCIÓN CON TEXT ANNOTATOR (Si existe textContent) */}
+            {selectedSubmission?.textContent && selectedSubmission.textContent.length > 0 ? (
+              <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <BookOpen className="w-5 h-5 text-indigo-600" />
+                  <h4 className="font-black text-slate-800 text-sm uppercase tracking-wide">
+                    Texto de Redacción {selectedSubmission.corrections && selectedSubmission.corrections.length > 0 && '(con correcciones del profesor)'}
+                  </h4>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-10">
-                <BookOpen className="w-12 h-12 text-slate-200 mx-auto mb-3"/>
-                <p className="text-slate-400">No hay detalles guardados para este intento.</p>
+                <TextAnnotator 
+                  text={selectedSubmission.textContent}
+                  annotations={selectedSubmission.corrections || []}
+                  onAddAnnotation={() => {}} // No-op en modo estudiante
+                  onRemoveAnnotation={() => {}} // No-op en modo estudiante
+                  readOnly={true}
+                />
+                <div className="mt-4 pt-4 border-t border-slate-300 flex items-center justify-between text-xs">
+                  <span className="text-slate-600 font-bold">
+                    Palabras: {selectedSubmission.textContent.split(/\s+/).filter((w: string) => w.length > 0).length}
+                  </span>
+                  <span className="text-slate-600 font-bold">
+                    Caracteres: {selectedSubmission.textContent.length}
+                  </span>
+                </div>
               </div>
+            ) : (
+              <>
+                {/* ✅ RESPUESTAS (Solo si NO hay textContent) */}
+                {selectedSubmission?.answers && selectedSubmission.answers.length > 0 ? (
+                  selectedSubmission.answers.map((ans: any, i: number) => (
+                    <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                      <p className="font-bold text-slate-700 text-sm mb-3">
+                        {i + 1}. {ans.questionText}
+                      </p>
+                      
+                      <div className="space-y-2">
+                        {/* Respuesta del Estudiante */}
+                        <div className={cn(
+                          "p-3 rounded-lg text-sm border-l-4",
+                          ans.isCorrect 
+                            ? "bg-emerald-50 border-emerald-400 text-emerald-900" 
+                            : "bg-rose-50 border-rose-400 text-rose-900"
+                        )}>
+                          <span className="text-[10px] font-black opacity-60 uppercase block mb-1">
+                            Respuesta del Alumno:
+                          </span>
+                          {String(ans.studentAnswer || '---')}
+                        </div>
+                        
+                        {/* Solución Correcta (solo si es incorrecta) */}
+                        {!ans.isCorrect && (
+                          <div className="p-3 rounded-lg text-sm bg-slate-50 border-l-4 border-slate-300 text-slate-600">
+                            <span className="text-[10px] font-black opacity-60 uppercase block mb-1">
+                              Solución Correcta:
+                            </span>
+                            {String(ans.correctAnswer || 'Consultar profesor')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10">
+                    <BookOpen className="w-12 h-12 text-slate-200 mx-auto mb-3"/>
+                    <p className="text-slate-400">No hay detalles guardados para este intento.</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
           
