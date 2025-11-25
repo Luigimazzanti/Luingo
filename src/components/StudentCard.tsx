@@ -1,122 +1,61 @@
 import React from 'react';
 import { Student } from '../types';
-import { TrendingUp, CheckCircle, Clock, Eye, EyeOff } from 'lucide-react';
+import { TrendingUp, CheckCircle, Clock, Trophy } from 'lucide-react';
 
-interface StudentCardProps {
-  student: Student;
-  onClick: () => void;
-  totalMaterials?: number; 
-}
+interface StudentCardProps { student: Student; onClick: () => void; }
 
-export const StudentCard: React.FC<StudentCardProps> = ({ 
-  student, 
-  onClick,
-  totalMaterials = 3 
-}) => {
+export const StudentCard: React.FC<StudentCardProps> = ({ student, onClick }) => {
+  // LÓGICA SEGURA PARA EVITAR NEGATIVOS
+  const total = student.total_tasks || 1;
+  // Completadas no puede ser mayor que total para la barra visual
+  const completed = Math.min(student.completed_tasks || 0, total);
+  // Pendientes nunca puede ser negativo
+  const pending = Math.max(0, total - student.completed_tasks);
+  const percent = Math.round((completed / total) * 100);
   
-  const getCEFRLevel = (level: number) => {
-      if (level <= 5) return { label: 'A1', color: 'bg-slate-100 text-slate-600 border-slate-300' };
-      if (level <= 10) return { label: 'A2', color: 'bg-sky-100 text-sky-700 border-sky-300' };
-      if (level <= 15) return { label: 'B1', color: 'bg-emerald-100 text-emerald-700 border-emerald-300' };
-      if (level <= 20) return { label: 'B2', color: 'bg-amber-100 text-amber-700 border-amber-300' };
-      if (level <= 25) return { label: 'C1', color: 'bg-orange-100 text-orange-700 border-orange-300' };
-      return { label: 'C2', color: 'bg-rose-100 text-rose-700 border-rose-300' };
-  };
+  const getLevelColor = (l: string) => {
+      if(l.includes('A')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      if(l.includes('B')) return 'bg-blue-100 text-blue-700 border-blue-200';
+      return 'bg-purple-100 text-purple-700 border-purple-200';
+  }
 
-  const cefr = getCEFRLevel(student.level || 1);
-  
-  // LÓGICA BLINDADA (Evitar negativos y porcentajes >100%)
-  const total = student.total_tasks || 1; // Aseguramos que nunca sea 0
-  const completed = Math.min(student.completed_tasks || 0, total); // Nunca mayor al total
-  const pending = Math.max(0, total - completed); // Nunca negativo
-  const percent = Math.round((completed / total) * 100); // Porcentaje limpio
-  
-  const safeMaterials = student.materials_viewed?.length || 0;
-  const safeAverage = student.average_grade || 0;
-  const materialsViewedPercentage = totalMaterials > 0 ? (safeMaterials / totalMaterials) * 100 : 0;
-  
   return (
-    <div
-      onClick={onClick}
-      className="group cursor-pointer bg-white rounded-3xl p-5 shadow-sm border-b-4 border-slate-200 hover:border-amber-300 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-    >
-      {/* Cabecera con avatar y nombre */}
-      <div className="flex items-center gap-4 mb-5">
-        <div className="relative shrink-0">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 border-2 border-indigo-100 overflow-hidden group-hover:rotate-6 transition-transform duration-300">
-                <img
-                    src={student.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'}
-                    alt={student.name}
-                    className="w-full h-full object-cover"
-                />
-            </div>
-            {percent === 100 && total > 0 && (
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-400 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-bounce">
-                    <CheckCircle className="w-4 h-4 text-white font-bold" />
-                </div>
-            )}
-        </div>
-        <div className="min-w-0 flex-1">
-            <h4 className="font-black text-slate-800 group-hover:text-amber-500 transition-colors text-lg truncate leading-tight">
-                {student.name}
-            </h4>
-            <div className={`inline-flex items-center px-2 py-0.5 rounded-lg border-2 text-[10px] font-black mt-1 uppercase tracking-wide ${cefr.color}`}>
-                Nivel {cefr.label}
-            </div>
+    <div onClick={onClick} className="group cursor-pointer bg-white rounded-3xl p-5 shadow-sm border-b-4 border-slate-200 hover:border-indigo-300 transition-all hover:-translate-y-1">
+      <div className="flex items-center gap-4 mb-4">
+        <img src={student.avatar_url} className="w-14 h-14 rounded-2xl bg-slate-100 object-cover border-2 border-white shadow-md" />
+        <div>
+            <h4 className="font-black text-slate-800 text-lg leading-tight group-hover:text-indigo-600">{student.name}</h4>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${getLevelColor(student.current_level_code || 'A1')}`}>
+                Nivel {student.current_level_code}
+            </span>
         </div>
       </div>
 
-      {/* Progreso General */}
-      <div className="space-y-4 mb-5">
-        {/* Tareas */}
-        <div>
-            <div className="flex justify-between text-xs mb-2 font-bold">
-                <span className="text-slate-400 uppercase tracking-wider">Misiones</span>
-                <span className="text-slate-800">{completed}/{total}</span>
-            </div>
-            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                <div 
-                    className="h-full bg-amber-400 rounded-full border-r-2 border-amber-200 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]" 
-                    style={{ width: `${percent}%` }}
-                />
-            </div>
-        </div>
-
-        {/* Materiales */}
-        <div>
-            <div className="flex justify-between text-xs mb-2 font-bold">
-                <span className="text-slate-400 uppercase tracking-wider">XP Ganada</span>
-                <span className="text-slate-800">{safeMaterials}/{totalMaterials}</span>
-            </div>
-            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                <div 
-                    className="h-full bg-sky-400 rounded-full border-r-2 border-sky-200 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]" 
-                    style={{ width: `${materialsViewedPercentage}%` }}
-                />
-            </div>
-        </div>
+      {/* BARRA DE PROGRESO */}
+      <div className="space-y-1 mb-4">
+          <div className="flex justify-between text-xs font-bold text-slate-500">
+              <span>Progreso</span>
+              <span>{percent}%</span>
+          </div>
+          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${percent}%` }}></div>
+          </div>
       </div>
 
-      {/* Footer Stats */}
-      <div className="pt-4 border-t-2 border-dashed border-slate-100 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-xl bg-slate-50 text-slate-400 group-hover:text-amber-500 group-hover:bg-amber-50 transition-colors">
-                <TrendingUp className="w-5 h-5" />
-            </div>
-            <div>
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Nota</p>
-                <p className="text-lg font-black text-slate-800 leading-none">
-                    {safeAverage.toFixed(1)}
-                </p>
-            </div>
-        </div>
-        
-        <div className="text-right group-hover:translate-x-[-4px] transition-transform">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Pendientes</p>
-            <p className="text-lg font-black text-rose-500 leading-none">
-                {pending}
-            </p>
-        </div>
+      {/* STATS */}
+      <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
+          <div className="text-center">
+              <p className="text-xl font-black text-indigo-600">{student.completed_tasks}</p>
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Hechas</p>
+          </div>
+          <div className="text-center border-l border-slate-100">
+              <p className="text-xl font-black text-rose-500">{pending}</p>
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Faltan</p>
+          </div>
+          <div className="text-center border-l border-slate-100">
+              <p className="text-xl font-black text-emerald-600">{(student.average_grade || 0).toFixed(1)}</p>
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Nota</p>
+          </div>
       </div>
     </div>
   );

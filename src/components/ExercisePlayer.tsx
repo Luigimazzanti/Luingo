@@ -93,35 +93,35 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
     onComplete(score, answersRef.current);
   };
 
-  // ✅ RENDER HUECOS MEJORADO (Visual)
+  // ✅ RENDER HUECOS MEJORADO (Visual con Flex-Wrap)
   const renderFillBlank = () => {
     // Separa por [...] o por 3+ guiones bajos
     const parts = currentQuestion.question_text.split(/\[...\]|_{3,}/);
     
     return (
-      <div className="mb-6">
-        <p className="text-lg md:text-xl text-slate-700 leading-relaxed flex flex-wrap items-center gap-2">
+      <div className="mb-6 bg-white p-6 rounded-3xl border-b-4 border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-baseline justify-center gap-2 text-xl md:text-2xl font-medium text-slate-700 leading-relaxed text-center">
           {parts.map((part, idx) => (
             <React.Fragment key={idx}>
-              <span>{part}</span>
+              <span className="inline-block">{part}</span>
               {idx < parts.length - 1 && (
                 <input
                   type="text"
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
                   disabled={feedbackState !== 'idle'}
-                  className="inline-block min-w-[120px] px-3 py-2 border-b-2 border-indigo-300 bg-indigo-50 rounded text-center font-bold text-indigo-700 focus:outline-none focus:border-indigo-500 disabled:opacity-60"
-                  placeholder="..."
+                  className="inline-block min-w-[100px] max-w-[200px] px-3 py-1 rounded-xl border-b-4 border-indigo-300 bg-indigo-50 text-center font-bold text-indigo-700 focus:outline-none focus:bg-white focus:border-indigo-500 disabled:opacity-60 transition-all"
+                  placeholder="?"
                 />
               )}
             </React.Fragment>
           ))}
-        </p>
+        </div>
       </div>
     );
   };
 
-  // ✅ RENDER ABIERTA (Visual)
+  // ✅ RENDER ABIERTA (Textarea Simple)
   const renderOpen = () => (
     <div className="mb-6">
       <textarea
@@ -129,7 +129,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
         onChange={(e) => setTextInput(e.target.value)}
         disabled={feedbackState !== 'idle'}
         rows={6}
-        className="w-full p-4 border-2 border-slate-200 rounded-2xl focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none resize-none text-slate-700 disabled:opacity-60"
+        className="w-full p-4 border-2 border-slate-200 rounded-2xl focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none resize-none text-slate-700 text-lg disabled:opacity-60"
         placeholder="Escribe tu respuesta aquí..."
       />
     </div>
