@@ -3,6 +3,7 @@ import { TeacherDashboard } from './components/TeacherDashboard';
 import { ClassSelection } from './components/ClassSelection';
 import { StudentPassport } from './components/StudentPassport';
 import { TaskCorrector } from './components/TaskCorrector';
+import { WritingEditor } from './components/WritingEditor'; // ✅ NUEVO IMPORT
 import { CommentWall } from './components/CommentWall';
 import { MediaViewer } from './components/MediaViewer';
 import { NotificationBell } from './components/NotificationBell';
@@ -61,12 +62,16 @@ export default function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer'>('home'); 
+  const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer' | 'writing'>('home'); // ✅ Añadida vista 'writing'
   
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [activeExercise, setActiveExercise] = useState<Exercise | null>(null);
   const [activePDFTask, setActivePDFTask] = useState<Task | null>(null); 
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  
+  // ✅ NUEVOS ESTADOS PARA WRITING
+  const [activeWritingTask, setActiveWritingTask] = useState<Task | null>(null);
+  const [activeWritingSubmission, setActiveWritingSubmission] = useState<Submission | null>(null);
   
   const [showTaskBuilder, setShowTaskBuilder] = useState(false); 
   const [taskBuilderMode, setTaskBuilderMode] = useState<'create' | 'edit'>('create');
@@ -84,6 +89,40 @@ export default function App() {
   const [realSubmissions, setRealSubmissions] = useState<Submission[]>([]);
   
   const [usernameInput, setUsernameInput] = useState("");
+
+  // ========== FUNCIÓN HELPER: RECARGAR ENTREGAS SIN PÉRDIDA DE ESTADO ==========
+  const loadSubmissions = async () => {
+    try {
+      console.log('🔄 Recargando submissions...');
+      const updatedSubs = await getMoodleSubmissions();
+      
+      if (currentUser?.role === 'teacher') {
+        // Profesor ve todas las entregas
+        setRealSubmissions(updatedSubs);
+        console.log('✅ Submissions del profesor actualizadas:', updatedSubs.length);
+      } else if (currentUser) {
+        // Estudiante solo ve las suyas
+        const mySubs = updatedSubs.filter((s: any) => 
+          String(s.student_id) === String(currentUser.id) || 
+          s.student_name === currentUser.name
+        );
+        setRealSubmissions(mySubs);
+        console.log('✅ Submissions del estudiante actualizadas:', mySubs.length);
+        
+        // Actualizar XP y nivel del estudiante
+        const xp = mySubs.length * 15;
+        const level = calculateLevelFromXP(xp);
+        setCurrentUser({
+          ...currentUser,
+          xp_points: xp,
+          level: level
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error al recargar submissions:', error);
+      throw error; // Re-lanzar para que el componente lo maneje
+    }
+  };
 
   // ========== INICIALIZACIÓN MOODLE ==========
   const initMoodle = async () => {
@@ -542,6 +581,8 @@ export default function App() {
                       setSelectedStudentId(null);
                       setShowTaskBuilder(true);
                     }}
+                    isTeacher={true} // ✅ MODO PROFESOR: Habilita edición de calificaciones
+                    onRefresh={loadSubmissions} // ✅ REFRESCO SIN PÉRDIDA DE ESTADO
                   />
                 )}
               </SheetContent>
@@ -557,14 +598,101 @@ export default function App() {
             submissions={realSubmissions}
             onLogout={handleLogout}
             onSelectTask={(task) => {
-              const exercise: Exercise = {
-                title: task.title,
-                level: task.level_tag || 'A1',
-                banana_reward_total: 100,
-                questions: task.content_data.questions || []
-              };
-              setActiveExercise(exercise);
-              setView('exercise');
+              // ✅ DETECTAR TIPO DE TAREA: Writing vs Quiz
+              if (task.content_data?.type === 'writing') {
+                // ✅ TAREA TIPO WRITING
+                console.log('📝 Abriendo tarea de redacción:', task.title);
+                setActiveWritingTask(task);
+                
+                // ✅ Buscar borrador o submission existente
+                const existing = realSubmissions.find(s => 
+                  s.task_id === task.id && 
+                  (String(s.student_id) === String(currentUser.id) || s.student_name === currentUser.name)
+                );
+                
+                // ✅ Si existe, recuperar el texto del borrador/submission
+                // El texto se guarda en text_content
+                const draftText = existing?.text_content || '';
+                const draftStatus = existing?.status || 'assigned';
+                
+                console.log('📄 Borrador encontrado:', { draftText, draftStatus, existing });
+                
+                setActiveWritingSubmission(existing || null);
+                setView('writing');
+              } else {
+                // ✅ TAREA TIPO QUIZ (EXISTENTE)
+                const exercise: Exercise = {
+                  title: task.title,
+                  level: task.level_tag || 'A1',
+                  banana_reward_total: 100,
+                  questions: task.content_data.questions || []
+                };
+                setActiveExercise(exercise);
+                setView('exercise');
+              }
+            }}
+          />
+        )}
+
+        {/* ========== ✅ WRITING EDITOR (ACTUALIZADO CON BORRADORES) ========== */}
+        {view === 'writing' && activeWritingTask && currentUser && (
+          <WritingEditor
+            task={activeWritingTask}
+            initialText={activeWritingSubmission?.text_content || ''} // ✅ RECUPERAR TEXTO DEL BORRADOR
+            onBack={() => {
+              setActiveWritingTask(null);
+              setActiveWritingSubmission(null);
+              setView('dashboard');
+            }}
+            onSaveDraft={async (text) => {
+              // ✅ GUARDAR BORRADOR (status: 'draft')
+              console.log('💾 Guardando borrador de redacción...');
+              const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+              
+              await submitTaskResult(
+                activeWritingTask.id,
+                activeWritingTask.title,
+                currentUser.id,
+                currentUser.name,
+                0, // Score 0 para borradores
+                10,
+                [], // No hay answers en writing
+                {
+                  text_content: text, // ✅ TEXTO DE LA REDACCIÓN
+                  word_count: wordCount,
+                  status: 'draft' // ✅ ESTADO BORRADOR (NO COMPLETADO)
+                }
+              );
+              
+              // ✅ Recargar submissions para actualizar el borrador
+              await loadSubmissions();
+              console.log('✅ Borrador guardado correctamente');
+            }}
+            onSubmit={async (text) => {
+              // ✅ ENVÍO FINAL (status: 'submitted')
+              console.log('📤 Enviando redacción final...');
+              const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+              
+              await submitTaskResult(
+                activeWritingTask.id,
+                activeWritingTask.title,
+                currentUser.id,
+                currentUser.name,
+                0, // Score 0, esperando corrección del profesor
+                10,
+                [],
+                {
+                  text_content: text,
+                  word_count: wordCount,
+                  status: 'submitted' // ✅ ESTADO ENVIADO (COMPLETADO)
+                }
+              );
+              
+              // ✅ Recargar submissions y volver al dashboard
+              await loadSubmissions();
+              setActiveWritingTask(null);
+              setActiveWritingSubmission(null);
+              setView('dashboard');
             }}
           />
         )}

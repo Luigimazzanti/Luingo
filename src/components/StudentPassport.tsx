@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student, Submission, Task } from '../types';
 import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle, Trash2, BookOpen } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 import { LUINGO_LEVELS } from '../lib/mockData';
 import { cn } from '../lib/utils';
-import { deleteMoodlePost, getMoodleSubmissions } from '../lib/moodle';
+import { deleteMoodlePost, gradeSubmission } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 
 interface StudentPassportProps {
@@ -14,6 +16,8 @@ interface StudentPassportProps {
   submissions?: Submission[];
   onBack: () => void;
   onAssignTask: () => void;
+  isTeacher?: boolean; // ✅ NUEVA PROP: Habilita edición de calificaciones
+  onRefresh?: () => Promise<void>; // ✅ NUEVA PROP: Refresco sin reload
 }
 
 export const StudentPassport: React.FC<StudentPassportProps> = ({
@@ -21,33 +25,117 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
   tasks = [],
   submissions = [],
   onBack,
-  onAssignTask
+  onAssignTask,
+  isTeacher = false, // ✅ Default: false (modo estudiante)
+  onRefresh // ✅ RECIBIR FUNCIÓN DE REFRESCO
 }) => {
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  
+  // ✅ ESTADOS PARA EDICIÓN (MODO PROFESOR)
+  const [editingGrade, setEditingGrade] = useState('');
+  const [editingFeedback, setEditingFeedback] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  // ✅ FUNCIÓN PARA BORRAR INTENTO
-  const handleDelete = async (postId: string, event: React.MouseEvent) => {
+  // ✅ PRECARGAR DATOS AL ABRIR MODAL
+  useEffect(() => {
+    if (selectedSubmission) {
+      setEditingGrade(selectedSubmission.grade?.toString() || '0');
+      setEditingFeedback(selectedSubmission.teacher_feedback || '');
+    }
+  }, [selectedSubmission]);
+
+  // ✅ FUNCIÓN PARA BORRAR INTENTO (UI HONESTA CON VERIFICACIÓN)
+  const handleDelete = async (sub: Submission, event: React.MouseEvent) => {
     event.stopPropagation(); // Evitar abrir el modal de detalles
     
-    if (!window.confirm("¿Estás seguro de que quieres borrar este intento? Esta acción no se puede deshacer.")) {
+    if (!window.confirm("¿Estás seguro de que quieres borrar este intento de Moodle? Esta acción no se puede deshacer.")) {
+      return;
+    }
+    
+    const toastId = toast.loading("Contactando con Moodle...");
+    
+    try {
+      // Limpiar IDs
+      const cleanPostId = sub.id || sub.postId;
+      const cleanDiscussionId = sub.discussionId || sub.discussion_id;
+      
+      console.log("🗑️ Intentando borrar:", { postId: cleanPostId, discussionId: cleanDiscussionId });
+      
+      // ✅ PASAR AMBOS IDs PARA QUE LA FUNCIÓN SEA MÁS INTELIGENTE
+      const success = await deleteMoodlePost(cleanPostId, cleanDiscussionId);
+      
+      toast.dismiss(toastId);
+      
+      if (success) {
+        // ✅ BORRADO EXITOSO EN MOODLE
+        toast.success("✅ Intento borrado correctamente de Moodle");
+        
+        // Recargar datos reales desde Moodle
+        if (onRefresh) {
+          await onRefresh();
+        } else {
+          window.location.reload();
+        }
+      } else {
+        // ❌ MOODLE RECHAZÓ EL BORRADO
+        toast.error("❌ Moodle rechazó el borrado. Verifica permisos o intenta borrar desde Moodle directamente.");
+        console.error("❌ deleteMoodlePost retornó false");
+      }
+    } catch (error) {
+      console.error("❌ Error al borrar intento:", error);
+      toast.dismiss(toastId);
+      toast.error("Error de conexión con Moodle");
+    }
+  };
+
+  // ✅ FUNCIÓN PARA GUARDAR CALIFICACIÓN Y FEEDBACK
+  const handleSaveGrade = async () => {
+    if (!selectedSubmission) return;
+    
+    const grade = parseFloat(editingGrade);
+    if (isNaN(grade) || grade < 0 || grade > 10) {
+      toast.error("Por favor, ingresa una calificación válida entre 0 y 10.");
       return;
     }
     
     try {
-      toast.loading("Borrando intento...");
-      const cleanId = postId.replace('post-', '');
-      await deleteMoodlePost(cleanId);
+      setIsSaving(true);
+      toast.loading("Guardando calificación...");
+      
+      // ✅ CRÍTICO: Reconstruir payload original para no perder metadatos
+      const safePayload = selectedSubmission.original_payload || {
+        taskId: selectedSubmission.task_id,
+        taskTitle: selectedSubmission.task_title,
+        studentId: selectedSubmission.student_id,
+        studentName: selectedSubmission.student_name,
+        score: selectedSubmission.score,
+        total: selectedSubmission.total,
+        answers: selectedSubmission.answers,
+        timestamp: selectedSubmission.submitted_at
+      };
+      
+      // Usar postId o limpiar el id
+      const targetId = selectedSubmission.postId || selectedSubmission.id.replace('post-', '');
+      
+      // ✅ PASAR EL PAYLOAD COMPLETO
+      await gradeSubmission(targetId, grade, editingFeedback, safePayload);
       
       toast.dismiss();
-      toast.success("Intento borrado correctamente");
+      toast.success("Calificación actualizada correctamente");
       
       // Forzar recarga de la página para actualizar datos
-      window.location.reload();
+      if (onRefresh) {
+        await onRefresh();
+      } else {
+        window.location.reload();
+      }
     } catch (error) {
-      console.error("Error al borrar intento:", error);
+      console.error("Error al guardar calificación:", error);
       toast.dismiss();
-      toast.error("Error al borrar el intento");
+      toast.error("Error al guardar la calificación");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -169,7 +257,7 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                                                 <div className="text-right px-2 flex flex-col items-end gap-1">
                                                     <span className="text-xs font-black text-slate-500">{sub.score}/{sub.total}</span>
                                                     <button 
-                                                        onClick={(e) => handleDelete(sub.id, e)} 
+                                                        onClick={(e) => handleDelete(sub, e)} 
                                                         className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
                                                         title="Borrar este intento"
                                                     >
@@ -285,6 +373,39 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
               </div>
             )}
           </div>
+          
+          {/* ✅ SECCIÓN DE EDICIÓN (MODO PROFESOR) */}
+          {isTeacher && (
+            <div className="p-6 bg-slate-50 border-t border-slate-100">
+              <div className="flex items-center gap-4">
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="10"
+                  value={editingGrade}
+                  onChange={(e) => setEditingGrade(e.target.value)}
+                  className="w-20"
+                  placeholder="Nota"
+                />
+                <Textarea
+                  value={editingFeedback}
+                  onChange={(e) => setEditingFeedback(e.target.value)}
+                  placeholder="Comentario del Profesor"
+                  className="flex-1"
+                />
+              </div>
+              <div className="mt-4 flex justify-end">
+                <Button
+                  onClick={handleSaveGrade}
+                  disabled={isSaving}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 rounded-lg text-xs shadow-sm"
+                >
+                  {isSaving ? "Guardando..." : "Guardar Calificación"}
+                </Button>
+              </div>
+            </div>
+          )}
           
           <div className="p-4 border-t border-slate-100 flex justify-end">
             <Button onClick={() => setSelectedSubmission(null)}>

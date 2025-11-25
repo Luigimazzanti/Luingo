@@ -80,8 +80,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     return group;
   });
 
+  // ✅ FILTRADO ESTRICTO: Solo mostrar grupos con al menos 1 intento sin calificar
+  const pendingGradingList = submissionList.filter((group: any) => {
+    // Un intento está pendiente si NO tiene status 'graded' Y NO tiene teacher_feedback
+    const hasPending = group.attempts.some((a: any) => 
+      a.status !== 'graded' && !a.teacher_feedback
+    );
+    return hasPending;
+  });
+
   // ========== LOG DE RESULTADO DE AGRUPACIÓN ==========
   console.log('📋 Entregas agrupadas:', submissionList.length, 'grupos');
+  console.log('⏳ Grupos pendientes de calificación:', pendingGradingList.length);
   console.log('🔍 Detalle de grupos:', submissionList);
 
   // ========== HANDLER CALIFICAR ==========
@@ -194,9 +204,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             >
               <GraduationCap className="w-4 h-4" />
               Calificar
-              {submissionList.length > 0 && (
+              {pendingGradingList.length > 0 && (
                 <span className="ml-2 bg-slate-100 text-slate-600 px-2 rounded-full text-xs font-bold">
-                  {submissionList.length}
+                  {pendingGradingList.length}
                 </span>
               )}
             </Button>
@@ -276,61 +286,50 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           {/* Vista Calificar */}
           {viewMode === 'grades' && (
             <div className="space-y-4">
-              {submissionList.length === 0 ? (
+              {pendingGradingList.length === 0 ? (
                 <div className="text-center py-20">
                   <GraduationCap className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                   <p className="text-slate-400 font-bold">No hay entregas pendientes</p>
                   <p className="text-slate-400 text-sm">Las entregas de los estudiantes aparecerán aquí</p>
                 </div>
               ) : (
-                submissionList.map((group: any, idx: number) => {
+                pendingGradingList.map((group: any, idx: number) => {
+                  // ✅ CONTADOR DE PENDIENTES: Cuántos intentos faltan calificar
+                  const pendingCount = group.attempts.filter((a: any) => 
+                    a.status !== 'graded' && !a.teacher_feedback
+                  ).length;
                   const lastAttempt = group.attempts[group.attempts.length - 1];
                   
                   return (
                     <div
                       key={idx}
-                      className="bg-white p-5 rounded-2xl border border-slate-200 flex justify-between items-center hover:shadow-md transition-all"
+                      className="bg-white p-5 rounded-2xl border border-slate-200 flex justify-between items-center hover:border-indigo-300 transition-all shadow-sm"
                     >
                       <div className="flex-1">
-                        <h3 className="font-bold text-slate-800 text-lg">
-                          {group.student_name}
-                        </h3>
-                        <p className="text-sm text-indigo-600 font-medium">
-                          {group.task_title}
-                        </p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {group.attempts.length} intento{group.attempts.length > 1 ? 's' : ''}
+                        <h3 className="font-bold text-slate-800">{group.student_name}</h3>
+                        <p className="text-sm text-indigo-600 font-medium">{group.task_title}</p>
+                        <div className="flex gap-3 mt-2 text-xs">
+                          <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold">
+                            Total Intentos: {group.attempts.length}
                           </span>
-                          <span>
-                            Último: {new Date(lastAttempt.submitted_at).toLocaleDateString()}
-                          </span>
+                          {pendingCount > 0 && (
+                            <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-md font-bold flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> Falta corregir: {pendingCount}
+                            </span>
+                          )}
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-4 shrink-0 ml-4">
-                        <div className="text-right">
-                          <p className="text-2xl font-black text-emerald-600">
-                            {lastAttempt.grade.toFixed(1)}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">
-                            Nota Actual
-                          </p>
-                        </div>
-                        
-                        <Button
-                          onClick={() => {
-                            setSelectedGroup(group);
-                            setGradeInput(lastAttempt.grade.toString());
-                            setFeedbackInput('');
-                          }}
-                          className="h-10 px-6 rounded-xl font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
-                        >
-                          <Eye className="w-4 h-4 mr-2" />
-                          Revisar
-                        </Button>
-                      </div>
+                      <Button
+                        onClick={() => {
+                          setSelectedGroup(group);
+                          setGradeInput('');
+                          setFeedbackInput('');
+                        }}
+                        className="h-10 px-6 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+                      >
+                        Calificar
+                      </Button>
                     </div>
                   );
                 })

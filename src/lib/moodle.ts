@@ -139,14 +139,56 @@ export const getMoodleTasks = async () => {
   });
 };
 
-// ========== BORRAR POST (INTENTO) ==========
-export const deleteMoodlePost = async (postId: string | number) => {
-  const cleanId = String(postId).replace('post-', '');
-  console.log("🗑️ Borrando intento (postId):", cleanId);
-  
-  return await callMoodle("mod_forum_delete_post", {
-    postid: cleanId
-  });
+// ========== BORRAR POST (INTENTO) - BORRADO INTELIGENTE ==========
+export const deleteMoodlePost = async (
+  postId: string | number, 
+  discussionId?: string | number
+): Promise<boolean> => {
+  const cleanPostId = String(postId).replace(/post-|sub-|discussion-/g, '');
+  console.log("🗑️ Intentando borrar Post:", cleanPostId);
+
+  try {
+    // 1️⃣ INTENTAR BORRAR COMO POST NORMAL
+    const resPost = await callMoodle("mod_forum_delete_post", { 
+      postid: cleanPostId 
+    });
+
+    console.log("📋 Respuesta de mod_forum_delete_post:", resPost);
+
+    // ✅ Verificar si el borrado fue exitoso
+    if (resPost && resPost.status === true) {
+      console.log("✅ Post borrado correctamente de Moodle");
+      return true;
+    }
+
+    // 2️⃣ FALLBACK: Si falla y tenemos discussionId, intentar borrar la discusión entera
+    // Esto pasa cuando intentas borrar el primer post de un hilo
+    // Moodle a veces exige borrar la discusión completa en ese caso
+    if (discussionId) {
+      const cleanDiscId = String(discussionId).replace(/\D/g, '');
+      console.log("⚠️ Falló borrar post. Intentando borrar Discusión completa:", cleanDiscId);
+
+      const resDisc = await callMoodle("mod_forum_delete_discussion", { 
+        discussionid: cleanDiscId 
+      });
+
+      console.log("📋 Respuesta de mod_forum_delete_discussion:", resDisc);
+
+      // Verificar éxito de eliminación de discusión
+      if (resDisc && (resDisc.status === true || resDisc.warnings?.length === 0)) {
+        console.log("✅ Discusión borrada correctamente de Moodle");
+        return true;
+      }
+    }
+
+    // ❌ Si llegamos aquí, ningún método funcionó
+    console.error("❌ No se pudo borrar en Moodle. Respuesta:", resPost);
+    return false;
+
+  } catch (error) {
+    console.error("❌ Error al intentar borrar:", error);
+    return false;
+  }
 };
 
 // ========== ✅ ENTREGAS OPTIMIZADAS (PARALELO) ==========
@@ -157,7 +199,8 @@ export const submitTaskResult = async (
   studentName: string,
   score: number,
   total: number,
-  answers: any[]
+  answers: any[],
+  extraData?: any // ✅ NUEVO: Datos adicionales (writing, status, etc.)
 ) => {
   const grade = total > 0 ? (score / total) * 10 : 0;
   const safeAnswers = Array.isArray(answers) ? answers : [];
@@ -179,7 +222,8 @@ export const submitTaskResult = async (
     total,
     grade,
     answers: safeAnswers,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    ...extraData // ✅ FUSIONAR DATOS ADICIONALES (text_content, word_count, status, etc.)
   };
   
   const jsonString = JSON.stringify(payload);
@@ -269,7 +313,10 @@ export const getMoodleSubmissions = async () => {
             answers: json.answers || [],
             teacher_feedback: json.teacher_feedback || null, // ✅ CRÍTICO: Extraer feedback del profesor
             submitted_at: dateStr,
-            status: 'submitted',
+            status: json.status || 'submitted', // ✅ NUEVO: Leer status (draft, submitted, graded)
+            text_content: json.text_content || null, // ✅ NUEVO: Texto de redacción
+            word_count: json.word_count || 0, // ✅ NUEVO: Contador de palabras
+            corrections: json.corrections || [], // ✅ NUEVO: Correcciones del profesor
             original_payload: json // ✅ CRÍTICO: Guardar payload completo para no perder datos al calificar
           };
         } catch (jsonError) {

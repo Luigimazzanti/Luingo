@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound } from 'lucide-react';
+import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
@@ -46,6 +46,21 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   );
   const [selectedLevel, setSelectedLevel] = useState(initialData?.content_data?.assignment_scope?.targetId || 'A1');
   const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts || 3);
+
+  // ✅ NUEVO: Tipo de tarea (Quiz vs Writing)
+  const [taskType, setTaskType] = useState<'quiz' | 'writing'>(
+    initialData?.content_data?.type === 'writing' ? 'writing' : 'quiz'
+  );
+
+  // ✅ NUEVO: Estados para Writing
+  const [writingPrompt, setWritingPrompt] = useState(initialData?.content_data?.writing_prompt || '');
+  const [minWords, setMinWords] = useState(initialData?.content_data?.min_words || 100);
+  const [maxWords, setMaxWords] = useState(initialData?.content_data?.max_words || 500);
+  const [resourceUrl, setResourceUrl] = useState(initialData?.content_data?.resource_url || '');
+  const [resourceType, setResourceType] = useState<'image' | 'video' | 'pdf' | 'none'>(
+    initialData?.content_data?.resource_type || 'none'
+  );
+  const [dueDate, setDueDate] = useState(initialData?.due_date || ''); // ✅ FECHA LÍMITE
 
   const [questions, setQuestions] = useState<QuestionDraft[]>(
     initialData?.content_data?.questions || [
@@ -153,12 +168,38 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       return;
     }
 
+    // ✅ VALIDAR SEGÚN EL TIPO DE TAREA
+    if (taskType === 'writing') {
+      if (!writingPrompt.trim()) {
+        toast.error("❌ La instrucción de redacción es obligatoria");
+        return;
+      }
+      if (minWords <= 0) {
+        toast.error("❌ El mínimo de palabras debe ser mayor a 0");
+        return;
+      }
+    }
+
     const taskData = {
       ...initialData,
       title,
       description,
-      category,
-      content_data: {
+      category: taskType === 'writing' ? 'writing' : category,
+      content_data: taskType === 'writing' ? {
+        // ✅ CONTENIDO PARA WRITING
+        type: 'writing',
+        writing_prompt: writingPrompt,
+        min_words: minWords,
+        max_words: maxWords,
+        resource_url: resourceUrl,
+        resource_type: resourceType,
+        assignment_scope: {
+          type: assignType,
+          targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
+          targetName: assignType === 'individual' ? studentName : undefined
+        }
+      } : {
+        // ✅ CONTENIDO PARA QUIZ
         type: 'form',
         questions,
         max_attempts: maxAttempts,
@@ -168,7 +209,8 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
           targetName: assignType === 'individual' ? studentName : undefined
         }
       },
-      color_tag: '#A8D8FF'
+      color_tag: '#A8D8FF',
+      due_date: dueDate // ✅ FECHA LÍMITE
     };
 
     onSaveTask(taskData);
@@ -408,6 +450,38 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
           
           {/* META INFO */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+            
+            {/* ✅ SELECTOR DE TIPO: QUIZ VS WRITING */}
+            <div>
+              <label className="text-xs font-black text-slate-600 uppercase mb-3 block">Tipo de Tarea</label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setTaskType('quiz')}
+                  className={cn(
+                    "flex-1 py-4 px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
+                    taskType === 'quiz'
+                      ? "bg-indigo-100 border-indigo-500 text-indigo-700 shadow-lg"
+                      : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
+                  )}
+                >
+                  <CheckSquare className="w-5 h-5" />
+                  <span>Cuestionario</span>
+                </button>
+                <button
+                  onClick={() => setTaskType('writing')}
+                  className={cn(
+                    "flex-1 py-4 px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
+                    taskType === 'writing'
+                      ? "bg-emerald-100 border-emerald-500 text-emerald-700 shadow-lg"
+                      : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300"
+                  )}
+                >
+                  <FileText className="w-5 h-5" />
+                  <span>Redacción</span>
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Título</label>
               <Input
@@ -427,85 +501,188 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
               />
             </div>
             <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Intentos Máx.</label>
-                <Input
-                  type="number"
-                  value={maxAttempts}
-                  onChange={e => setMaxAttempts(Number(e.target.value))}
-                  className="bg-slate-50 border-2 border-slate-200 h-10"
-                  min={1}
-                  max={10}
-                />
-              </div>
-              <Button
-                onClick={() => setShowAiModal(true)}
-                className="bg-gradient-to-r from-orange-500 to-pink-500 text-white font-black px-6 rounded-xl h-10 mt-6 shadow-lg hover:shadow-xl transition-all"
-              >
-                <Sparkles className="w-4 h-4 mr-2" />
-                Generar con IA
-              </Button>
+              {taskType === 'quiz' && (
+                <div className="flex-1">
+                  <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Intentos Máx.</label>
+                  <Input
+                    type="number"
+                    value={maxAttempts}
+                    onChange={e => setMaxAttempts(Number(e.target.value))}
+                    className="bg-slate-50 border-2 border-slate-200 h-10"
+                    min={1}
+                    max={10}
+                  />
+                </div>
+              )}
+              {taskType === 'quiz' && (
+                <Button
+                  onClick={() => setShowAiModal(true)}
+                  className="bg-gradient-to-r from-orange-500 to-pink-500 text-white font-black px-6 rounded-xl h-10 mt-6 shadow-lg hover:shadow-xl transition-all"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generar con IA
+                </Button>
+              )}
             </div>
           </div>
 
-          {/* PREGUNTAS */}
-          <div className="space-y-4">
-            {questions.map((q, idx) => (
-              <div key={q.id} className="bg-white p-6 rounded-2xl shadow-sm border-2 border-slate-200 space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 font-black flex items-center justify-center shrink-0">
-                      {idx + 1}
-                    </div>
-                    <select
-                      value={q.type}
-                      onChange={e => updateQuestion(q.id, 'type', e.target.value as QuestionType)}
-                      className="px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg font-bold text-sm"
-                    >
-                      <option value="choice">Opción Múltiple</option>
-                      <option value="true_false">Verdadero/Falso</option>
-                      <option value="fill_blank">Completar</option>
-                      <option value="open">Abierta</option>
-                    </select>
-                  </div>
-                  <button onClick={() => removeQuestion(q.id)} className="text-rose-400 hover:text-rose-600">
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </div>
+          {/* ✅ CONFIGURACIÓN ESPECÍFICA PARA WRITING */}
+          {taskType === 'writing' && (
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-6 rounded-2xl shadow-sm border-2 border-emerald-200 space-y-4">
+              <h3 className="font-black text-emerald-900 flex items-center gap-2 text-lg">
+                <FileText className="w-5 h-5" />
+                Configuración de Redacción
+              </h3>
 
+              <div>
+                <label className="text-xs font-black text-emerald-800 uppercase mb-2 block">
+                  Instrucción de Redacción *
+                </label>
+                <Textarea
+                  value={writingPrompt}
+                  onChange={e => setWritingPrompt(e.target.value)}
+                  className="bg-white border-2 border-emerald-300 h-24 resize-none"
+                  placeholder="Ej: Escribe una carta formal a tu profesor explicando por qué no pudiste asistir a clase..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Pregunta</label>
-                  <Textarea
-                    value={q.question_text}
-                    onChange={e => updateQuestion(q.id, 'question_text', e.target.value)}
-                    className="bg-slate-50 border-2 border-slate-200 h-16 resize-none"
-                    placeholder="Escribe tu pregunta aquí..."
+                  <label className="text-xs font-black text-emerald-800 uppercase mb-2 block">
+                    Mínimo de Palabras
+                  </label>
+                  <Input
+                    type="number"
+                    value={minWords}
+                    onChange={e => setMinWords(Number(e.target.value))}
+                    className="bg-white border-2 border-emerald-300 h-10"
+                    min={0}
                   />
                 </div>
-
-                {renderQuestionBody(q, idx)}
-
                 <div>
-                  <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Explicación</label>
-                  <Textarea
-                    value={q.explanation}
-                    onChange={e => updateQuestion(q.id, 'explanation', e.target.value)}
-                    className="bg-amber-50 border-2 border-amber-200 h-16 resize-none text-amber-900"
-                    placeholder="Explica por qué es correcta..."
+                  <label className="text-xs font-black text-emerald-800 uppercase mb-2 block">
+                    Máximo de Palabras
+                  </label>
+                  <Input
+                    type="number"
+                    value={maxWords}
+                    onChange={e => setMaxWords(Number(e.target.value))}
+                    className="bg-white border-2 border-emerald-300 h-10"
+                    min={minWords}
                   />
                 </div>
               </div>
-            ))}
 
-            <Button
-              onClick={addQuestion}
-              variant="outline"
-              className="w-full border-2 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 h-12 font-bold rounded-xl"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Añadir Pregunta
-            </Button>
-          </div>
+              <div>
+                <label className="text-xs font-black text-emerald-800 uppercase mb-2 block">
+                  Recurso Multimedia (Opcional)
+                </label>
+                <div className="space-y-3">
+                  <select
+                    value={resourceType}
+                    onChange={e => setResourceType(e.target.value as any)}
+                    className="w-full h-10 px-3 bg-white border-2 border-emerald-300 rounded-lg font-bold text-sm"
+                  >
+                    <option value="none">Sin recurso</option>
+                    <option value="image">Imagen</option>
+                    <option value="video">Video (YouTube)</option>
+                    <option value="pdf">PDF</option>
+                  </select>
+
+                  {resourceType !== 'none' && (
+                    <div className="flex items-center gap-2">
+                      {resourceType === 'image' && <ImageIcon className="w-5 h-5 text-emerald-600" />}
+                      {resourceType === 'video' && <Video className="w-5 h-5 text-emerald-600" />}
+                      {resourceType === 'pdf' && <FileIcon className="w-5 h-5 text-emerald-600" />}
+                      <Input
+                        value={resourceUrl}
+                        onChange={e => setResourceUrl(e.target.value)}
+                        className="flex-1 bg-white border-2 border-emerald-300 h-10"
+                        placeholder={
+                          resourceType === 'image' ? 'URL de la imagen' :
+                          resourceType === 'video' ? 'URL de YouTube' :
+                          'URL del PDF'
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-emerald-800 uppercase mb-2 block">
+                  Fecha Límite (Opcional)
+                </label>
+                <Input
+                  type="date"
+                  value={dueDate}
+                  onChange={e => setDueDate(e.target.value)}
+                  className="bg-white border-2 border-emerald-300 h-10"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* PREGUNTAS (SOLO PARA QUIZ) */}
+          {taskType === 'quiz' && (
+            <div className="space-y-4">
+              {questions.map((q, idx) => (
+                <div key={q.id} className="bg-white p-6 rounded-2xl shadow-sm border-2 border-slate-200 space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 font-black flex items-center justify-center shrink-0">
+                        {idx + 1}
+                      </div>
+                      <select
+                        value={q.type}
+                        onChange={e => updateQuestion(q.id, 'type', e.target.value as QuestionType)}
+                        className="px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg font-bold text-sm"
+                      >
+                        <option value="choice">Opción Múltiple</option>
+                        <option value="true_false">Verdadero/Falso</option>
+                        <option value="fill_blank">Completar</option>
+                        <option value="open">Abierta</option>
+                      </select>
+                    </div>
+                    <button onClick={() => removeQuestion(q.id)} className="text-rose-400 hover:text-rose-600">
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Pregunta</label>
+                    <Textarea
+                      value={q.question_text}
+                      onChange={e => updateQuestion(q.id, 'question_text', e.target.value)}
+                      className="bg-slate-50 border-2 border-slate-200 h-16 resize-none"
+                      placeholder="Escribe tu pregunta aquí..."
+                    />
+                  </div>
+
+                  {renderQuestionBody(q, idx)}
+
+                  <div>
+                    <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Explicación</label>
+                    <Textarea
+                      value={q.explanation}
+                      onChange={e => updateQuestion(q.id, 'explanation', e.target.value)}
+                      className="bg-amber-50 border-2 border-amber-200 h-16 resize-none text-amber-900"
+                      placeholder="Explica por qué es correcta..."
+                    />
+                  </div>
+                </div>
+              ))}
+
+              <Button
+                onClick={addQuestion}
+                variant="outline"
+                className="w-full border-2 border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 h-12 font-bold rounded-xl"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Añadir Pregunta
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* ========== FOOTER ========== */}

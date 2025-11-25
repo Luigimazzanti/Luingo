@@ -1,5 +1,31 @@
 // --- CORE ARCHITECTURE: LIBRARY VS ASSIGNMENTS ---
 
+// ✅ TIPOS DE TAREA
+export type TaskType = 'quiz' | 'writing';
+export type TaskCategory = 'homework' | 'quiz' | 'project' | 'reading' | 'writing';
+
+// ✅ TIPOS DE RECURSOS MULTIMEDIA
+export type ResourceType = 'image' | 'video' | 'pdf' | 'none';
+
+// ✅ TIPOS DE CORRECCIÓN
+export type CorrectionType = 'grammar' | 'vocabulary' | 'spelling' | 'style' | 'coherence';
+
+// ✅ INTERFAZ DE CONTENIDO EXTENDIDA
+export interface ContentData {
+  type: 'form' | 'writing';
+  
+  // Campos para Quiz/Form
+  questions?: Question[];
+  
+  // Campos para Writing
+  writing_prompt?: string;
+  min_words?: number;
+  max_words?: number;
+  resource_url?: string;
+  resource_type?: ResourceType;
+  rubric?: string; // Rúbrica de evaluación
+}
+
 // 1. TABLE: TASKS_LIBRARY (La Biblioteca)
 // Definición pura de la tarea, sin datos de alumnos.
 export interface TaskTemplate {
@@ -7,9 +33,9 @@ export interface TaskTemplate {
   teacher_id: string;
   title: string;
   description: string;
-  content_data: any; // El JSON del ejercicio/formulario/PDF
+  content_data: ContentData; // ✅ AHORA TIPADO
   level_tag: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'ALL'; // Para sugerencias
-  category: 'homework' | 'quiz' | 'project' | 'reading';
+  category: TaskCategory; // ✅ ACTUALIZADO
   estimated_time?: number;
   rubric?: any;
   max_attempts?: number; // Límite de intentos (undefined = ilimitado)
@@ -24,7 +50,7 @@ export interface Assignment {
   task_title?: string; // Título de la tarea
   student_id: string; // FK -> Students
   student_name?: string; // Nombre del estudiante
-  status: 'assigned' | 'in_progress' | 'submitted' | 'graded';
+  status: 'assigned' | 'in_progress' | 'draft' | 'submitted' | 'graded'; // ✅ AÑADIDO 'draft'
   
   // ✅ SISTEMA MULTI-INTENTOS
   attempts?: number; // Número de intentos realizados
@@ -33,6 +59,8 @@ export interface Assignment {
   // Data del Alumno
   submission_data?: any; // Respuestas del alumno
   answers?: any[]; // Array de respuestas detalladas
+  text_content?: string; // ✅ NUEVO: El texto del alumno (para writing)
+  word_count?: number; // ✅ NUEVO: Contador de palabras
   submitted_at?: string;
   updated_at?: string; // Última actualización
   
@@ -43,6 +71,7 @@ export interface Assignment {
   feedback_text?: string;
   teacher_feedback?: string; // Feedback del profesor
   feedback_audio_url?: string;
+  corrections?: WritingCorrection[]; // ✅ NUEVO: Correcciones del profesor
   graded_at?: string; // ✅ Fecha de calificación
   
   // Metadatos de Moodle
@@ -104,6 +133,16 @@ export interface Correction {
   original: string;
   correction: string;
   type: 'grammar' | 'vocabulary' | 'spelling';
+}
+
+// ✅ INTERFAZ EXTENDIDA PARA CORRECCIONES DE WRITING
+export interface WritingCorrection {
+  type: CorrectionType;
+  start: number;
+  end: number;
+  original: string;
+  correction: string;
+  explanation?: string;
 }
 
 export interface Comment {
