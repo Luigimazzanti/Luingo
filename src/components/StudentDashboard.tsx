@@ -8,6 +8,7 @@ import { LayoutDashboard, BookOpen, Trophy, LogOut, Menu, Zap, Flame, Users, Che
 import { cn } from '../lib/utils';
 import { CommunityFeed } from './community/CommunityFeed';
 import { mockMaterials } from '../lib/mockData';
+import luingoLogo from 'figma:asset/5c3aee031df4e645d2ea41499714325beb9cd4f4.png';
 
 interface StudentDashboardProps {
   student: Student;
@@ -65,7 +66,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const NavContent = () => (
     <div className="flex flex-col h-full">
       <div className="h-16 flex items-center px-6 border-b border-slate-100 shrink-0">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0 text-white font-black text-lg">L</div>
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+          <img src={luingoLogo} alt="LuinGo" className="w-full h-full object-cover" />
+        </div>
         <span className="ml-3 font-bold text-xl tracking-tight text-slate-800">LuinGo</span>
       </div>
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
