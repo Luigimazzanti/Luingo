@@ -638,7 +638,7 @@ export default function App() {
         {view === 'writing' && activeWritingTask && currentUser && (
           <WritingEditor
             task={activeWritingTask}
-            initialText={activeWritingSubmission?.text_content || ''} // ✅ RECUPERAR TEXTO DEL BORRADOR
+            initialText={activeWritingSubmission?.textContent || activeWritingSubmission?.text_content || ''} // ✅ RECUPERAR TEXTO DEL BORRADOR
             onBack={() => {
               setActiveWritingTask(null);
               setActiveWritingSubmission(null);
@@ -647,7 +647,6 @@ export default function App() {
             onSaveDraft={async (text) => {
               // ✅ GUARDAR BORRADOR (status: 'draft')
               console.log('💾 Guardando borrador de redacción...');
-              const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
               
               await submitTaskResult(
                 activeWritingTask.id,
@@ -657,11 +656,9 @@ export default function App() {
                 0, // Score 0 para borradores
                 10,
                 [], // No hay answers en writing
-                {
-                  text_content: text, // ✅ TEXTO DE LA REDACCIÓN
-                  word_count: wordCount,
-                  status: 'draft' // ✅ ESTADO BORRADOR (NO COMPLETADO)
-                }
+                text, // ✅ textContent
+                'draft', // ✅ status
+                [] // ✅ corrections vacío
               );
               
               // ✅ Recargar submissions para actualizar el borrador
@@ -671,7 +668,6 @@ export default function App() {
             onSubmit={async (text) => {
               // ✅ ENVÍO FINAL (status: 'submitted')
               console.log('📤 Enviando redacción final...');
-              const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
               
               await submitTaskResult(
                 activeWritingTask.id,
@@ -681,11 +677,9 @@ export default function App() {
                 0, // Score 0, esperando corrección del profesor
                 10,
                 [],
-                {
-                  text_content: text,
-                  word_count: wordCount,
-                  status: 'submitted' // ✅ ESTADO ENVIADO (COMPLETADO)
-                }
+                text, // ✅ textContent
+                'submitted', // ✅ status
+                [] // ✅ corrections vacío
               );
               
               // ✅ Recargar submissions y volver al dashboard

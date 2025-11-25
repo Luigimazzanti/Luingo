@@ -6,7 +6,7 @@ import { cn } from '../lib/utils';
 
 interface TaskCardProps {
   task: Task;
-  status: 'assigned' | 'in_progress' | 'submitted' | 'graded' | 'completed';
+  status: 'assigned' | 'in_progress' | 'submitted' | 'graded' | 'completed' | 'draft';
   onClick: () => void;
   attemptsUsed?: number;
   bestGrade?: number;
@@ -19,13 +19,42 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   attemptsUsed = 0,
   bestGrade
 }) => {
+  const isWriting = task.content_data?.type === 'writing';
+  
   // ✅ LEER EL DATO REAL (Si no existe, 1 por defecto para seguridad)
   const maxAttempts = task.content_data?.max_attempts ?? 1;
 
-  // ✅ Lógica de Bloqueo: Si ya gastó los intentos, se bloquea.
-  const isLocked = attemptsUsed >= maxAttempts;
-  const hasActivity = attemptsUsed > 0;
-  const isCompleted = status === 'graded' || (status === 'submitted' && isLocked);
+  // ✅ Lógica diferenciada para Writing vs Quiz
+  let isLocked = false;
+  let hasActivity = attemptsUsed > 0;
+  let isCompleted = status === 'graded';
+  let buttonLabel = 'Comenzar';
+  let buttonVariant: 'default' | 'outline' | 'secondary' = 'default';
+
+  if (isWriting) {
+    // ✅ WRITING: No hay intentos, solo estados
+    if (status === 'draft') {
+      buttonLabel = 'Continuar Borrador';
+      buttonVariant = 'secondary';
+    } else if (status === 'submitted') {
+      buttonLabel = 'Esperando Corrección';
+      buttonVariant = 'outline';
+      isLocked = true;
+    } else if (status === 'graded') {
+      buttonLabel = 'Ver Corrección';
+      isCompleted = true;
+    }
+  } else {
+    // ✅ QUIZ: Lógica de intentos
+    isLocked = attemptsUsed >= maxAttempts;
+    isCompleted = status === 'graded' || (status === 'submitted' && isLocked);
+    
+    if (isCompleted) {
+      buttonLabel = 'Ver Resumen';
+    } else if (attemptsUsed > 0) {
+      buttonLabel = 'Reintentar';
+    }
+  }
 
   return (
     <div 
@@ -95,27 +124,32 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           isCompleted 
             ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200" 
             : isLocked 
-              ? "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200" 
-              : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+              ? "bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200" 
+              : buttonVariant === 'secondary'
+                ? "bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
+                : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
         )}
         disabled={false} // ✅ Siempre clickeable
       >
         {isCompleted ? (
-          "Ver Resultado"
-        ) : isLocked ? (
           <>
             <Eye className="w-4 h-4 mr-2" /> 
-            Ver Resumen
+            {buttonLabel}
           </>
-        ) : attemptsUsed > 0 ? (
+        ) : isLocked ? (
+          <>
+            <Clock className="w-4 h-4 mr-2" /> 
+            {buttonLabel}
+          </>
+        ) : attemptsUsed > 0 && !isWriting ? (
           <>
             <RotateCcw className="w-4 h-4 mr-2" /> 
-            Reintentar
+            {buttonLabel}
           </>
         ) : (
           <>
             <PlayCircle className="w-4 h-4 mr-2 fill-current" /> 
-            Comenzar
+            {buttonLabel}
           </>
         )}
       </Button>

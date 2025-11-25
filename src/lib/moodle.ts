@@ -10,34 +10,40 @@ interface MoodleParams {
   [key: string]: string | number | boolean;
 }
 
-// ========== PROXY CENTRALIZADO ==========
+// ========== ✅ PROXY CON SAFE PARSE (FIX CRASH) ==========
 const callMoodle = async (functionName: string, params: MoodleParams = {}) => {
   const proxyUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/moodle-proxy`;
   
   try {
     const response = await fetch(proxyUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${publicAnonKey}`
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Authorization': `Bearer ${publicAnonKey}` 
       },
-      body: JSON.stringify({
-        functionName,
-        params,
-        settings: { url: MOODLE_URL, token: MOODLE_TOKEN }
+      body: JSON.stringify({ 
+        functionName, 
+        params, 
+        settings: { url: MOODLE_URL, token: MOODLE_TOKEN } 
       })
     });
 
-    const data = await response.json();
+    // ✅ SAFE PARSE: Primero leer como texto, luego intentar parsear
+    const text = await response.text();
     
-    if (data.exception) {
-      console.error(`❌ Moodle Error (${functionName}):`, data.exception);
+    try {
+      const data = JSON.parse(text);
+      if (data.exception) { 
+        console.warn(`⚠️ Moodle Exception (${functionName}):`, data.message); 
+        return null; 
+      }
+      return data;
+    } catch (parseError) {
+      console.error(`❌ Error parseando JSON de Moodle (${functionName}):`, text.substring(0, 100));
       return null;
     }
-    
-    return data;
   } catch (error) {
-    console.error(`❌ Network Error (${functionName}):`, error);
+    console.error(`❌ Error de Red (${functionName}):`, error);
     return null;
   }
 };
@@ -112,7 +118,7 @@ export const getMoodleTasks = async () => {
   
   return data.discussions.map((disc: any) => {
     const match = disc.message.match(/\[LUINGO_DATA\](.*?)\[\/LUINGO_DATA\]/);
-    const contentData = match ? JSON.parse(match[1]) : { type: 'form', questions: [] };
+    const contentData = match ? JSON.parse(match[1]) : { type: 'quiz', questions: [] };
     
     // ✅ FECHA SEGURA (Fix Crash)
     let created = new Date();
@@ -127,6 +133,7 @@ export const getMoodleTasks = async () => {
     return {
       id: `discussion-${disc.discussion}`,
       postId: disc.id,
+      discussionId: disc.discussion,
       title: disc.subject,
       description: disc.message.split('[LUINGO_DATA]')[0].replace(/<[^>]*>?/gm, ''),
       content_data: contentData,
@@ -134,6 +141,7 @@ export const getMoodleTasks = async () => {
       status: 'published',
       level_tag: contentData.level || 'A1',
       color_tag: '#A8D8FF',
+      due_date: contentData.due_date || null, // ✅ FECHA LÍMITE PARA WRITING
       created_at: created.toISOString()
     };
   });
@@ -162,8 +170,6 @@ export const deleteMoodlePost = async (
     }
 
     // 2️⃣ FALLBACK: Si falla y tenemos discussionId, intentar borrar la discusión entera
-    // Esto pasa cuando intentas borrar el primer post de un hilo
-    // Moodle a veces exige borrar la discusión completa en ese caso
     if (discussionId) {
       const cleanDiscId = String(discussionId).replace(/\D/g, '');
       console.log("⚠️ Falló borrar post. Intentando borrar Discusión completa:", cleanDiscId);
@@ -174,14 +180,12 @@ export const deleteMoodlePost = async (
 
       console.log("📋 Respuesta de mod_forum_delete_discussion:", resDisc);
 
-      // Verificar éxito de eliminación de discusión
       if (resDisc && (resDisc.status === true || resDisc.warnings?.length === 0)) {
         console.log("✅ Discusión borrada correctamente de Moodle");
         return true;
       }
     }
 
-    // ❌ Si llegamos aquí, ningún método funcionó
     console.error("❌ No se pudo borrar en Moodle. Respuesta:", resPost);
     return false;
 
@@ -191,7 +195,7 @@ export const deleteMoodlePost = async (
   }
 };
 
-// ========== ✅ ENTREGAS OPTIMIZADAS (PARALELO) ==========
+// ========== ✅ ENTREGAS (CON SOPORTE WRITING) ==========
 export const submitTaskResult = async (
   taskId: string,
   taskTitle: string,
@@ -200,12 +204,14 @@ export const submitTaskResult = async (
   score: number,
   total: number,
   answers: any[],
-  extraData?: any // ✅ NUEVO: Datos adicionales (writing, status, etc.)
+  textContent?: string, // ✅ NUEVO: Texto de redacción
+  status: 'submitted' | 'draft' | 'graded' = 'submitted', // ✅ NUEVO: Estado
+  corrections?: any[] // ✅ NUEVO: Correcciones del profesor
 ) => {
   const grade = total > 0 ? (score / total) * 10 : 0;
   const safeAnswers = Array.isArray(answers) ? answers : [];
   
-  // ✅ 1. BUSCAR HILO EXISTENTE (Optimización: Solo discusiones, no posts completos)
+  // ✅ 1. BUSCAR HILO EXISTENTE
   const forumData = await callMoodle("mod_forum_get_forum_discussions", {
     forumid: SUBMISSIONS_FORUM_ID
   });
@@ -213,6 +219,7 @@ export const submitTaskResult = async (
   const targetSubject = `Entrega: ${taskTitle} - ${studentName}`;
   const existingDisc = forumData?.discussions?.find((d: any) => d.subject === targetSubject);
   
+  // ✅ PAYLOAD EXTENDIDO CON DATOS WRITING
   const payload = {
     taskId,
     taskTitle,
@@ -222,12 +229,28 @@ export const submitTaskResult = async (
     total,
     grade,
     answers: safeAnswers,
-    timestamp: new Date().toISOString(),
-    ...extraData // ✅ FUSIONAR DATOS ADICIONALES (text_content, word_count, status, etc.)
+    textContent, // ✅ Guardamos texto de redacción
+    status, // ✅ Guardamos estado (draft, submitted, graded)
+    corrections, // ✅ Guardamos correcciones del profesor
+    timestamp: new Date().toISOString()
   };
   
   const jsonString = JSON.stringify(payload);
-  const messageHtml = `<div class="luingo-result">✅ Nota: ${grade.toFixed(1)}/10</div><span style="display:none;">[LUINGO_DATA]${jsonString}[/LUINGO_DATA]</span>`;
+  
+  // ✅ MENSAJE VISUAL DIFERENCIADO
+  let displayHtml = '';
+  if (textContent) {
+    const wordCount = textContent.split(/\s+/).filter(w => w.length > 0).length;
+    const statusLabel = status === 'draft' ? '📝 Borrador' : status === 'submitted' ? '📤 Enviado' : '✅ Calificado';
+    displayHtml = `<div class="luingo-writing">
+      <strong>${statusLabel}</strong><br/>
+      Palabras: ${wordCount}
+    </div>`;
+  } else {
+    displayHtml = `<div class="luingo-result">✅ Nota: ${grade.toFixed(1)}/10</div>`;
+  }
+  
+  const messageHtml = `${displayHtml}<span style="display:none;">[LUINGO_DATA]${jsonString}[/LUINGO_DATA]</span>`;
 
   if (existingDisc) {
     // ✅ A) ACTUALIZAR POST PRINCIPAL + AÑADIR REPLY
@@ -241,9 +264,10 @@ export const submitTaskResult = async (
     });
     
     // Añadir reply como historial
+    const replySubject = status === 'draft' ? "Borrador Guardado" : status === 'submitted' ? "Entrega Final" : "Intento";
     return await callMoodle("mod_forum_add_discussion_post", {
       postid: existingDisc.id,
-      subject: "Intento",
+      subject: replySubject,
       message: messageHtml
     });
   } else {
@@ -258,8 +282,9 @@ export const submitTaskResult = async (
   }
 };
 
-// ========== ✅ CARGA PARALELA MASIVA (TURBO) ==========
+// ========== ✅ CARGA BATCH SAFE (FIX CRASH DE RED) ==========
 export const getMoodleSubmissions = async () => {
+  console.log("🔄 Cargando entregas con batching seguro...");
   console.time("⚡ getMoodleSubmissions");
   
   const data = await callMoodle("mod_forum_get_forum_discussions", {
@@ -271,69 +296,86 @@ export const getMoodleSubmissions = async () => {
     return [];
   }
 
-  console.log(`📦 Procesando ${data.discussions.length} hilos en PARALELO...`);
+  const discussions = data.discussions;
+  console.log(`📦 ${discussions.length} hilos encontrados. Procesando en BATCHES...`);
 
-  // ✅ PROMISE.ALL: TODAS LAS PETICIONES EN PARALELO
-  const promises = data.discussions.map(async (disc: any) => {
-    try {
-      const postsData = await callMoodle("mod_forum_get_discussion_posts", {
-        discussionid: disc.discussion
-      });
-      
-      if (!postsData || !postsData.posts) return [];
-      
-      return postsData.posts.map((post: any) => {
-        const match = post.message.match(/\[LUINGO_DATA\](.*?)\[\/LUINGO_DATA\]/);
-        if (!match) return null;
+  let allAttempts: any[] = [];
+  const BATCH_SIZE = 5; // ✅ PROCESAR SOLO 5 HILOS A LA VEZ
+
+  // ✅ PROCESAMIENTO EN LOTES
+  for (let i = 0; i < discussions.length; i += BATCH_SIZE) {
+    const batch = discussions.slice(i, i + BATCH_SIZE);
+    console.log(`🔄 Procesando lote ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(discussions.length / BATCH_SIZE)}...`);
+
+    const promises = batch.map(async (disc: any) => {
+      try {
+        const postsData = await callMoodle("mod_forum_get_discussion_posts", {
+          discussionid: disc.discussion
+        });
         
-        try {
-          const json = JSON.parse(match[1]);
+        if (!postsData || !postsData.posts) return [];
+        
+        return postsData.posts.map((post: any) => {
+          const match = post.message.match(/\[LUINGO_DATA\](.*?)\[\/LUINGO_DATA\]/);
+          if (!match) return null;
           
-          // ✅ FECHA SEGURA (Fix Crash)
-          let dateStr = new Date().toISOString();
           try {
-            if (post.created && !isNaN(post.created)) {
-              dateStr = new Date(post.created * 1000).toISOString();
+            const json = JSON.parse(match[1]);
+            
+            // ✅ FECHA SEGURA
+            let dateStr = new Date().toISOString();
+            try {
+              if (post.created && !isNaN(post.created)) {
+                dateStr = new Date(post.created * 1000).toISOString();
+              }
+            } catch (dateError) {
+              console.warn(`⚠️ Fecha inválida en post ${post.id}:`, dateError);
             }
-          } catch (dateError) {
-            console.warn(`⚠️ Fecha inválida en post ${post.id}:`, dateError);
+            
+            return {
+              id: `post-${post.id}`,
+              postId: post.id,
+              discussionId: disc.discussion,
+              task_id: json.taskId || 'unknown',
+              task_title: json.taskTitle || disc.subject.replace('Entrega: ', '').split(' - ')[0],
+              student_id: json.studentId || '',
+              student_name: json.studentName || disc.userfullname,
+              grade: json.grade || 0,
+              score: json.score || 0,
+              total: json.total || 0,
+              answers: json.answers || [],
+              teacher_feedback: json.teacher_feedback || null,
+              submitted_at: dateStr,
+              // ✅ CAMPOS WRITING (compatibilidad con ambos nombres)
+              status: json.status || 'submitted', // draft, submitted, graded
+              textContent: json.textContent || json.text_content || '', // ✅ Leer ambas versiones
+              text_content: json.textContent || json.text_content || '', // ✅ Retrocompatibilidad
+              word_count: json.word_count || 0,
+              corrections: json.corrections || [],
+              original_payload: json
+            };
+          } catch (jsonError) {
+            console.warn(`⚠️ JSON corrupto en post ${post.id}:`, jsonError);
+            return null;
           }
-          
-          return {
-            id: `post-${post.id}`,
-            postId: post.id,
-            discussionId: disc.discussion,
-            task_id: json.taskId || 'unknown',
-            task_title: json.taskTitle || disc.subject.replace('Entrega: ', '').split(' - ')[0],
-            student_id: json.studentId || '',
-            student_name: json.studentName || disc.userfullname,
-            grade: json.grade || 0,
-            score: json.score || 0,
-            total: json.total || 0,
-            answers: json.answers || [],
-            teacher_feedback: json.teacher_feedback || null, // ✅ CRÍTICO: Extraer feedback del profesor
-            submitted_at: dateStr,
-            status: json.status || 'submitted', // ✅ NUEVO: Leer status (draft, submitted, graded)
-            text_content: json.text_content || null, // ✅ NUEVO: Texto de redacción
-            word_count: json.word_count || 0, // ✅ NUEVO: Contador de palabras
-            corrections: json.corrections || [], // ✅ NUEVO: Correcciones del profesor
-            original_payload: json // ✅ CRÍTICO: Guardar payload completo para no perder datos al calificar
-          };
-        } catch (jsonError) {
-          console.warn(`⚠️ JSON corrupto en post ${post.id}:`, jsonError);
-          return null;
-        }
-      }).filter(Boolean); // ✅ Limpiar nulos
-      
-    } catch (threadError) {
-      console.warn(`⚠️ Error leyendo hilo ${disc.discussion}:`, threadError);
-      return [];
-    }
-  });
+        }).filter(Boolean);
+        
+      } catch (threadError) {
+        console.warn(`⚠️ Error leyendo hilo ${disc.discussion}:`, threadError);
+        return [];
+      }
+    });
 
-  // ✅ ESPERAR A QUE TODAS LAS PROMESAS SE RESUELVAN
-  const results = await Promise.all(promises);
-  const allAttempts = results.flat();
+    // ✅ ESPERAR A QUE TERMINE ESTE LOTE
+    const results = await Promise.all(promises);
+    results.forEach(res => allAttempts.push(...res));
+    
+    // ✅ PAUSA PARA RESPIRAR (evita saturación)
+    await new Promise(r => setTimeout(r, 200));
+  }
+  
+  // ✅ ORDENAR POR FECHA (más reciente primero)
+  allAttempts.sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
   
   console.log(`✅ Total de intentos cargados: ${allAttempts.length}`);
   console.timeEnd("⚡ getMoodleSubmissions");
@@ -346,13 +388,13 @@ export const gradeSubmission = async (
   postId: string | number,
   grade: number,
   feedback: string,
-  originalPayload: any // ✅ CRÍTICO: Recibir payload original para no sobrescribirlo
+  originalPayload: any // ✅ CRÍTICO: Recibir payload original
 ) => {
   const cleanId = String(postId).replace(/post-|sub-/g, '');
   
-  // ✅ FUSIONAR DATOS: Mantenemos metadatos originales (IDs, respuestas) + nueva calificación
+  // ✅ FUSIONAR DATOS: Mantener metadatos originales + nueva calificación
   const updatedPayload = {
-    ...originalPayload, // ✅ ESTO EVITA QUE DESAPAREZCA DE LOS FILTROS
+    ...originalPayload,
     grade: grade,
     teacher_feedback: feedback,
     graded_at: new Date().toISOString(),
@@ -361,7 +403,6 @@ export const gradeSubmission = async (
 
   const jsonString = JSON.stringify(updatedPayload);
 
-  // HTML visible para Moodle + JSON oculto para LuinGo
   const message = `<div class="luingo-result">
     <h3>✅ Calificado: ${grade.toFixed(1)} / 10</h3>
     <p><strong>Feedback del Profesor:</strong> ${feedback || 'Sin comentarios'}</p>
@@ -370,7 +411,7 @@ export const gradeSubmission = async (
   <br/>
   <span style="display:none;">[LUINGO_DATA]${jsonString}[/LUINGO_DATA]</span>`;
 
-  console.log(`✅ Calificando post ${cleanId} con datos fusionados (sin pérdida)`);
+  console.log(`✅ Calificando post ${cleanId} con datos fusionados`);
 
   return await callMoodle("mod_forum_update_discussion_post", {
     postid: cleanId,

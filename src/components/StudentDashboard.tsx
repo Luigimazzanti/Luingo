@@ -41,15 +41,42 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       ).length;
   };
 
-  const getTaskStatus = (taskId: string) => getAttemptsCount(taskId) > 0 ? 'submitted' : 'assigned';
+  // ✅ NUEVO: Obtener estado real de la tarea (draft, submitted, graded)
+  const getTaskStatus = (taskId: string) => {
+    // Buscar la submission más reciente de esta tarea
+    const sub = submissions
+      .filter(s => s.task_id === taskId && String(s.student_id) === String(student.id))
+      .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())[0];
+    
+    return sub ? (sub.status || 'submitted') : 'assigned';
+  };
 
+  // ✅ FILTRO ACTUALIZADO: Pendientes = assigned o draft
   const pendingTasks = tasks.filter(t => {
-    const attempts = getAttemptsCount(t.id);
-    const max = t.content_data?.max_attempts ?? 3; // Default 3 si no existe
-    return attempts < max;
+    const status = getTaskStatus(t.id);
+    
+    // Si está enviado o calificado, YA NO ES PENDIENTE
+    if (status === 'submitted' || status === 'graded') return false;
+    
+    // Si es draft, es pendiente (se puede continuar)
+    // Si assigned, es pendiente (no se ha empezado)
+    
+    // Para Quiz, chequear intentos
+    if (t.content_data?.type !== 'writing') {
+      const attempts = getAttemptsCount(t.id);
+      const max = t.content_data?.max_attempts ?? 3;
+      return attempts < max;
+    }
+    
+    // Para Writing, si es assigned o draft, es pendiente
+    return true;
   });
 
-  const completedTasks = tasks.filter(t => getAttemptsCount(t.id) > 0);
+  // ✅ COMPLETADAS: Solo las que están submitted o graded
+  const completedTasks = tasks.filter(t => {
+    const status = getTaskStatus(t.id);
+    return status === 'submitted' || status === 'graded';
+  });
 
   // Función para abrir el resumen de una tarea completada
   const openSummary = (task: Task) => {
