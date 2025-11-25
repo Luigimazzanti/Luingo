@@ -98,18 +98,15 @@ export default function App() {
         if (Array.isArray(moodleCourses)) {
           setCourses(moodleCourses);
         }
-
-        // ✅ Cargar tareas una sola vez - REEMPLAZAR, NO APPEND
+        
         const forumTasks = await getMoodleTasks();
         setTasks(forumTasks);
-        
-        console.log("✅ Moodle inicializado correctamente");
       } else {
-        setConnectionError("No se pudo conectar a Moodle.");
+        setConnectionError("No se pudo conectar a Moodle. Verifica la configuración.");
       }
     } catch (e) {
-      console.error("Error al conectar con Moodle:", e);
-      setConnectionError("Error crítico al inicializar Moodle.");
+      console.error("Error inicializando Moodle:", e);
+      setConnectionError("Error crítico al conectar con Moodle.");
     } finally {
       setLoading(false);
     }
@@ -130,7 +127,6 @@ export default function App() {
         const lowerName = username.toLowerCase();
         let role: 'teacher' | 'student' = 'student';
         
-        // Lógica de roles
         if (lowerName === 'luigi' || lowerName.includes('teacher')) {
           role = 'teacher';
         } else if (lowerName === 'admin') {
@@ -147,60 +143,61 @@ export default function App() {
           updated_at: new Date().toISOString(),
         };
 
-        // ✅ CARGAR DATOS REALES Y LIMPIOS - REEMPLAZAR, NO APPEND
-        const [latestTasks, allSubs] = await Promise.all([
-          getMoodleTasks(),
-          getMoodleSubmissions()
-        ]);
-        
-        console.log("📊 Datos cargados:", {
-          tareas: latestTasks.length,
-          submissions: allSubs.length
-        });
-        
-        setTasks(latestTasks); // ✅ Reemplazar completamente
-        
-        // ✅ Filtrar submissions según rol
-        if (role === 'teacher') {
-          // Profesor ve todas las submissions
-          setRealSubmissions(allSubs);
-        } else {
-          // Estudiante solo ve las suyas (match por ID o nombre)
-          const mySubs = allSubs.filter((s: any) => 
-            String(s.student_id) === String(moodleUser.id) || 
-            s.student_name === moodleUser.fullname
-          );
-          setRealSubmissions(mySubs);
+        toast.loading("Cargando datos del usuario...");
+
+        try {
+          const [latestTasks, allSubs] = await Promise.all([
+            getMoodleTasks(),
+            getMoodleSubmissions()
+          ]);
+
+          setTasks(latestTasks);
+
+          if (role === 'teacher') {
+            setRealSubmissions(allSubs);
+          } else {
+            // Estudiante solo ve las suyas (match por ID o nombre)
+            const mySubs = allSubs.filter((s: any) => 
+              String(s.student_id) === String(moodleUser.id) || 
+              s.student_name === moodleUser.fullname
+            );
+            setRealSubmissions(mySubs);
+            
+            console.log(`👨‍🎓 Submissions del estudiante "${moodleUser.fullname}":`, mySubs.length);
+            
+            // Calcular XP real basado en submissions
+            const xp = mySubs.length * 15;
+            const level = calculateLevelFromXP(xp);
+            userProfile.xp_points = xp;
+            userProfile.level = level;
+          }
           
-          console.log(`👨‍🎓 Submissions del estudiante "${moodleUser.fullname}":`, mySubs.length);
+          setCurrentUser(userProfile);
           
-          // Calcular XP real basado en submissions
-          const xp = mySubs.length * 15;
-          const level = calculateLevelFromXP(xp);
-          userProfile.xp_points = xp;
-          userProfile.level = level;
+          // ✅ Configurar estudiante por defecto si soy alumno
+          if (role === 'student') {
+            const studentProfile: Student = {
+              ...userProfile,
+              level: userProfile.level || 1,
+              current_level_code: 'A1',
+              completed_tasks: 0,
+              total_tasks: latestTasks.length,
+              average_grade: 0,
+              materials_viewed: [],
+              joined_at: new Date().toISOString()
+            } as Student;
+            
+            setStudents([studentProfile]);
+          }
+          
+          const streak = checkStreak();
+          toast.success(`¡Hola ${userProfile.name}! 🔥 Racha: ${streak} días`);
+        } catch (e) {
+          console.error("Error cargando datos extra:", e);
+          setCurrentUser(userProfile);
+          toast.dismiss();
+          toast.warning("Entraste con datos limitados");
         }
-        
-        setCurrentUser(userProfile);
-        
-        // ✅ Configurar estudiante por defecto si soy alumno
-        if (role === 'student') {
-          const studentProfile: Student = {
-            ...userProfile,
-            level: userProfile.level || 1,
-            current_level_code: 'A1',
-            completed_tasks: 0,
-            total_tasks: latestTasks.length,
-            average_grade: 0,
-            materials_viewed: [],
-            joined_at: new Date().toISOString()
-          } as Student;
-          
-          setStudents([studentProfile]);
-        }
-        
-        const streak = checkStreak();
-        toast.success(`¡Hola ${userProfile.name}! 🔥 Racha: ${streak} días`);
       } else {
         toast.error("Usuario no encontrado en Moodle");
       }
@@ -213,8 +210,9 @@ export default function App() {
   };
 
   // ========== GESTIÓN DE CLASES ==========
+  // ✅ FIX CRÍTICO: Siempre entrar al dashboard, incluso si getEnrolledUsers falla
   const handleSelectClass = async (courseId: string) => {
-    toast.loading("Cargando clase...");
+    toast.loading("Entrando al aula...");
     
     try {
       const enrolled = await getEnrolledUsers(Number(courseId));
@@ -259,265 +257,228 @@ export default function App() {
         });
 
         setStudents(mappedStudents);
-        setSelectedClassId(courseId);
-        setView('dashboard');
-        toast.dismiss();
-        toast.success("Clase cargada correctamente");
+      } else {
+        console.warn("⚠️ No se pudo cargar la lista de estudiantes (falta de permisos o error)");
       }
     } catch (error) {
-      console.error("Error al cargar clase:", error);
+      console.warn("⚠️ Error al cargar estudiantes (probablemente falta de permisos Moodle):", error);
+    } finally {
+      // ✅ PASE LO QUE PASE, ENTRAMOS AL DASHBOARD
+      setSelectedClassId(courseId);
+      setView('dashboard');
       toast.dismiss();
-      toast.error("Error al cargar clase");
+    }
+  };
+
+  const handleCreateClass = async (name: string) => {
+    const shortname = name.substring(0, 10).toLowerCase().replace(/\s/g, '') + Math.floor(Math.random() * 100);
+    toast.loading("Creando clase...");
+    
+    try {
+      await createCourse(name, shortname);
+      toast.success("Clase creada exitosamente");
+      const updatedCourses = await getCourses();
+      setCourses(updatedCourses);
+    } catch (error) {
+      console.error("Error al crear clase:", error);
+      toast.error("Error al crear la clase");
+    } finally {
+      toast.dismiss();
     }
   };
 
   // ========== GESTIÓN DE TAREAS ==========
-  const handleGenerateTask = () => {
-    setTaskToEdit(null);
-    setTaskBuilderMode('create');
-    setStartBuilderWithAI(true);
-    setShowTaskBuilder(true);
-  };
-
   const handleSaveNewTask = async (taskData: any) => {
     try {
       if (taskToEdit) {
-        // Editar tarea existente
-        await updateMoodleTask(
-          taskToEdit.postId || taskToEdit.id,
-          taskData.title,
-          taskData.description,
-          taskData.content_data
-        );
-        toast.success("Tarea actualizada correctamente");
+        await updateMoodleTask(taskToEdit.postId || taskToEdit.id, taskData.title, taskData.description, taskData.content_data);
+        toast.success("Tarea actualizada");
       } else {
-        // Crear nueva tarea
-        await createMoodleTask(
-          taskData.title,
-          taskData.description,
-          taskData.content_data
-        );
-        toast.success("Tarea creada correctamente");
+        await createMoodleTask(taskData.title, taskData.description, taskData.content_data);
+        toast.success("Tarea creada");
       }
-
+      
       setShowTaskBuilder(false);
       setTaskToEdit(null);
+      setTaskBuilderMode('create');
       setStartBuilderWithAI(false);
-
-      // ✅ RECARGAR TAREAS LIMPIAMENTE - REEMPLAZAR
-      const updated = await getMoodleTasks();
-      setTasks(updated);
       
-      console.log("✅ Tareas actualizadas:", updated.length);
+      const updatedTasks = await getMoodleTasks();
+      setTasks(updatedTasks);
     } catch (error) {
       console.error("Error al guardar tarea:", error);
-      toast.error("Error al guardar tarea");
+      toast.error("Error al guardar la tarea");
     }
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    if (!window.confirm("¿Seguro que quieres borrar esta tarea?")) return;
+    if (!window.confirm("¿Estás seguro de eliminar esta tarea?")) return;
     
     try {
       await deleteMoodleTask(taskId);
-      
-      // ✅ RECARGAR TAREAS - REEMPLAZAR
-      const updated = await getMoodleTasks();
-      setTasks(updated);
-      
-      toast.success("Tarea borrada");
+      const updatedTasks = await getMoodleTasks();
+      setTasks(updatedTasks);
+      toast.success("Tarea eliminada");
     } catch (error) {
-      console.error("Error al borrar tarea:", error);
-      toast.error("Error al borrar tarea");
+      console.error("Error al eliminar tarea:", error);
+      toast.error("Error al eliminar la tarea");
     }
   };
 
   const handleEditTask = (task: Task) => {
     setTaskToEdit(task);
     setTaskBuilderMode('edit');
-    setStartBuilderWithAI(false);
     setShowTaskBuilder(true);
   };
 
-  // ========== GESTIÓN DE SUBMISSIONS ==========
-  const loadSubmissions = async () => {
-    try {
-      const allSubs = await getMoodleSubmissions();
-      
-      if (currentUser?.role === 'teacher') {
-        setRealSubmissions(allSubs);
-      } else {
-        const mySubs = allSubs.filter((s: any) => 
-          s.student_name === currentUser?.name || 
-          String(s.student_id) === String(currentUser?.id)
-        );
-        setRealSubmissions(mySubs);
-      }
-      
-      console.log("✅ Submissions recargadas");
-    } catch (error) {
-      console.error("Error al cargar submissions:", error);
-    }
+  // ========== NAVEGACIÓN ==========
+  const handleGoHome = () => {
+    setView('home');
+    setSelectedClassId(null);
+    setSelectedStudentId(null);
   };
 
-  // ========== GESTIÓN DE EJERCICIOS ==========
-  const handleSelectTask = (task: Task) => {
-    if (task.content_data?.type === 'pdf') {
-      setActivePDFTask(task);
-      setView('pdf-viewer');
-    } else {
-      const exercise: Exercise = {
-        title: task.title,
-        level: task.level_tag || 'A1',
-        banana_reward_total: 100,
-        questions: task.content_data?.questions || []
-      };
-      setActiveExercise(exercise);
-      setView('exercise');
-    }
+  const handleLogout = async () => {
+    setCurrentUser(null);
+    setView('home');
+    setRealSubmissions([]);
+    setStudents([]);
+    setSelectedClassId(null);
   };
 
-  const handleExerciseComplete = async (score: number, answers: any[]) => {
-    toast.success("¡Tarea finalizada!");
-    
-    if (currentUser && activeExercise) {
-      try {
-        // Buscar ID de la tarea
-        const taskRef = tasks.find(t => t.title === activeExercise.title);
-        
-        if (taskRef) {
-          await submitTaskResult(
-            taskRef.id,
-            activeExercise.title,
-            currentUser.id,
-            currentUser.name,
-            score,
-            activeExercise.questions.length,
-            answers
-          );
-          
-          console.log("✅ Resultado enviado a Moodle");
-          
-          // ✅ RECARGA FORZADA DE SUBMISSIONS - REEMPLAZAR
-          await loadSubmissions();
-          
-          // Actualizar XP del usuario
-          const newSubs = await getMoodleSubmissions();
-          const mySubs = newSubs.filter((s: any) => 
-            s.student_name === currentUser.name || 
-            String(s.student_id) === String(currentUser.id)
-          );
-          
-          const newXP = mySubs.length * 15;
-          const newLevel = calculateLevelFromXP(newXP);
-          
-          setCurrentUser(prev => ({
-            ...prev!,
-            xp_points: newXP,
-            level: newLevel
-          }));
-          
-          toast.success(`+15 XP | Total: ${newXP} XP`);
-        }
-      } catch (error) {
-        console.error("Error al enviar resultado:", error);
-        toast.error("Error al guardar resultado");
-      }
-    }
-    
-    // ✅ VUELTA DIRECTA AL DASHBOARD (Sin pasar por 'correction')
-    setView('dashboard');
-    setActiveExercise(null);
-  };
-
-  const handleExerciseExit = () => {
-    // ✅ VUELTA DIRECTA AL DASHBOARD
-    setView('dashboard');
-    setActiveExercise(null);
-  };
-
-  // ========== GESTIÓN DE ESTUDIANTES ==========
   const handleSelectStudent = (id: string) => {
     setSelectedStudentId(id);
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setView('home');
-    setRealSubmissions([]);
-    setTasks([]);
-    setStudents([]);
-    toast.info("Sesión cerrada");
-  };
+  // ========== RENDERIZADO ==========
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-600 font-medium">Cargando LuinGo...</p>
+        </div>
+      </div>
+    );
+  }
 
-  // ========== CREAR NUEVA CLASE ==========
-  const handleCreateClass = async (courseName: string, shortName: string) => {
-    try {
-      const result = await createCourse(courseName, shortName);
-      if (result) {
-        toast.success("Clase creada correctamente");
-        const moodleCourses = await getCourses();
-        if (Array.isArray(moodleCourses)) {
-          setCourses(moodleCourses);
-        }
-      }
-    } catch (error) {
-      console.error("Error al crear clase:", error);
-      toast.error("Error al crear clase");
-    }
-  };
+  if (connectionError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-red-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl border-b-4 border-rose-300 max-w-md text-center">
+          <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">❌</span>
+          </div>
+          <h2 className="text-2xl font-black text-slate-800 mb-2">Error de Conexión</h2>
+          <p className="text-slate-600 mb-6">{connectionError}</p>
+          <Button onClick={initMoodle} className="w-full">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Reintentar
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
-  // ========== RENDER ==========
-  return (
-    <div className="h-screen w-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 overflow-hidden flex flex-col">
-      <Toaster position="top-right" richColors />
-
-      {/* ✅ NAVBAR SUPERIOR GLOBAL (Solo cuando hay usuario logueado) */}
-      {currentUser && view !== 'home' && (
-        <nav className="h-16 bg-white border-b border-slate-200 shadow-sm flex items-center justify-between px-4 md:px-6 shrink-0 z-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
-              <span className="text-white font-black text-xl">L</span>
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
+        <Toaster position="top-center" richColors />
+        <div className="bg-white p-8 rounded-3xl shadow-xl border-b-4 border-indigo-300 max-w-md w-full">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-4xl font-black text-white">L</span>
             </div>
-            <div>
-              <h1 className="font-black text-slate-800 text-lg leading-none">LuinGo</h1>
-              <p className="text-xs text-slate-500">{currentUser.role === 'teacher' ? 'Profesor' : 'Estudiante'}</p>
-            </div>
+            <h1 className="text-3xl font-black text-slate-800 mb-2">LuinGo</h1>
+            <p className="text-slate-500">Plataforma de Aprendizaje Gamificado</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Nombre del usuario */}
-            <div className="hidden sm:flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg">
-              <img 
-                src={currentUser.avatar_url} 
-                alt={currentUser.name} 
-                className="w-7 h-7 rounded-full"
-              />
-              <span className="text-sm font-bold text-slate-700">{currentUser.name}</span>
-            </div>
-
-            {/* ✅ BOTÓN DE SALIR VISIBLE CON TEXTO */}
+          <div className="space-y-4">
+            <Input
+              type="text"
+              placeholder="Ingresa tu usuario de Moodle"
+              value={usernameInput}
+              onChange={(e) => setUsernameInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && usernameInput && initializeUser(usernameInput)}
+              className="h-12 text-lg"
+            />
             <Button 
-              variant="ghost" 
-              onClick={handleLogout} 
-              className="text-slate-500 hover:text-rose-600 hover:bg-rose-50 font-bold gap-2 px-3 h-10"
+              onClick={() => usernameInput && initializeUser(usernameInput)}
+              disabled={!usernameInput}
+              className="w-full h-12 text-lg font-bold"
             >
-              <LogOut className="w-5 h-5" />
-              <span className="hidden md:inline">Salir</span>
+              <LogOut className="w-5 h-5 mr-2 rotate-180" />
+              Entrar
             </Button>
           </div>
-        </nav>
+
+          <div className="mt-6 pt-6 border-t border-slate-100">
+            <p className="text-xs text-slate-400 text-center">
+              Conectado a Moodle • Sistema de Gamificación Activo 🎮
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F0F4F8]">
+      <Toaster position="top-center" richColors />
+      
+      {/* ========== HEADER GLOBAL (Solo en Dashboard) ========== */}
+      {view === 'dashboard' && (
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleGoHome}
+                className="text-slate-400 hover:text-indigo-600"
+              >
+                <Home className="w-5 h-5" />
+              </Button>
+              <div>
+                <h1 className="text-lg font-black text-slate-800">LuinGo</h1>
+                <p className="text-xs text-slate-500">
+                  {currentUser.role === 'teacher' ? 'Panel del Profesor' : 'Panel del Estudiante'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right mr-2">
+                <p className="text-sm font-bold text-slate-700">{currentUser.name}</p>
+                <p className="text-xs text-slate-500">{currentUser.role === 'teacher' ? 'Profesor' : 'Estudiante'}</p>
+              </div>
+              <img 
+                src={currentUser.avatar_url} 
+                alt={currentUser.name}
+                className="w-10 h-10 rounded-full border-2 border-indigo-200"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-slate-400 hover:text-rose-500"
+              >
+                <LogOut className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+        </header>
       )}
 
-      {/* CONTENIDO PRINCIPAL */}
-      <div className="flex-1 overflow-hidden">
-        {/* TASK BUILDER MODAL */}
+      <main>
+        {/* ========== TASK BUILDER MODAL ========== */}
         {showTaskBuilder && (
           <TaskBuilder 
             onSaveTask={handleSaveNewTask}
             onCancel={() => {
               setShowTaskBuilder(false);
               setTaskToEdit(null);
+              setTaskBuilderMode('create');
               setStartBuilderWithAI(false);
             }}
             initialData={taskToEdit || undefined}
@@ -525,122 +486,43 @@ export default function App() {
           />
         )}
 
-        {/* PANTALLA DE CARGA */}
-        {loading && (
-          <div className="h-full w-full flex items-center justify-center">
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
-              <p className="text-slate-600 font-medium">Conectando con Moodle...</p>
-            </div>
-          </div>
-        )}
-
-        {/* ERROR DE CONEXIÓN */}
-        {connectionError && !loading && (
-          <div className="h-full w-full flex items-center justify-center p-4">
-            <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border-2 border-red-200 text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-3xl">⚠️</span>
-              </div>
-              <h2 className="text-xl font-black text-slate-800 mb-2">Error de Conexión</h2>
-              <p className="text-slate-600 mb-6">{connectionError}</p>
-              <Button onClick={initMoodle} className="w-full">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Reintentar
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* PANTALLA DE LOGIN */}
-        {!loading && !connectionError && !currentUser && view === 'home' && (
-          <div className="h-full w-full flex items-center justify-center p-4">
-            <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border-4 border-indigo-100">
-              <div className="text-center mb-8">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                  <span className="text-white font-black text-3xl">L</span>
-                </div>
-                <h1 className="text-3xl font-black text-slate-800 mb-2">LuinGo</h1>
-                <p className="text-slate-500">Plataforma LMS con IA</p>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">
-                    Usuario de Moodle
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="Ingresa tu username"
-                    value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && usernameInput && initializeUser(usernameInput)}
-                    className="w-full h-12 text-lg"
-                  />
-                </div>
-
-                <Button
-                  onClick={() => usernameInput && initializeUser(usernameInput)}
-                  disabled={!usernameInput}
-                  className="w-full h-12 text-lg font-black"
-                >
-                  Entrar
-                </Button>
-
-                <div className="text-xs text-slate-400 text-center mt-4">
-                  <p>👨‍🏫 Profesor: <code className="bg-slate-100 px-2 py-1 rounded">luigi</code></p>
-                  <p>👨‍🎓 Estudiante: <code className="bg-slate-100 px-2 py-1 rounded">admin</code></p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* SELECCIÓN DE CLASE */}
-        {!loading && !connectionError && currentUser && view === 'home' && (
-          <ClassSelection
+        {/* ========== CLASS SELECTION ========== */}
+        {view === 'home' && (
+          <ClassSelection 
             courses={courses}
             onSelectClass={handleSelectClass}
             onCreateClass={handleCreateClass}
-            userName={currentUser.name}
-            userRole={currentUser.role}
           />
         )}
 
-        {/* DASHBOARD DEL PROFESOR */}
-        {view === 'dashboard' && currentUser?.role === 'teacher' && (
+        {/* ========== TEACHER DASHBOARD ========== */}
+        {view === 'dashboard' && currentUser.role === 'teacher' && (
           <>
             <TeacherDashboard
               classroom={classroom}
               students={students}
               tasks={tasks}
-              submissions={realSubmissions}
               onSelectStudent={handleSelectStudent}
-              onGenerateTask={handleGenerateTask}
+              onGenerateTask={() => {
+                setStartBuilderWithAI(true);
+                setShowTaskBuilder(true);
+              }}
               onDeleteTask={handleDeleteTask}
               onEditTask={handleEditTask}
-              onRefreshSubmissions={loadSubmissions}
-              onLogout={handleLogout}
             />
 
-            {/* SHEET: PERFIL DEL ESTUDIANTE */}
-            <Sheet 
-              open={!!selectedStudentId} 
-              onOpenChange={(open) => !open && setSelectedStudentId(null)}
-            >
-              <SheetContent side="right" className="w-full sm:max-w-2xl p-0 border-l-4 border-slate-200 bg-[#F0F4F8] overflow-y-auto">
-                <SheetHeader className="hidden">
-                  <SheetTitle>Perfil del Estudiante</SheetTitle>
-                  <SheetDescription>Detalles y asignación de tareas</SheetDescription>
-                </SheetHeader>
-
+            {/* ========== STUDENT PASSPORT SHEET ========== */}
+            <Sheet open={!!selectedStudentId} onOpenChange={(o) => !o && setSelectedStudentId(null)}>
+              <SheetContent side="right" className="w-full sm:max-w-2xl p-0 overflow-hidden border-l-4 border-slate-200">
+                <SheetTitle className="sr-only">Passport del Estudiante</SheetTitle>
+                <SheetDescription className="sr-only">Detalles y progreso del estudiante</SheetDescription>
                 {selectedStudentId && (
                   <StudentPassport 
-                    student={students.find(s => s.id === selectedStudentId) || students[0]}
+                    student={students.find(s => s.id === selectedStudentId)!}
                     tasks={tasks}
                     submissions={realSubmissions.filter(s => 
-                      s.student_name === (students.find(st => st.id === selectedStudentId)?.name) ||
-                      s.student_id === selectedStudentId
+                      String(s.student_id) === String(selectedStudentId) || 
+                      s.student_name === students.find(st => st.id === selectedStudentId)?.name
                     )}
                     onBack={() => setSelectedStudentId(null)}
                     onAssignTask={() => {
@@ -654,40 +536,75 @@ export default function App() {
           </>
         )}
 
-        {/* DASHBOARD DEL ESTUDIANTE */}
-        {view === 'dashboard' && currentUser?.role === 'student' && (
+        {/* ========== STUDENT DASHBOARD ========== */}
+        {view === 'dashboard' && currentUser.role === 'student' && (
           <StudentDashboard 
-            student={students[0]}
+            student={students[0] || { ...currentUser, level: 1, xp_points: 0 } as any}
             tasks={tasks}
             submissions={realSubmissions}
             onLogout={handleLogout}
-            onSelectTask={handleSelectTask}
+            onSelectTask={(task) => {
+              const exercise: Exercise = {
+                title: task.title,
+                level: task.level_tag || 'A1',
+                banana_reward_total: 100,
+                questions: task.content_data.questions || []
+              };
+              setActiveExercise(exercise);
+              setView('exercise');
+            }}
           />
         )}
 
-        {/* REPRODUCTOR DE EJERCICIOS */}
+        {/* ========== EXERCISE PLAYER ========== */}
         {view === 'exercise' && activeExercise && (
           <ExercisePlayer 
             exercise={activeExercise}
             studentName={currentUser?.name}
-            onExit={handleExerciseExit}
-            onComplete={handleExerciseComplete}
-          />
-        )}
-
-        {/* VISOR DE PDF */}
-        {view === 'pdf-viewer' && activePDFTask && (
-          <PDFAnnotator
-            pdfUrl={activePDFTask.content_data?.pdf_url || ''}
-            taskTitle={activePDFTask.title}
-            onBack={() => setView('dashboard')}
-            onSubmit={() => {
-              toast.success("PDF anotado guardado");
+            onExit={() => {
+              setActiveExercise(null);
+              setView('dashboard');
+            }}
+            onComplete={async (score, answers) => {
+              toast.success("¡Tarea finalizada!");
+              
+              if (currentUser) {
+                const taskRef = tasks.find(t => t.title === activeExercise.title);
+                
+                await submitTaskResult(
+                  taskRef?.id || 'unknown',
+                  activeExercise.title,
+                  currentUser.id,
+                  currentUser.name,
+                  score,
+                  activeExercise.questions.length,
+                  answers
+                );
+                
+                // Recargar submissions
+                const newSubs = await getMoodleSubmissions();
+                const mySubs = newSubs.filter((s: any) => 
+                  String(s.student_id) === String(currentUser.id) || 
+                  s.student_name === currentUser.name
+                );
+                setRealSubmissions(mySubs);
+                
+                // Actualizar XP
+                const xp = mySubs.length * 15;
+                const level = calculateLevelFromXP(xp);
+                setCurrentUser({
+                  ...currentUser,
+                  xp_points: xp,
+                  level: level
+                });
+              }
+              
+              setActiveExercise(null);
               setView('dashboard');
             }}
           />
         )}
-      </div>
+      </main>
     </div>
   );
 }
