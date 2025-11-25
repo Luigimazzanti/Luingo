@@ -42,18 +42,27 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [feedbackInput, setFeedbackInput] = useState('');
   const [isGrading, setIsGrading] = useState(false);
 
-  // ========== LÓGICA DE AGRUPACIÓN ROBUSTA ==========
+  // ========== LOG DE DEPURACIÓN ==========
+  console.log('👨‍🏫 TeacherDashboard recibió:', submissions?.length || 0, 'entregas');
+  console.log('📊 Datos de entregas:', submissions);
+
+  // ========== LÓGICA DE AGRUPACIÓN ROBUSTA CON FALLBACKS ==========
   const groupedSubmissions = submissions.reduce((acc: any, sub) => {
-    // Clave única: Tarea + Estudiante
-    const key = `${sub.task_id}-${sub.student_id}`;
+    // Clave robusta: Si falta ID, usamos nombre/título como fallback
+    const studentKey = sub.student_id || sub.student_name || 'unknown-student';
+    const taskKey = sub.task_id && sub.task_id !== 'unknown' 
+      ? sub.task_id 
+      : sub.task_title || 'unknown-task';
+    
+    const key = `${studentKey}-${taskKey}`;
     
     if (!acc[key]) {
       acc[key] = {
         key,
-        student_name: sub.student_name,
-        student_id: sub.student_id,
-        task_title: sub.task_title,
-        task_id: sub.task_id,
+        student_name: sub.student_name || 'Estudiante Desconocido',
+        student_id: sub.student_id || 'unknown',
+        task_title: sub.task_title || 'Tarea Sin Título',
+        task_id: sub.task_id || 'unknown',
         attempts: []
       };
     }
@@ -70,6 +79,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     );
     return group;
   });
+
+  // ========== LOG DE RESULTADO DE AGRUPACIÓN ==========
+  console.log('📋 Entregas agrupadas:', submissionList.length, 'grupos');
+  console.log('🔍 Detalle de grupos:', submissionList);
 
   // ========== HANDLER CALIFICAR ==========
   const handleGrade = async (attempt: any) => {
