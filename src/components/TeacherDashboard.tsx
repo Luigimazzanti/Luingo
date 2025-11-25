@@ -96,11 +96,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setIsGrading(true);
     
     try {
+      // ✅ CRÍTICO: Reconstruir payload original para no perder metadatos
+      const safePayload = attempt.original_payload || {
+        taskId: attempt.task_id,
+        taskTitle: attempt.task_title,
+        studentId: attempt.student_id,
+        studentName: attempt.student_name,
+        score: attempt.score,
+        total: attempt.total,
+        answers: attempt.answers,
+        timestamp: attempt.submitted_at
+      };
+
       // Usamos postId o id (limpiando 'post-')
       const targetId = attempt.postId || attempt.id.replace('post-', '');
-      await gradeSubmission(targetId, newGrade, feedbackInput);
+      
+      // ✅ CORRECCIÓN: Pasar el payload original para evitar pérdida de datos
+      await gradeSubmission(targetId, newGrade, feedbackInput, safePayload);
 
-      toast.success('✅ Calificación guardada');
+      toast.success('✅ Calificación guardada correctamente');
       
       if (onRefreshSubmissions) {
         onRefreshSubmissions();
@@ -110,7 +124,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       setGradeInput('');
       setFeedbackInput('');
     } catch (error) {
-      console.error('Error al calificar:', error);
+      console.error('❌ Error al calificar:', error);
       toast.error('Error al guardar la calificación');
     } finally {
       setIsGrading(false);

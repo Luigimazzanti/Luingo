@@ -268,7 +268,8 @@ export const getMoodleSubmissions = async () => {
             total: json.total || 0,
             answers: json.answers || [],
             submitted_at: dateStr,
-            status: 'submitted'
+            status: 'submitted',
+            original_payload: json // ✅ CRÍTICO: Guardar payload completo para no perder datos al calificar
           };
         } catch (jsonError) {
           console.warn(`⚠️ JSON corrupto en post ${post.id}:`, jsonError);
@@ -292,13 +293,40 @@ export const getMoodleSubmissions = async () => {
   return allAttempts;
 };
 
-// ========== CALIFICACIÓN MANUAL ==========
-export const gradeSubmission = async (postId: string | number, grade: number, feedback: string) => {
-  const cleanId = String(postId).replace('post-', '');
+// ========== CALIFICACIÓN MANUAL (SIN PÉRDIDA DE DATOS) ==========
+export const gradeSubmission = async (
+  postId: string | number,
+  grade: number,
+  feedback: string,
+  originalPayload: any // ✅ CRÍTICO: Recibir payload original para no sobrescribirlo
+) => {
+  const cleanId = String(postId).replace(/post-|sub-/g, '');
   
+  // ✅ FUSIONAR DATOS: Mantenemos metadatos originales (IDs, respuestas) + nueva calificación
+  const updatedPayload = {
+    ...originalPayload, // ✅ ESTO EVITA QUE DESAPAREZCA DE LOS FILTROS
+    grade: grade,
+    teacher_feedback: feedback,
+    graded_at: new Date().toISOString(),
+    status: 'graded'
+  };
+
+  const jsonString = JSON.stringify(updatedPayload);
+
+  // HTML visible para Moodle + JSON oculto para LuinGo
+  const message = `<div class="luingo-result">
+    <h3>✅ Calificado: ${grade.toFixed(1)} / 10</h3>
+    <p><strong>Feedback del Profesor:</strong> ${feedback || 'Sin comentarios'}</p>
+    <p style="font-size:0.8em; color:#666;">Alumno: ${originalPayload.studentName || 'N/A'}</p>
+  </div>
+  <br/>
+  <span style="display:none;">[LUINGO_DATA]${jsonString}[/LUINGO_DATA]</span>`;
+
+  console.log(`✅ Calificando post ${cleanId} con datos fusionados (sin pérdida)`);
+
   return await callMoodle("mod_forum_update_discussion_post", {
     postid: cleanId,
-    subject: "Calificado",
-    message: `<strong>Calificación: ${grade}/10</strong><br/>${feedback}`
+    subject: `Calificado: ${originalPayload.taskTitle || 'Tarea'} - ${originalPayload.studentName || 'Estudiante'}`,
+    message: message
   });
 };
