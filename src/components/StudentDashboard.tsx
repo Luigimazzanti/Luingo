@@ -163,6 +163,26 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </DialogHeader>
                 
                 <div className="p-6 space-y-6">
+                    {/* ✅ SECCIÓN DE FEEDBACK DEL PROFESOR */}
+                    {selectedSubmission?.teacher_feedback && selectedSubmission.teacher_feedback.length > 0 && (
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-2xl border-2 border-indigo-200 shadow-sm">
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center text-white shrink-0 text-lg">
+                                    👨‍🏫
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="font-black text-indigo-900 mb-2 text-sm uppercase tracking-wide">
+                                        Comentarios del Profesor
+                                    </h4>
+                                    <p className="text-slate-700 leading-relaxed font-medium">
+                                        "{selectedSubmission.teacher_feedback}"
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* LISTA DE RESPUESTAS */}
                     {selectedSubmission?.answers && selectedSubmission.answers.length > 0 ? (
                         selectedSubmission.answers.map((ans: any, i: number) => (
                             <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">

@@ -267,6 +267,7 @@ export const getMoodleSubmissions = async () => {
             score: json.score || 0,
             total: json.total || 0,
             answers: json.answers || [],
+            teacher_feedback: json.teacher_feedback || null, // ✅ CRÍTICO: Extraer feedback del profesor
             submitted_at: dateStr,
             status: 'submitted',
             original_payload: json // ✅ CRÍTICO: Guardar payload completo para no perder datos al calificar

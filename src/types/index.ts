@@ -43,7 +43,12 @@ export interface Assignment {
   feedback_text?: string;
   teacher_feedback?: string; // Feedback del profesor
   feedback_audio_url?: string;
-  graded_at?: string;
+  graded_at?: string; // ✅ Fecha de calificación
+  
+  // Metadatos de Moodle
+  original_payload?: any; // ✅ JSON completo para no perder datos al calificar
+  postId?: number; // ✅ ID del post en Moodle
+  discussionId?: number; // ✅ ID de la discusión en Moodle
   
   // Metadatos de visualización
   due_date?: string;
