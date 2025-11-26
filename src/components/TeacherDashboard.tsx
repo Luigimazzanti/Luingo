@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Task, Classroom, Submission } from '../types';
 import { StudentCard } from './StudentCard';
-import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, CheckCircle, Clock, Globe } from 'lucide-react';
+import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -10,7 +10,7 @@ import { Textarea } from './ui/textarea';
 import { gradeSubmission } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 import { TextAnnotator, Annotation } from './TextAnnotator';
-import { CommunityFeed } from './community/CommunityFeed';
+import { CommunityFeed } from './community/CommunityFeed'; // ✅ IMPORTAR COMUNIDAD
 
 interface TeacherDashboardProps {
   classroom: Classroom;
@@ -38,18 +38,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onLogout
 }) => {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
-  const [viewMode, setViewMode] = useState<'students' | 'tasks' | 'grades'>('students');
+  // ✅ AÑADIDO 'community' AL ESTADO
+  const [viewMode, setViewMode] = useState<'students' | 'tasks' | 'grades' | 'community'>('students');
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
   const [gradeInput, setGradeInput] = useState('');
   const [feedbackInput, setFeedbackInput] = useState('');
   const [isGrading, setIsGrading] = useState(false);
-  
+
   // ✅ ESTADO PARA ANOTACIONES DE TEXTO (WRITING)
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
-
-  // ========== LOG DE DEPURACIÓN ==========
-  console.log('👨‍🏫 TeacherDashboard recibió:', submissions?.length || 0, 'entregas');
-  console.log('📊 Datos de entregas:', submissions);
 
   // ========== LÓGICA DE AGRUPACIÓN ROBUSTA CON FALLBACKS ==========
   const groupedSubmissions = submissions.reduce((acc: any, sub) => {
@@ -72,12 +69,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       };
     }
     
-    // Añadir intento a la lista
     acc[key].attempts.push(sub);
     return acc;
   }, {});
 
-  // Convertir a array y ordenar intentos por fecha
   const submissionList = Object.values(groupedSubmissions).map((group: any) => {
     group.attempts.sort((a: any, b: any) => 
       new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime()
@@ -87,20 +82,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   // ✅ FILTRADO ESTRICTO: Solo mostrar grupos con al menos 1 intento sin calificar
   const pendingGradingList = submissionList.filter((group: any) => {
-    // Un intento está pendiente si NO tiene status 'graded' Y NO tiene teacher_feedback
     const hasPending = group.attempts.some((a: any) => 
       a.status !== 'graded' && !a.teacher_feedback
     );
     return hasPending;
   });
 
-  // ========== LOG DE RESULTADO DE AGRUPACIÓN ==========
-  console.log('📋 Entregas agrupadas:', submissionList.length, 'grupos');
-  console.log('⏳ Grupos pendientes de calificación:', pendingGradingList.length);
-  console.log('🔍 Detalle de grupos:', submissionList);
-
   // ========== HANDLER CALIFICAR ==========
-  const handleGrade = async (attempt: any, correctionsData?: any[]) => { // ✅ ACEPTA CORRECCIONES
+  const handleGrade = async (attempt: any, correctionsData?: any[]) => {
     const newGrade = parseFloat(gradeInput);
     
     if (isNaN(newGrade) || newGrade < 0 || newGrade > 10) {
@@ -111,7 +100,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setIsGrading(true);
     
     try {
-      // ✅ CRÍTICO: Reconstruir payload original para no perder metadatos
       const safePayload = attempt.original_payload || {
         taskId: attempt.task_id,
         taskTitle: attempt.task_title,
@@ -120,18 +108,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         score: attempt.score,
         total: attempt.total,
         answers: attempt.answers,
-        textContent: attempt.textContent, // ✅ Incluir texto
+        textContent: attempt.textContent,
         timestamp: attempt.submitted_at
       };
 
-      // Usamos postId o id (limpiando 'post-')
       const targetId = attempt.postId || attempt.id.replace('post-', '');
-      
-      // ✅ INCLUIR CORRECCIONES EN EL GUARDADO
-      // Si vienen del argumento (TaskCorrector), usarlas. Si no, mantener las existentes o vacías.
       const finalCorrections = correctionsData || attempt.corrections || [];
       
-      // ✅ CORRECCIÓN: Pasar el payload original para evitar pérdida de datos + CORRECCIONES
       await gradeSubmission(targetId, newGrade, feedbackInput, safePayload, finalCorrections);
 
       toast.success(`✅ Calificación guardada (${finalCorrections.length} correcciones)`);
@@ -153,13 +136,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] flex flex-col">
+      
       {/* Header */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl font-black text-slate-800">{classroom.name}</h1>
-              <p className="text-sm text-slate-500">{classroom.subject} • {classroom.level}</p>
+              <p className="text-sm text-slate-500">{classroom.description}</p>
             </div>
             
             <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -191,7 +175,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         <div className="max-w-7xl mx-auto">
           
           {/* Tabs Navegación */}
-          <div className="flex gap-2 mb-8 bg-white p-1 rounded-xl w-full sm:w-fit shadow-sm border border-slate-200">
+          <div className="flex flex-wrap gap-2 mb-8 bg-white p-1 rounded-xl w-full sm:w-fit shadow-sm border border-slate-200">
             <Button
               variant={viewMode === 'students' ? 'default' : 'ghost'}
               onClick={() => setViewMode('students')}
@@ -201,6 +185,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               <span className="hidden sm:inline">Estudiantes</span>
               <span className="sm:hidden">Estud.</span>
             </Button>
+            
             <Button
               variant={viewMode === 'tasks' ? 'default' : 'ghost'}
               onClick={() => setViewMode('tasks')}
@@ -210,6 +195,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               <span className="hidden sm:inline">Misiones</span>
               <span className="sm:hidden">Mis.</span>
             </Button>
+            
             <Button
               variant={viewMode === 'grades' ? 'default' : 'ghost'}
               onClick={() => setViewMode('grades')}
@@ -223,6 +209,17 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   {pendingGradingList.length}
                 </span>
               )}
+            </Button>
+            
+            {/* ✅ NUEVO BOTÓN COMUNIDAD */}
+            <Button
+              variant={viewMode === 'community' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('community')}
+              className="rounded-lg gap-2 h-10 flex-1 sm:flex-none"
+            >
+              <Globe className="w-4 h-4" />
+              <span className="hidden sm:inline">Comunidad</span>
+              <span className="sm:hidden">Com.</span>
             </Button>
           </div>
 
@@ -308,7 +305,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 </div>
               ) : (
                 pendingGradingList.map((group: any, idx: number) => {
-                  // ✅ CONTADOR DE PENDIENTES: Cuántos intentos faltan calificar
                   const pendingCount = group.attempts.filter((a: any) => 
                     a.status !== 'graded' && !a.teacher_feedback
                   ).length;
@@ -334,21 +330,34 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         </div>
                       </div>
                       
-                      <Button
-                        onClick={() => {
-                          setSelectedGroup(group);
-                          setGradeInput('');
-                          setFeedbackInput('');
-                        }}
-                        className="h-10 px-6 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
-                      >
-                        Calificar
-                      </Button>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-2xl font-black text-emerald-600">
+                            {lastAttempt.grade.toFixed(1)}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">Última Nota</p>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            setSelectedGroup(group);
+                            setGradeInput(lastAttempt.grade.toString());
+                            setFeedbackInput('');
+                          }}
+                          className="h-10 px-6 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+                        >
+                          Revisar
+                        </Button>
+                      </div>
                     </div>
                   );
                 })
               )}
             </div>
+          )}
+
+          {/* ✅ VISTA COMUNIDAD */}
+          {viewMode === 'community' && (
+            <CommunityFeed student={students[0] || null} isTeacher={true} />
           )}
         </div>
       </div>
@@ -404,54 +413,51 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     </div>
                   </div>
 
-                  {/* Respuestas del Estudiante */}
-                  <div className="space-y-3">
-                    {/* ✅ BLOQUE DE REDACCIÓN CON TEXT ANNOTATOR (Si existe textContent) */}
-                    {att.textContent && att.textContent.length > 0 ? (
-                      <div className="mb-6">
-                        <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-3">
-                          <Eye className="w-4 h-4" />
-                          Texto de Redacción con Correcciones
-                        </h4>
-                        <TextAnnotator 
-                          text={att.textContent}
-                          annotations={att.corrections || []}
-                          onAddAnnotation={(annotation) => {
-                            // Actualizar localmente (temporal hasta guardar)
-                            const updatedCorrections = [...(att.corrections || []), annotation];
-                            att.corrections = updatedCorrections;
-                            setAnnotations(updatedCorrections);
-                            toast.success('✅ Corrección añadida');
-                          }}
-                          onUpdateAnnotation={(annotation) => {
-                            // ✅ ACTUALIZAR CORRECCIÓN EXISTENTE
-                            const updatedCorrections = (att.corrections || []).map((a: Annotation) => 
-                              a.id === annotation.id ? annotation : a
-                            );
-                            att.corrections = updatedCorrections;
-                            setAnnotations(updatedCorrections);
-                            toast.success('✏️ Corrección actualizada');
-                          }}
-                          onRemoveAnnotation={(id) => {
-                            const updatedCorrections = (att.corrections || []).filter((a: Annotation) => a.id !== id);
-                            att.corrections = updatedCorrections;
-                            setAnnotations(updatedCorrections);
-                            toast.success('🗑️ Corrección eliminada');
-                          }}
-                          readOnly={false}
-                        />
-                        <div className="mt-3 flex items-center justify-between text-xs px-2">
-                          <span className="text-slate-500 font-bold">
-                            Palabras: {att.textContent.split(/\s+/).filter((w: string) => w.length > 0).length}
-                          </span>
-                          <span className="text-slate-500 font-bold">
-                            Caracteres: {att.textContent.length}
-                          </span>
-                        </div>
+                  {/* VISOR REDACCIÓN */}
+                  {att.textContent && att.textContent.length > 0 ? (
+                    <div className="mb-6">
+                      <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-3">
+                        <Eye className="w-4 h-4" />
+                        Texto de Redacción con Correcciones
+                      </h4>
+                      <TextAnnotator 
+                        text={att.textContent}
+                        annotations={att.corrections || []}
+                        onAddAnnotation={(annotation) => {
+                          const updatedCorrections = [...(att.corrections || []), annotation];
+                          att.corrections = updatedCorrections;
+                          setAnnotations(updatedCorrections);
+                          toast.success('✅ Corrección añadida');
+                        }}
+                        onUpdateAnnotation={(annotation) => {
+                          const updatedCorrections = (att.corrections || []).map((a: Annotation) => 
+                            a.id === annotation.id ? annotation : a
+                          );
+                          att.corrections = updatedCorrections;
+                          setAnnotations(updatedCorrections);
+                          toast.success('✏️ Corrección actualizada');
+                        }}
+                        onRemoveAnnotation={(id) => {
+                          const updatedCorrections = (att.corrections || []).filter((a: Annotation) => a.id !== id);
+                          att.corrections = updatedCorrections;
+                          setAnnotations(updatedCorrections);
+                          toast.success('🗑️ Corrección eliminada');
+                        }}
+                        readOnly={false}
+                      />
+                      <div className="mt-3 flex items-center justify-between text-xs px-2">
+                        <span className="text-slate-500 font-bold">
+                          Palabras: {att.textContent.split(/\s+/).filter((w: string) => w.length > 0).length}
+                        </span>
+                        <span className="text-slate-500 font-bold">
+                          Caracteres: {att.textContent.length}
+                        </span>
                       </div>
-                    ) : (
-                      <>
-                        {/* ✅ BLOQUE DE RESPUESTAS (Solo si NO hay textContent) */}
+                    </div>
+                  ) : (
+                    <>
+                      {/* VISOR PREGUNTAS */}
+                      <div className="space-y-3">
                         <h4 className="font-bold text-slate-700 flex items-center gap-2">
                           <CheckCircle className="w-4 h-4" />
                           Respuestas del Estudiante
@@ -513,9 +519,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             No hay respuestas detalladas para este intento
                           </div>
                         )}
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    </>
+                  )}
 
                   {/* Formulario de Evaluación */}
                   <div className="bg-indigo-50 p-6 rounded-2xl border-2 border-indigo-200 space-y-4">
@@ -579,7 +585,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
       {/* ========== DIALOG DE INVITACIÓN ========== */}
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md rounded-3xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black text-slate-800">
               Código de Invitación

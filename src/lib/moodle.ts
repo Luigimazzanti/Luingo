@@ -449,7 +449,7 @@ export const gradeSubmission = async (
 
 // ========== 📱 COMUNIDAD (SOCIAL FEED) ==========
 
-// ✅ LEER POSTS DE COMUNIDAD
+// ✅ LEER POSTS DE COMUNIDAD (Parseo de HTML mejorado)
 export const getCommunityPosts = async () => {
   console.log("📱 Cargando posts de comunidad...");
   
@@ -460,15 +460,12 @@ export const getCommunityPosts = async () => {
   if (!data || !data.discussions) return [];
   
   return data.discussions.map((disc: any) => {
-    // Extraer metadata del JSON oculto
+    // Intentar sacar metadata del span oculto
     const match = disc.message.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
-    const meta = match ? cleanMoodleJSON(match[1]) || {} : {};
+    const meta = match ? cleanMoodleJSON(match[1]) || { type: 'mixed', level: 'ALL' } : { type: 'mixed', level: 'ALL' };
     
-    // Limpiar mensaje visible (quitar el JSON oculto y HTML)
-    const cleanMessage = disc.message
-      .split('<span style="display:none;">')[0]
-      .replace(/<[^>]*>?/gm, '')
-      .trim();
+    // El contenido es el mensaje HTML limpio de la etiqueta de datos
+    const contentHtml = disc.message.split('<span style="display:none;">')[0];
     
     return {
       id: `comm-${disc.discussion}`,
@@ -477,10 +474,8 @@ export const getCommunityPosts = async () => {
       author: disc.userfullname || 'Profesor',
       avatar: disc.userpictureurl || '',
       title: disc.subject,
-      content: cleanMessage || meta.description || '',
-      type: meta.type || 'text', // video, image, article, link
-      url: meta.url || '',
-      target_levels: meta.target_levels || ['ALL'], // Array de niveles
+      content: contentHtml, // ✅ HTML COMPLETO (Texto + Iframes)
+      targetLevel: meta.level || 'ALL',
       likes: meta.likes || 0,
       date: new Date(disc.created * 1000).toISOString(),
       commentsCount: disc.numreplies || 0
@@ -488,32 +483,31 @@ export const getCommunityPosts = async () => {
   });
 };
 
-// ✅ CREAR POST (SOLO PROFE)
+// ✅ CREAR POST (Ahora acepta HTML directo)
 export const createCommunityPost = async (
   title: string, 
-  content: string, 
-  type: string, 
-  url: string, 
-  levels: string[]
+  htmlContent: string, 
+  level: string
 ) => {
-  const meta = { 
-    type, 
-    url, 
-    target_levels: levels, 
-    likes: 0,
-    description: content
-  };
+  console.log("📤 Publicando en comunidad:", title);
   
-  // Guardamos el contenido visible + metadata oculta
-  const message = `${content}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  // Metadata mínima para filtros
+  const meta = { level, type: 'mixed', likes: 0 };
+  const message = `${htmlContent}<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
   
-  console.log("📝 Creando post de comunidad:", { title, type, levels });
-  
-  return await callMoodle("mod_forum_add_discussion", {
+  const res = await callMoodle("mod_forum_add_discussion", {
     forumid: COMMUNITY_FORUM_ID,
     subject: title,
-    message
+    message: message
   });
+  
+  if (res && (res.discussionid || res.discussion)) {
+    console.log("✅ Publicado con ID:", res.discussionid || res.discussion);
+    return true;
+  }
+  
+  console.error("❌ Error al publicar:", res);
+  return false;
 };
 
 // ✅ COMENTAR EN POST (OPCIONAL - Para futuro)

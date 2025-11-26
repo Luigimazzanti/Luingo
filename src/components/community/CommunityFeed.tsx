@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SocialCard } from './SocialCard';
+import { ResourceComposer } from './ResourceComposer'; // ✅ NUEVO IMPORT
 import { Button } from '../ui/button';
 import { Filter, Globe, Lock, Plus, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -16,13 +17,6 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
 
   // Estado Crear Post (Solo Profe)
   const [showCreate, setShowCreate] = useState(false);
-  const [newPost, setNewPost] = useState({ 
-    title: '', 
-    content: '', 
-    type: 'text', 
-    url: '', 
-    level: 'ALL' 
-  });
 
   const loadPosts = async () => {
     setLoading(true);
@@ -39,37 +33,23 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
   const filteredPosts = posts.filter(p => {
     if (isTeacher || filterMode === 'all') return true;
     const userLevel = student?.current_level_code || 'A1';
-    return p.target_levels.includes(userLevel) || p.target_levels.includes('ALL');
+    return p.targetLevel === userLevel || p.targetLevel === 'ALL';
   });
 
-  const handleCreate = async () => {
-    if (!newPost.title) {
-      toast.error('El título es obligatorio');
-      return;
-    }
-    
+  // ✅ NUEVO HANDLER CON HTML
+  const handlePublish = async (title: string, html: string, level: string) => {
     toast.loading("Publicando...");
     
-    try {
-      await createCommunityPost(
-        newPost.title, 
-        newPost.content, 
-        newPost.type, 
-        newPost.url, 
-        [newPost.level]
-      );
-      
-      toast.dismiss();
+    const success = await createCommunityPost(title, html, level);
+    
+    toast.dismiss();
+    
+    if (success) {
       toast.success("¡Publicado!");
-      
       setShowCreate(false);
-      setNewPost({ title: '', content: '', type: 'text', url: '', level: 'ALL' });
-      
       loadPosts();
-    } catch (error) {
-      toast.dismiss();
-      toast.error("Error al publicar");
-      console.error(error);
+    } else {
+      toast.error("Error al conectar con Moodle");
     }
   };
 
@@ -153,85 +133,11 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
 
       {/* Modal Crear Post */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-lg rounded-3xl bg-[#F8FAFC]">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-slate-800">Crear Publicación</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4 p-2">
-            <div>
-              <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">Título *</label>
-              <Input 
-                placeholder="Título llamativo" 
-                value={newPost.title} 
-                onChange={e => setNewPost({...newPost, title: e.target.value})} 
-                className="font-bold text-lg border-slate-200 bg-white"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">Descripción</label>
-              <Textarea 
-                placeholder="Descripción del contenido..." 
-                value={newPost.content} 
-                onChange={e => setNewPost({...newPost, content: e.target.value})} 
-                className="bg-white border-slate-200 min-h-[100px]"
-                rows={4}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">Tipo</label>
-                <select 
-                  className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold bg-white" 
-                  value={newPost.type} 
-                  onChange={e => setNewPost({...newPost, type: e.target.value})}
-                >
-                  <option value="text">📝 Texto</option>
-                  <option value="video">🎥 Video (YouTube)</option>
-                  <option value="image">🖼️ Imagen</option>
-                  <option value="article">📄 Artículo</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">Nivel</label>
-                <select 
-                  className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold bg-white" 
-                  value={newPost.level} 
-                  onChange={e => setNewPost({...newPost, level: e.target.value})}
-                >
-                  <option value="ALL">🌍 Todos</option>
-                  <option value="A1">🌱 A1</option>
-                  <option value="A2">🌿 A2</option>
-                  <option value="B1">🌳 B1</option>
-                  <option value="B2">🌲 B2</option>
-                  <option value="C1">🏔️ C1</option>
-                  <option value="C2">⛰️ C2</option>
-                </select>
-              </div>
-            </div>
-
-            {(newPost.type !== 'text') && (
-              <div>
-                <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">URL del Recurso</label>
-                <Input 
-                  placeholder="https://youtube.com/watch?v=..." 
-                  value={newPost.url} 
-                  onChange={e => setNewPost({...newPost, url: e.target.value})} 
-                  className="bg-white border-slate-200"
-                />
-              </div>
-            )}
-
-            <Button 
-              onClick={handleCreate} 
-              className="w-full bg-indigo-600 hover:bg-indigo-700 font-bold h-12 rounded-xl text-base shadow-lg shadow-indigo-200"
-            >
-              ✨ Publicar
-            </Button>
-          </div>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 rounded-3xl overflow-hidden">
+          <ResourceComposer 
+            onPublish={handlePublish}
+            onCancel={() => setShowCreate(false)}
+          />
         </DialogContent>
       </Dialog>
 
