@@ -4,7 +4,8 @@ import { Button } from '../ui/button';
 import { Globe, Lock, Plus, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getCommunityPosts, createCommunityPost } from '../../lib/moodle';
-import { Dialog, DialogContent } from '../ui/dialog';
+// IMPORTANTE: Importamos los componentes de accesibilidad que faltaban
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { ResourceComposer } from './ResourceComposer';
 import { ArticleReader } from './ArticleReader';
 import { toast } from 'sonner@2.0.3';
@@ -50,7 +51,7 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-32">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
@@ -133,13 +134,22 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
         </div>
       )}
 
-      {/* Modal Crear Post */}
+      {/* Modal Crear Post - CORREGIDO */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 border-0 bg-transparent shadow-none overflow-hidden">
-          <ResourceComposer 
-            onPublish={handlePublish}
-            onCancel={() => setShowCreate(false)}
-          />
+        <DialogContent className="max-w-[95vw] w-full h-[90vh] p-0 border-0 bg-transparent shadow-none flex flex-col">
+          
+          {/* ✅ ESTAS LÍNEAS ARREGLAN EL ERROR ROJO */}
+          <DialogHeader className="sr-only">
+            <DialogTitle>Crear Nuevo Recurso</DialogTitle>
+            <DialogDescription>Editor de contenido para la comunidad</DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-200">
+            <ResourceComposer 
+              onPublish={handlePublish}
+              onCancel={() => setShowCreate(false)}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
