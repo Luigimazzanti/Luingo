@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Task, Classroom, Submission } from '../types';
 import { StudentCard } from './StudentCard';
-import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, CheckCircle, Clock } from 'lucide-react';
+import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, CheckCircle, Clock, Globe } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -10,6 +10,7 @@ import { Textarea } from './ui/textarea';
 import { gradeSubmission } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 import { TextAnnotator, Annotation } from './TextAnnotator';
+import { CommunityFeed } from './community/CommunityFeed';
 
 interface TeacherDashboardProps {
   classroom: Classroom;

@@ -1,113 +1,239 @@
-import React, { useState } from 'react';
-import { Material, Student } from '../../types';
+import React, { useState, useEffect } from 'react';
 import { SocialCard } from './SocialCard';
-import { ArticleReader } from './ArticleReader';
-import { Filter, Globe, Lock } from 'lucide-react';
+import { Button } from '../ui/button';
+import { Filter, Globe, Lock, Plus, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { getCommunityPosts, createCommunityPost } from '../../lib/moodle';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
+import { toast } from 'sonner@2.0.3';
 
-interface CommunityFeedProps {
-  materials: Material[];
-  student: Student;
-}
-
-export const CommunityFeed: React.FC<CommunityFeedProps> = ({ materials, student }) => {
+export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?: boolean }) => {
+  const [posts, setPosts] = useState<any[]>([]);
   const [filterMode, setFilterMode] = useState<'my_level' | 'all'>('my_level');
-  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // ✅ SAFE GUARDS: Si student es undefined, usamos un fallback para no romper la app
-  const safeLevel = student?.current_level_code || 'A1';
-
-  // --- SMART FILTERING LOGIC ---
-  const filteredMaterials = materials.filter(mat => {
-      if (filterMode === 'all') return true;
-      // Logic: Show if targeted to student's level code OR 'ALL'
-      return mat.target_levels.includes(safeLevel) || mat.target_levels.includes('ALL');
+  // Estado Crear Post (Solo Profe)
+  const [showCreate, setShowCreate] = useState(false);
+  const [newPost, setNewPost] = useState({ 
+    title: '', 
+    content: '', 
+    type: 'text', 
+    url: '', 
+    level: 'ALL' 
   });
 
-  const handleMaterialClick = (mat: Material) => {
-      if (mat.type === 'article') {
-          setSelectedMaterial(mat);
-      } else {
-          // Open external link/video logic
-          window.open(mat.url, '_blank');
-      }
+  const loadPosts = async () => {
+    setLoading(true);
+    const data = await getCommunityPosts();
+    setPosts(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { 
+    loadPosts(); 
+  }, []);
+
+  // Filtro
+  const filteredPosts = posts.filter(p => {
+    if (isTeacher || filterMode === 'all') return true;
+    const userLevel = student?.current_level_code || 'A1';
+    return p.target_levels.includes(userLevel) || p.target_levels.includes('ALL');
+  });
+
+  const handleCreate = async () => {
+    if (!newPost.title) {
+      toast.error('El título es obligatorio');
+      return;
+    }
+    
+    toast.loading("Publicando...");
+    
+    try {
+      await createCommunityPost(
+        newPost.title, 
+        newPost.content, 
+        newPost.type, 
+        newPost.url, 
+        [newPost.level]
+      );
+      
+      toast.dismiss();
+      toast.success("¡Publicado!");
+      
+      setShowCreate(false);
+      setNewPost({ title: '', content: '', type: 'text', url: '', level: 'ALL' });
+      
+      loadPosts();
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Error al publicar");
+      console.error(error);
+    }
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 animate-in fade-in duration-500">
+    <div className="space-y-8">
       
-      {/* --- HEADER & CONTROLS --- */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-          <div>
-              <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">
-                  Comunidad
-              </h1>
-              <p className="text-slate-500 font-medium">
-                  Descubre lo que está pasando en tu clase de español.
-              </p>
-          </div>
-
-          {/* Level Filter Switch */}
-          <div className="bg-slate-100 p-1 rounded-xl inline-flex self-start">
-              <button
-                onClick={() => setFilterMode('my_level')}
-                className={cn(
-                    "px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all",
-                    filterMode === 'my_level' 
-                        ? "bg-white text-indigo-600 shadow-sm" 
-                        : "text-slate-500 hover:text-slate-700"
-                )}
-              >
-                  <Lock className="w-4 h-4" />
-                  Mi Nivel ({safeLevel})
-              </button>
-              <button
-                onClick={() => setFilterMode('all')}
-                className={cn(
-                    "px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all",
-                    filterMode === 'all' 
-                        ? "bg-white text-indigo-600 shadow-sm" 
-                        : "text-slate-500 hover:text-slate-700"
-                )}
-              >
-                  <Globe className="w-4 h-4" />
-                  Explorar Todo
-              </button>
-          </div>
-      </div>
-
-      {/* --- FEED GRID --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredMaterials.map(material => (
-              <SocialCard 
-                key={material.id} 
-                material={material} 
-                studentLevel={safeLevel}
-                onClick={() => handleMaterialClick(material)}
-              />
-          ))}
-      </div>
-
-      {/* Empty State */}
-      {filteredMaterials.length === 0 && (
-          <div className="text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-              <p className="text-slate-400 font-bold">No hay posts para tu nivel aún.</p>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-1">Comunidad</h1>
+          <p className="text-slate-500 font-medium">Descubre y comparte cultura.</p>
+        </div>
+        
+        <div className="flex gap-3">
+          {/* Filtros Alumno */}
+          {!isTeacher && (
+            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm flex">
               <button 
-                onClick={() => setFilterMode('all')}
-                className="text-indigo-600 text-sm font-bold mt-2 hover:underline"
+                onClick={() => setFilterMode('my_level')} 
+                className={cn(
+                  "px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all", 
+                  filterMode === 'my_level' 
+                    ? "bg-slate-100 text-indigo-600" 
+                    : "text-slate-400 hover:text-slate-600"
+                )}
               >
-                  Ver posts de otros niveles
+                <Lock className="w-3 h-3" /> Mi Nivel
               </button>
-          </div>
+              <button 
+                onClick={() => setFilterMode('all')} 
+                className={cn(
+                  "px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all", 
+                  filterMode === 'all' 
+                    ? "bg-slate-100 text-indigo-600" 
+                    : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                <Globe className="w-3 h-3" /> Todo
+              </button>
+            </div>
+          )}
+          
+          {/* Botón Publicar (Solo Profe) */}
+          {isTeacher && (
+            <Button 
+              onClick={() => setShowCreate(true)} 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200"
+            >
+              <Plus className="w-5 h-5 mr-2"/> Nuevo Post
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Feed */}
+      {loading ? (
+        <div className="py-20 text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto"/>
+          <p className="text-slate-400 mt-4 font-medium">Cargando posts...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredPosts.map(post => (
+            <SocialCard 
+              key={post.id} 
+              post={post} 
+              onClick={() => {
+                if (post.url && post.url.length > 0) {
+                  window.open(post.url, '_blank');
+                }
+              }} 
+            />
+          ))}
+          {filteredPosts.length === 0 && (
+            <div className="col-span-full text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+              <p className="text-slate-400 font-bold">No hay publicaciones aún.</p>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* --- READERS --- */}
-      {selectedMaterial && selectedMaterial.type === 'article' && (
-          <ArticleReader 
-            material={selectedMaterial} 
-            onClose={() => setSelectedMaterial(null)} 
-          />
-      )}
+      {/* Modal Crear Post */}
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="sm:max-w-lg rounded-3xl bg-[#F8FAFC]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-slate-800">Crear Publicación</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 p-2">
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">Título *</label>
+              <Input 
+                placeholder="Título llamativo" 
+                value={newPost.title} 
+                onChange={e => setNewPost({...newPost, title: e.target.value})} 
+                className="font-bold text-lg border-slate-200 bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">Descripción</label>
+              <Textarea 
+                placeholder="Descripción del contenido..." 
+                value={newPost.content} 
+                onChange={e => setNewPost({...newPost, content: e.target.value})} 
+                className="bg-white border-slate-200 min-h-[100px]"
+                rows={4}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">Tipo</label>
+                <select 
+                  className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold bg-white" 
+                  value={newPost.type} 
+                  onChange={e => setNewPost({...newPost, type: e.target.value})}
+                >
+                  <option value="text">📝 Texto</option>
+                  <option value="video">🎥 Video (YouTube)</option>
+                  <option value="image">🖼️ Imagen</option>
+                  <option value="article">📄 Artículo</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">Nivel</label>
+                <select 
+                  className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold bg-white" 
+                  value={newPost.level} 
+                  onChange={e => setNewPost({...newPost, level: e.target.value})}
+                >
+                  <option value="ALL">🌍 Todos</option>
+                  <option value="A1">🌱 A1</option>
+                  <option value="A2">🌿 A2</option>
+                  <option value="B1">🌳 B1</option>
+                  <option value="B2">🌲 B2</option>
+                  <option value="C1">🏔️ C1</option>
+                  <option value="C2">⛰️ C2</option>
+                </select>
+              </div>
+            </div>
+
+            {(newPost.type !== 'text') && (
+              <div>
+                <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">URL del Recurso</label>
+                <Input 
+                  placeholder="https://youtube.com/watch?v=..." 
+                  value={newPost.url} 
+                  onChange={e => setNewPost({...newPost, url: e.target.value})} 
+                  className="bg-white border-slate-200"
+                />
+              </div>
+            )}
+
+            <Button 
+              onClick={handleCreate} 
+              className="w-full bg-indigo-600 hover:bg-indigo-700 font-bold h-12 rounded-xl text-base shadow-lg shadow-indigo-200"
+            >
+              ✨ Publicar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

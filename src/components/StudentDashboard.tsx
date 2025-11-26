@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { CommunityFeed } from './community/CommunityFeed';
-import { mockMaterials } from '../lib/mockData';
 import { TextAnnotator } from './TextAnnotator';
 
 interface StudentDashboardProps {
@@ -208,7 +207,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
           {activeTab === 'community' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CommunityFeed materials={mockMaterials} student={student} />
+              <CommunityFeed student={student} />
             </div>
           )}
         </div>

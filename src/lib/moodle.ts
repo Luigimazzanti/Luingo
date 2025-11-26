@@ -5,6 +5,7 @@ const MOODLE_URL = "https://luingo.moodiy.com/webservice/rest/server.php";
 const MOODLE_TOKEN = "8b1869dbac3f73adb6ed03421fdd8535";
 const TASKS_FORUM_ID = 4;
 const SUBMISSIONS_FORUM_ID = 7;
+const COMMUNITY_FORUM_ID = 5; // ✅ NUEVO: FORO DE COMUNIDAD
 
 interface MoodleParams {
   [key: string]: string | number | boolean;
@@ -442,6 +443,88 @@ export const gradeSubmission = async (
   return await callMoodle("mod_forum_update_discussion_post", {
     postid: cleanId,
     subject: `Calificado: ${originalPayload.taskTitle || 'Tarea'} - ${originalPayload.studentName || 'Estudiante'}`,
+    message: message
+  });
+};
+
+// ========== 📱 COMUNIDAD (SOCIAL FEED) ==========
+
+// ✅ LEER POSTS DE COMUNIDAD
+export const getCommunityPosts = async () => {
+  console.log("📱 Cargando posts de comunidad...");
+  
+  const data = await callMoodle("mod_forum_get_forum_discussions", { 
+    forumid: COMMUNITY_FORUM_ID 
+  });
+  
+  if (!data || !data.discussions) return [];
+  
+  return data.discussions.map((disc: any) => {
+    // Extraer metadata del JSON oculto
+    const match = disc.message.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
+    const meta = match ? cleanMoodleJSON(match[1]) || {} : {};
+    
+    // Limpiar mensaje visible (quitar el JSON oculto y HTML)
+    const cleanMessage = disc.message
+      .split('<span style="display:none;">')[0]
+      .replace(/<[^>]*>?/gm, '')
+      .trim();
+    
+    return {
+      id: `comm-${disc.discussion}`,
+      discussionId: disc.discussion,
+      postId: disc.id,
+      author: disc.userfullname || 'Profesor',
+      avatar: disc.userpictureurl || '',
+      title: disc.subject,
+      content: cleanMessage || meta.description || '',
+      type: meta.type || 'text', // video, image, article, link
+      url: meta.url || '',
+      target_levels: meta.target_levels || ['ALL'], // Array de niveles
+      likes: meta.likes || 0,
+      date: new Date(disc.created * 1000).toISOString(),
+      commentsCount: disc.numreplies || 0
+    };
+  });
+};
+
+// ✅ CREAR POST (SOLO PROFE)
+export const createCommunityPost = async (
+  title: string, 
+  content: string, 
+  type: string, 
+  url: string, 
+  levels: string[]
+) => {
+  const meta = { 
+    type, 
+    url, 
+    target_levels: levels, 
+    likes: 0,
+    description: content
+  };
+  
+  // Guardamos el contenido visible + metadata oculta
+  const message = `${content}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  
+  console.log("📝 Creando post de comunidad:", { title, type, levels });
+  
+  return await callMoodle("mod_forum_add_discussion", {
+    forumid: COMMUNITY_FORUM_ID,
+    subject: title,
+    message
+  });
+};
+
+// ✅ COMENTAR EN POST (OPCIONAL - Para futuro)
+export const addCommunityComment = async (postId: string | number, message: string) => {
+  const cleanId = String(postId).replace(/comm-/g, '');
+  
+  console.log("💬 Añadiendo comentario al post:", cleanId);
+  
+  return await callMoodle("mod_forum_add_discussion_post", {
+    postid: cleanId,
+    subject: "Comentario",
     message: message
   });
 };
