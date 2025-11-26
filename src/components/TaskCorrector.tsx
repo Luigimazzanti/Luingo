@@ -17,34 +17,34 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
   const isWriting = !!submission.textContent;
   const [grade, setGrade] = useState(submission.grade?.toString() || '');
   const [feedback, setFeedback] = useState(submission.teacher_feedback || '');
-  
-  // ✅ ESTADO LOCAL REACTIVO
+
+  // ESTADO LOCAL (Fuente de la verdad visual)
   const [corrections, setCorrections] = useState<Annotation[]>(submission.corrections || []);
 
-  // ✅ Forzar actualización si cambia la prop submission
+  // Sincronizar si cambian las props
   useEffect(() => {
-    setCorrections(submission.corrections || []);
+    if (submission.corrections) {
+      setCorrections(submission.corrections);
+    }
   }, [submission.corrections]);
 
   const handleAddAnnotation = (ann: Annotation) => {
-    // ✅ Crear NUEVA referencia de array para disparar render
     const newCorrections = [...corrections, ann];
     setCorrections(newCorrections);
-    toast.success("Anotación añadida");
+    toast.success("Anotación agregada");
   };
 
   const handleUpdateAnnotation = (updatedAnn: Annotation) => {
-    // ✅ Crear NUEVA referencia
+    // Reemplazar la anotación vieja por la nueva
     const newCorrections = corrections.map(c => c.id === updatedAnn.id ? updatedAnn : c);
     setCorrections(newCorrections);
-    toast.success("Anotación actualizada");
+    toast.success("Actualizado correctamente");
   };
 
   const handleRemoveAnnotation = (id: string) => {
-    // ✅ Crear NUEVA referencia
     const newCorrections = corrections.filter(c => c.id !== id);
     setCorrections(newCorrections);
-    toast.success("Anotación borrada");
+    toast.success("Borrado");
   };
 
   const handleSave = () => {
@@ -53,12 +53,11 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
       toast.error("Nota inválida (0-10)");
       return;
     }
-    // ✅ ENVIAR ESTADO LOCAL ACTUALIZADO
     onSaveCorrection(numGrade, feedback, corrections);
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col pb-20"> {/* Padding bottom para scrolling */}
+    <div className="min-h-screen bg-white flex flex-col pb-20">
       {/* HEADER COMPACTO */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 py-3 flex justify-between items-center shadow-sm">
         <Button variant="ghost" size="sm" onClick={onBack} className="text-slate-500 -ml-2">
@@ -70,10 +69,10 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
         </div>
       </div>
 
-      <div className="flex-1 w-full max-w-3xl mx-auto p-4 md:p-8 flex flex-col gap-8">
+      <div className="flex-1 w-full max-w-5xl mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8">
         
-        {/* SECCIÓN 1: EL TRABAJO DEL ALUMNO */}
-        <div className="flex-1">
+        {/* SECCIÓN 1: TEXTO DEL ALUMNO */}
+        <div className="flex-1 lg:order-1">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
               📄 Redacción
@@ -82,10 +81,11 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
               {submission.textContent?.split(/\s+/).length || 0} palabras
             </span>
           </div>
-
           {isWriting ? (
             <TextAnnotator 
-              key={`annotator-${corrections.length}`} // ✅ KEY PARA FORZAR RENDER SI CAMBIA LA LONGITUD
+              // 🔥 LA CLAVE MÁGICA: Forzar renderizado si cambian los datos
+              key={JSON.stringify(corrections)}
+              
               text={submission.textContent || ''} 
               annotations={corrections}
               onAddAnnotation={handleAddAnnotation}
@@ -93,42 +93,49 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
               onRemoveAnnotation={handleRemoveAnnotation}
             />
           ) : (
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-slate-400">
-              Esta tarea no es de redacción.
+            <div className="space-y-4">
+                {submission.answers?.map((ans:any, i:number) => (
+                    <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <p className="font-bold mb-2">{ans.questionText}</p>
+                        <p className={`text-sm ${ans.isCorrect ? 'text-emerald-600':'text-rose-600'}`}>Respuesta: {ans.studentAnswer}</p>
+                    </div>
+                ))}
             </div>
           )}
         </div>
 
-        {/* SECCIÓN 2: EVALUACIÓN FINAL (Al final en móvil) */}
-        <div className="bg-indigo-50 p-5 rounded-2xl border-2 border-indigo-100 space-y-4">
-          <h3 className="font-black text-indigo-900 flex items-center gap-2">
-            <GraduationCap className="w-5 h-5"/> Evaluación
-          </h3>
-          
-          <div>
-            <label className="text-xs font-bold text-indigo-700 uppercase block mb-2">Nota (0-10)</label>
-            <Input 
-              type="number" 
-              value={grade} 
-              onChange={e => setGrade(e.target.value)} 
-              className="bg-white border-indigo-200 text-2xl font-black text-indigo-600 h-14"
-              placeholder="0.0"
-            />
-          </div>
-          
-          <div>
-            <label className="text-xs font-bold text-indigo-700 uppercase block mb-2">Feedback Global</label>
-            <Textarea 
-              value={feedback} 
-              onChange={e => setFeedback(e.target.value)} 
-              className="bg-white border-indigo-200 min-h-[100px] text-sm"
-              placeholder="Escribe un comentario general..."
-            />
-          </div>
+        {/* SECCIÓN 2: EVALUACIÓN */}
+        <div className="w-full lg:w-80 shrink-0 lg:order-2 space-y-6">
+          <div className="bg-indigo-50 p-5 rounded-2xl border-2 border-indigo-100 space-y-4 sticky top-20">
+            <h3 className="font-black text-indigo-900 flex items-center gap-2">
+              <GraduationCap className="w-5 h-5"/> Evaluación
+            </h3>
+            
+            <div>
+              <label className="text-xs font-bold text-indigo-700 uppercase block mb-2">Nota (0-10)</label>
+              <Input 
+                type="number" 
+                value={grade} 
+                onChange={e => setGrade(e.target.value)} 
+                className="bg-white border-indigo-200 text-2xl font-black text-indigo-600 h-14"
+                placeholder="0.0"
+              />
+            </div>
+            
+            <div>
+              <label className="text-xs font-bold text-indigo-700 uppercase block mb-2">Feedback Global</label>
+              <Textarea 
+                value={feedback} 
+                onChange={e => setFeedback(e.target.value)} 
+                className="bg-white border-indigo-200 min-h-[150px] text-sm"
+                placeholder="Comentario general..."
+              />
+            </div>
 
-          <Button onClick={handleSave} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 rounded-xl shadow-md">
-            <Save className="w-4 h-4 mr-2" /> Guardar Todo
-          </Button>
+            <Button onClick={handleSave} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 rounded-xl shadow-md">
+              <Save className="w-4 h-4 mr-2" /> Guardar Todo
+            </Button>
+          </div>
         </div>
       </div>
     </div>

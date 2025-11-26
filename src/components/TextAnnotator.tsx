@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
-import { X, Check, Trash2, Highlighter, PenTool, MessageSquare } from 'lucide-react';
+import { X, Check, Trash2, Highlighter, PenTool, MessageSquare, Info } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export interface Annotation {
@@ -178,6 +178,20 @@ export const TextAnnotator: React.FC<TextAnnotatorProps> = ({
 
   return (
     <>
+      {/* 🎨 LEYENDA DE COLORES */}
+      {annotations.length > 0 && (
+        <div className="mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center gap-3 md:gap-4">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Info className="w-4 h-4" />
+            <span className="font-bold">Leyenda:</span>
+          </div>
+          <LegendItem label="Gramática" color="rose" />
+          <LegendItem label="Vocabulario" color="amber" />
+          <LegendItem label="Ortografía" color="blue" />
+          <LegendItem label="Sugerencia" color="emerald" />
+        </div>
+      )}
+
       <div 
         ref={containerRef} 
         className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm whitespace-pre-wrap break-words text-lg leading-relaxed font-serif text-slate-800 pb-32"
@@ -318,5 +332,25 @@ const TypeBtn = ({ label, color, active, onClick }: {
     >
       {label}
     </button>
+  );
+};
+
+const LegendItem = ({ label, color }: {
+  label: string;
+  color: 'rose' | 'amber' | 'blue' | 'emerald';
+}) => {
+  const colorMap = {
+    rose: 'bg-rose-100 text-rose-900 border-b-2 border-rose-400',
+    amber: 'bg-amber-100 text-amber-900 border-b-2 border-amber-400',
+    blue: 'bg-blue-100 text-blue-900 border-b-2 border-blue-400',
+    emerald: 'bg-emerald-100 text-emerald-900 border-b-2 border-emerald-400'
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <mark className={cn("rounded px-0.5 mx-0.5", colorMap[color])}>
+        {label}
+      </mark>
+    </div>
   );
 };
