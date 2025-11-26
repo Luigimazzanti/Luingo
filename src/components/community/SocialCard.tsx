@@ -1,8 +1,12 @@
 import React from 'react';
-import { Heart, MessageCircle, Share2, Play, FileText, Image as ImageIcon, MonitorPlay, Mic } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Play, FileText, Image as ImageIcon, MonitorPlay, Mic, Edit2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-export const SocialCard: React.FC<{ post: any, onClick: () => void }> = ({ post, onClick }) => {
+export const SocialCard: React.FC<{ 
+  post: any, 
+  onClick: () => void, 
+  onEdit?: () => void // ✅ NUEVO: Callback para editar
+}> = ({ post, onClick, onEdit }) => {
   
   // Detectar contenido HTML
   const hasVideo = post.content.includes('youtube.com/embed') || post.content.includes('youtu.be');
@@ -157,6 +161,17 @@ export const SocialCard: React.FC<{ post: any, onClick: () => void }> = ({ post,
             <MessageCircle className="w-5 h-5" />
             <span className="text-xs font-bold">{post.commentsCount || 0}</span>
           </button>
+          
+          {/* ✅ BOTÓN EDITAR (Solo si onEdit existe) */}
+          {onEdit && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-600 transition-colors group/edit"
+              title="Editar post"
+            >
+              <Edit2 className="w-4 h-4 group-hover/edit:scale-110 transition-transform" />
+            </button>
+          )}
         </div>
         
         <div className="flex items-center gap-2">

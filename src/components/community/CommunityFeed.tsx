@@ -3,20 +3,27 @@ import { SocialCard } from './SocialCard';
 import { Button } from '../ui/button';
 import { Globe, Lock, Plus, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { getCommunityPosts, createCommunityPost } from '../../lib/moodle';
-// IMPORTANTE: Importamos los componentes de accesibilidad que faltaban
+import { getCommunityPosts, createCommunityPost, updateCommunityPost } from '../../lib/moodle'; // ✅ AÑADIDO updateCommunityPost
+// ✅ AÑADIDO DialogDescription para accesibilidad
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { ResourceComposer } from './ResourceComposer';
 import { ArticleReader } from './ArticleReader';
 import { toast } from 'sonner@2.0.3';
 
-export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?: boolean }) => {
+interface CommunityFeedProps {
+  student: any;
+  isTeacher?: boolean;
+}
+
+export const CommunityFeed: React.FC<CommunityFeedProps> = ({ student, isTeacher = false }) => {
   const [posts, setPosts] = useState<any[]>([]);
   const [filterMode, setFilterMode] = useState<'my_level' | 'all'>('my_level');
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any>(null);
+  const [editingPost, setEditingPost] = useState<any>(null); // ✅ NUEVO: Estado para post en edición
 
+  // Cargar desde Moodle
   const loadPosts = async () => {
     setLoading(true);
     const data = await getCommunityPosts();
@@ -28,44 +35,61 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
     loadPosts(); 
   }, []);
 
+  // Filtro de Nivel
   const filteredPosts = posts.filter(p => {
     if (isTeacher || filterMode === 'all') return true;
     const userLevel = student?.current_level_code || 'A1';
     return p.targetLevel === 'ALL' || p.targetLevel === userLevel;
   });
 
+  // ✅ HANDLER UNIFICADO (Crear o Editar)
   const handlePublish = async (title: string, html: string, level: string) => {
-    toast.loading("Publicando...");
+    let success = false;
     
-    const success = await createCommunityPost(title, html, level);
+    toast.loading(editingPost ? "Actualizando post..." : "Publicando...");
+    
+    if (editingPost) {
+      // Modo edición
+      success = await updateCommunityPost(editingPost.postId, title, html, level);
+    } else {
+      // Modo creación
+      success = await createCommunityPost(title, html, level);
+    }
     
     toast.dismiss();
     
     if (success) { 
-      toast.success("¡Post publicado con éxito!"); 
-      setShowCreate(false); 
+      toast.success(editingPost ? "✅ Post actualizado" : "✅ Publicado con éxito"); 
+      setShowCreate(false);
+      setEditingPost(null); // Limpiar estado de edición
       loadPosts(); 
     } else { 
-      toast.error("Error al publicar en Moodle"); 
+      toast.error("❌ Error al conectar con Moodle"); 
     }
   };
 
+  // ✅ ABRIR EDITOR EN MODO EDICIÓN
+  const openEdit = (post: any) => {
+    setEditingPost(post);
+    setShowCreate(true); // Reutilizamos el modal de creación
+  };
+
   return (
-    <div className="space-y-8 pb-32">
+    <div className="space-y-8">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tight mb-1">
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-1">
             Comunidad 🌍
           </h1>
           <p className="text-slate-500 font-medium">
-            Descubre recursos, cultura y contenido educativo
+            Explora contenido exclusivo y recursos educativos
           </p>
         </div>
         
         <div className="flex gap-3 w-full md:w-auto">
-          {/* Filtros Alumno */}
+          {/* Filtros (Solo Alumno) */}
           {!isTeacher && (
             <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm flex flex-1 md:flex-none">
               <button 
@@ -93,7 +117,7 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
             </div>
           )}
           
-          {/* Botón Publicar (Solo Profe) */}
+          {/* Botón Publicar (Solo Profesor) */}
           {isTeacher && (
             <Button 
               onClick={() => setShowCreate(true)} 
@@ -105,11 +129,11 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
         </div>
       </div>
 
-      {/* Feed */}
+      {/* Feed Grid */}
       {loading ? (
-        <div className="py-20 text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto"/>
-          <p className="text-slate-400 mt-4 font-medium">Cargando contenido...</p>
+        <div className="py-20 text-center flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-500"/>
+          <p className="text-slate-400 text-sm font-bold">Cargando muro...</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -118,6 +142,7 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
               key={post.id} 
               post={post} 
               onClick={() => setSelectedPost(post)} 
+              onEdit={isTeacher ? () => openEdit(post) : undefined} // ✅ Solo mostrar editar si es profesor
             />
           ))}
           {filteredPosts.length === 0 && (
@@ -134,26 +159,35 @@ export const CommunityFeed = ({ student, isTeacher }: { student: any, isTeacher?
         </div>
       )}
 
-      {/* Modal Crear Post - CORREGIDO */}
+      {/* ✅ MODAL CREACIÓN (ARREGLADO) */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-[95vw] w-full h-[90vh] p-0 border-0 bg-transparent shadow-none flex flex-col">
+        <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 border-0 bg-transparent shadow-none flex flex-col">
           
-          {/* ✅ ESTAS LÍNEAS ARREGLAN EL ERROR ROJO */}
+          {/* ✅ FIX DE ACCESIBILIDAD: Títulos ocultos requeridos */}
           <DialogHeader className="sr-only">
             <DialogTitle>Crear Nuevo Recurso</DialogTitle>
-            <DialogDescription>Editor de contenido para la comunidad</DialogDescription>
+            <DialogDescription>Editor multimedia para la comunidad</DialogDescription>
           </DialogHeader>
-
-          <div className="flex-1 bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-200">
+          
+          {/* Contenedor Visual del Editor */}
+          <div className="flex-1 bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-200 flex flex-col">
             <ResourceComposer 
-              onPublish={handlePublish}
-              onCancel={() => setShowCreate(false)}
+              initialData={editingPost ? { 
+                title: editingPost.title, 
+                content: editingPost.content, 
+                level: editingPost.targetLevel 
+              } : undefined} // ✅ CORREGIDO: Pasar objeto initialData
+              onPublish={handlePublish} 
+              onCancel={() => { 
+                setShowCreate(false); 
+                setEditingPost(null); // Limpiar al cancelar
+              }}
             />
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Visor de Post */}
+      {/* Visor de Artículos */}
       {selectedPost && (
         <ArticleReader 
           material={selectedPost} 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
@@ -7,16 +7,71 @@ import { toast } from 'sonner@2.0.3';
 import { cn } from '../../lib/utils';
 
 interface ResourceComposerProps {
+  initialData?: { title: string, content: string, level: string }; // ✅ NUEVO: Para edición
   onPublish: (title: string, contentHtml: string, level: string) => void;
   onCancel: () => void;
 }
 
-export const ResourceComposer: React.FC<ResourceComposerProps> = ({ onPublish, onCancel }) => {
-  const [title, setTitle] = useState('');
-  const [level, setLevel] = useState('ALL');
+export const ResourceComposer: React.FC<ResourceComposerProps> = ({ initialData, onPublish, onCancel }) => {
+  const [title, setTitle] = useState(initialData?.title || '');
+  const [level, setLevel] = useState(initialData?.level || 'ALL');
   const [blocks, setBlocks] = useState<{type: string, content: string}[]>([
     { type: 'text', content: '' }
   ]);
+
+  // ✅ PARSER INTELIGENTE: HTML -> BLOQUES (Para Edición)
+  useEffect(() => {
+    if (initialData?.content) {
+      console.log('🔍 Parseando HTML para edición:', initialData.content.substring(0, 100));
+      
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(initialData.content, 'text/html');
+      const newBlocks: any[] = [];
+      
+      // Buscar elementos clave en el HTML
+      const processNode = (node: Node) => {
+        if (node.nodeName === 'P' && node.textContent?.trim()) {
+          newBlocks.push({ type: 'text', content: node.textContent.trim() });
+        } else if (node.nodeName === 'IMG') {
+          const img = node as HTMLImageElement;
+          newBlocks.push({ type: 'image', content: img.src });
+        } else if (node.nodeName === 'DIV') {
+          const el = node as HTMLDivElement;
+          const iframe = el.querySelector('iframe');
+          const audio = el.querySelector('audio');
+          
+          if (iframe) {
+            const src = iframe.src;
+            if (src.includes('youtube.com/embed')) {
+              // Convertir embed a URL normal para el editor
+              const videoId = src.split('/embed/')[1]?.split('?')[0];
+              newBlocks.push({ type: 'video', content: `https://www.youtube.com/watch?v=${videoId}` });
+            } else if (src.includes('genial.ly')) {
+              newBlocks.push({ type: 'genially', content: src });
+            }
+          } else if (audio) {
+            newBlocks.push({ type: 'audio', content: audio.src });
+          } else {
+            // Procesar hijos del div
+            el.childNodes.forEach(processNode);
+          }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          // Procesar recursivamente otros elementos
+          (node as Element).childNodes.forEach(processNode);
+        }
+      };
+      
+      doc.body.childNodes.forEach(processNode);
+      
+      if (newBlocks.length > 0) {
+        console.log('✅ Bloques parseados:', newBlocks);
+        setBlocks(newBlocks);
+      } else {
+        console.warn('⚠️ No se encontraron bloques, usando texto plano');
+        setBlocks([{ type: 'text', content: doc.body.textContent || '' }]);
+      }
+    }
+  }, [initialData]);
 
   const addBlock = (type: any) => setBlocks([...blocks, { type, content: '' }]);
   
@@ -77,7 +132,9 @@ export const ResourceComposer: React.FC<ResourceComposerProps> = ({ onPublish, o
       {/* Header */}
       <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-indigo-50 to-purple-50">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-black text-slate-800">✨ Crear Recurso</h2>
+          <h2 className="text-2xl font-black text-slate-800">
+            {initialData ? '✏️ Editar Recurso' : '✨ Crear Recurso'}
+          </h2>
           <Button
             variant="ghost"
             size="icon"
@@ -204,7 +261,7 @@ export const ResourceComposer: React.FC<ResourceComposerProps> = ({ onPublish, o
             className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold px-8 rounded-xl shadow-lg shadow-indigo-200 flex-1 md:flex-none"
           >
             <Check className="w-5 h-5 mr-2" />
-            PUBLICAR
+            {initialData ? 'ACTUALIZAR' : 'PUBLICAR'}
           </Button>
         </div>
       </div>

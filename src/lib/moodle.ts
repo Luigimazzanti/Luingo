@@ -57,9 +57,9 @@ const cleanMoodleJSON = (raw: string) => {
     // 1️⃣ Decodificar entidades HTML comunes
     let clean = raw
       .replace(/&quot;/g, '"')
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
       .replace(/&#039;/g, "'")
       .replace(/&apos;/g, "'");
     
@@ -80,6 +80,13 @@ const cleanMoodleJSON = (raw: string) => {
     console.error("Raw recibido:", raw.substring(0, 200));
     return null;
   }
+};
+
+// ========== 🔧 HELPER: DECODIFICAR HTML ENTITIES ==========
+const decodeHTML = (html: string) => {
+  const txt = document.createElement('textarea');
+  txt.innerHTML = html;
+  return txt.value;
 };
 
 // ========== FUNCIONES BÁSICAS ==========
@@ -450,7 +457,7 @@ export const gradeSubmission = async (
 
 // ========== 📱 COMUNIDAD (SOCIAL FEED) ==========
 
-// ✅ LEER POSTS DE COMUNIDAD (Parseo de HTML mejorado)
+// ✅ LEER POSTS DE COMUNIDAD (Parseo HTML mejorado con decodificación)
 export const getCommunityPosts = async () => {
   console.log("📱 Cargando posts de comunidad...");
   
@@ -461,12 +468,32 @@ export const getCommunityPosts = async () => {
   if (!data || !data.discussions) return [];
   
   return data.discussions.map((disc: any) => {
-    // Intentar sacar metadata del span oculto
-    const match = disc.message.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
-    const meta = match ? cleanMoodleJSON(match[1]) || { type: 'mixed', level: 'ALL' } : { type: 'mixed', level: 'ALL' };
+    // 1️⃣ Decodificar primero para recuperar las etiquetas reales
+    const rawMessage = decodeHTML(disc.message);
     
-    // El contenido es el mensaje HTML limpio de la etiqueta de datos
-    const contentHtml = disc.message.split('<span style="display:none;">')[0];
+    // 2️⃣ Extraer Metadata del span oculto
+    const match = rawMessage.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
+    let meta = { type: 'mixed', level: 'ALL', likes: 0 };
+    
+    if (match) {
+      try {
+        meta = JSON.parse(match[1]);
+      } catch (e) {
+        console.warn('⚠️ Error parseando metadata de post:', e);
+      }
+    }
+    
+    // 3️⃣ Limpiar Contenido (Quitar el span de metadata completo)
+    let contentHtml = rawMessage.split('<span style="display:none;">')[0];
+    
+    // Fallback: si el split no funcionó, usar replace
+    if (contentHtml.length === rawMessage.length) {
+      contentHtml = rawMessage.replace(/<span style="display:none;">[\s\S]*?<\/span>/g, '');
+      contentHtml = contentHtml.replace(/\[LUINGO_DATA\][\s\S]*?\[\/LUINGO_DATA\]/g, '');
+    }
+    
+    // Limpiar <br/> sobrantes al final
+    contentHtml = contentHtml.replace(/<br\s*\/?>\s*$/gi, '').trim();
     
     return {
       id: `comm-${disc.discussion}`,
@@ -475,7 +502,7 @@ export const getCommunityPosts = async () => {
       author: disc.userfullname || 'Profesor',
       avatar: disc.userpictureurl || '',
       title: disc.subject,
-      content: contentHtml, // ✅ HTML COMPLETO (Texto + Iframes)
+      content: contentHtml, // ✅ HTML LIMPIO Y DECODIFICADO (Texto + Iframes)
       targetLevel: meta.level || 'ALL',
       likes: meta.likes || 0,
       date: new Date(disc.created * 1000).toISOString(),
@@ -508,6 +535,34 @@ export const createCommunityPost = async (
   }
   
   console.error("❌ Error al publicar:", res);
+  return false;
+};
+
+// ✅ ACTUALIZAR POST (EDITAR)
+export const updateCommunityPost = async (
+  postId: string | number, 
+  title: string, 
+  htmlContent: string, 
+  level: string
+) => {
+  const cleanId = String(postId).replace(/\D/g, ''); // Limpiar ID
+  console.log("📝 Actualizando post:", cleanId);
+  
+  const meta = { level, type: 'mixed', likes: 0 };
+  const message = `${htmlContent}<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  
+  const res = await callMoodle("mod_forum_update_discussion_post", {
+    postid: cleanId,
+    subject: title,
+    message: message
+  });
+  
+  if (res) {
+    console.log("✅ Post actualizado correctamente");
+    return true;
+  }
+  
+  console.error("❌ Error al actualizar:", res);
   return false;
 };
 
