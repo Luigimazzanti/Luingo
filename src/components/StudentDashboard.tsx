@@ -4,11 +4,12 @@ import { TaskCard } from './TaskCard';
 import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from './ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { LayoutDashboard, BookOpen, Trophy, LogOut, Menu, Zap, Flame, Users, CheckCircle2, XCircle } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Trophy, LogOut, Menu, Zap, Flame, Users, CheckCircle2, XCircle, MessageSquare } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { CommunityFeed } from './community/CommunityFeed';
 import { mockMaterials } from '../lib/mockData';
 import luingoLogo from 'figma:asset/5c3aee031df4e645d2ea41499714325beb9cd4f4.png';
+import { TextAnnotator } from './TextAnnotator';
 
 interface StudentDashboardProps {
   student: Student;
@@ -209,8 +210,27 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         </div>
                     )}
 
-                    {/* LISTA DE RESPUESTAS */}
-                    {selectedSubmission?.answers && selectedSubmission.answers.length > 0 ? (
+                    {/* ✅ VISOR DE REDACCIÓN PARA EL ALUMNO */}
+                    {selectedSubmission?.textContent && selectedSubmission.textContent.length > 0 && (
+                        <div className="bg-white p-0 rounded-2xl border-2 border-indigo-100 shadow-sm overflow-hidden">
+                            <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex items-center gap-2">
+                                <MessageSquare className="w-4 h-4 text-indigo-600"/>
+                                <h4 className="font-black text-indigo-900 text-xs uppercase tracking-wider">Tu Redacción Corregida</h4>
+                            </div>
+                            <div className="p-4">
+                                <TextAnnotator 
+                                    text={selectedSubmission.textContent} 
+                                    annotations={selectedSubmission.corrections || []} 
+                                    onAddAnnotation={()=>{}} 
+                                    onRemoveAnnotation={()=>{}} 
+                                    readOnly={true} 
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* LISTA DE RESPUESTAS (Solo si NO hay textContent) */}
+                    {selectedSubmission?.answers && selectedSubmission.answers.length > 0 && (
                         selectedSubmission.answers.map((ans: any, i: number) => (
                             <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                                 <p className="font-bold text-slate-700 text-sm mb-3 flex gap-2">
@@ -234,7 +254,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                 </div>
                             </div>
                         ))
-                    ) : (
+                    )}
+
+                    {/* Mensaje si no hay respuestas ni texto */}
+                    {(!selectedSubmission?.answers || selectedSubmission.answers.length === 0) && 
+                     (!selectedSubmission?.textContent || selectedSubmission.textContent.length === 0) && (
                         <div className="text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
                             No hay detalles de respuestas guardados para este intento.
                         </div>

@@ -99,7 +99,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   console.log('🔍 Detalle de grupos:', submissionList);
 
   // ========== HANDLER CALIFICAR ==========
-  const handleGrade = async (attempt: any) => {
+  const handleGrade = async (attempt: any, correctionsData?: any[]) => { // ✅ ACEPTA CORRECCIONES
     const newGrade = parseFloat(gradeInput);
     
     if (isNaN(newGrade) || newGrade < 0 || newGrade > 10) {
@@ -119,16 +119,21 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         score: attempt.score,
         total: attempt.total,
         answers: attempt.answers,
+        textContent: attempt.textContent, // ✅ Incluir texto
         timestamp: attempt.submitted_at
       };
 
       // Usamos postId o id (limpiando 'post-')
       const targetId = attempt.postId || attempt.id.replace('post-', '');
       
-      // ✅ CORRECCIÓN: Pasar el payload original para evitar pérdida de datos
-      await gradeSubmission(targetId, newGrade, feedbackInput, safePayload);
+      // ✅ INCLUIR CORRECCIONES EN EL GUARDADO
+      // Si vienen del argumento (TaskCorrector), usarlas. Si no, mantener las existentes o vacías.
+      const finalCorrections = correctionsData || attempt.corrections || [];
+      
+      // ✅ CORRECCIÓN: Pasar el payload original para evitar pérdida de datos + CORRECCIONES
+      await gradeSubmission(targetId, newGrade, feedbackInput, safePayload, finalCorrections);
 
-      toast.success('✅ Calificación guardada correctamente');
+      toast.success(`✅ Calificación guardada (${finalCorrections.length} correcciones)`);
       
       if (onRefreshSubmissions) {
         onRefreshSubmissions();
@@ -150,25 +155,26 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       {/* Header */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl font-black text-slate-800">{classroom.name}</h1>
               <p className="text-sm text-slate-500">{classroom.subject} • {classroom.level}</p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
               <Button
                 onClick={() => setShowInviteDialog(true)}
                 variant="outline"
-                className="gap-2 rounded-xl border-slate-200 hover:border-indigo-300"
+                className="gap-2 rounded-xl border-slate-200 hover:border-indigo-300 flex-1 sm:flex-none"
               >
                 <QrCode className="w-4 h-4" />
                 <span className="hidden sm:inline">Código de Invitación</span>
+                <span className="sm:hidden">Invitación</span>
               </Button>
               
               <Button
                 onClick={onGenerateTask}
-                className="gap-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold shadow-md"
+                className="gap-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold shadow-md flex-1 sm:flex-none"
               >
                 <Sparkles className="w-4 h-4" />
                 <span className="hidden sm:inline">Generar con IA</span>
@@ -184,30 +190,33 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         <div className="max-w-7xl mx-auto">
           
           {/* Tabs Navegación */}
-          <div className="flex gap-2 mb-8 bg-white p-1 rounded-xl w-fit shadow-sm border border-slate-200">
+          <div className="flex gap-2 mb-8 bg-white p-1 rounded-xl w-full sm:w-fit shadow-sm border border-slate-200">
             <Button
               variant={viewMode === 'students' ? 'default' : 'ghost'}
               onClick={() => setViewMode('students')}
-              className="rounded-lg gap-2"
+              className="rounded-lg gap-2 h-10 flex-1 sm:flex-none"
             >
               <Users className="w-4 h-4" />
-              Estudiantes
+              <span className="hidden sm:inline">Estudiantes</span>
+              <span className="sm:hidden">Estud.</span>
             </Button>
             <Button
               variant={viewMode === 'tasks' ? 'default' : 'ghost'}
               onClick={() => setViewMode('tasks')}
-              className="rounded-lg gap-2"
+              className="rounded-lg gap-2 h-10 flex-1 sm:flex-none"
             >
               <List className="w-4 h-4" />
-              Misiones
+              <span className="hidden sm:inline">Misiones</span>
+              <span className="sm:hidden">Mis.</span>
             </Button>
             <Button
               variant={viewMode === 'grades' ? 'default' : 'ghost'}
               onClick={() => setViewMode('grades')}
-              className="rounded-lg gap-2"
+              className="rounded-lg gap-2 h-10 flex-1 sm:flex-none relative"
             >
               <GraduationCap className="w-4 h-4" />
-              Calificar
+              <span className="hidden sm:inline">Calificar</span>
+              <span className="sm:hidden">Calif.</span>
               {pendingGradingList.length > 0 && (
                 <span className="ml-2 bg-slate-100 text-slate-600 px-2 rounded-full text-xs font-bold">
                   {pendingGradingList.length}
@@ -412,6 +421,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             att.corrections = updatedCorrections;
                             setAnnotations(updatedCorrections);
                             toast.success('✅ Corrección añadida');
+                          }}
+                          onUpdateAnnotation={(annotation) => {
+                            // ✅ ACTUALIZAR CORRECCIÓN EXISTENTE
+                            const updatedCorrections = (att.corrections || []).map((a: Annotation) => 
+                              a.id === annotation.id ? annotation : a
+                            );
+                            att.corrections = updatedCorrections;
+                            setAnnotations(updatedCorrections);
+                            toast.success('✏️ Corrección actualizada');
                           }}
                           onRemoveAnnotation={(id) => {
                             const updatedCorrections = (att.corrections || []).filter((a: Annotation) => a.id !== id);

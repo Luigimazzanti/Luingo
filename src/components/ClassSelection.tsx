@@ -48,12 +48,12 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black text-slate-800">Mis Clases</h1>
           <p className="text-slate-500 font-bold">Hola Profe, ¿dónde vamos a enseñar hoy?</p>
         </div>
-        <Button className="bg-slate-800 text-white rounded-2xl h-12 px-6 font-bold hover:bg-slate-700 shadow-lg hover:-translate-y-1 transition-all" onClick={() => setShowCreateDialog(true)}>
+        <Button className="bg-slate-800 text-white rounded-2xl h-12 px-6 font-bold hover:bg-slate-700 shadow-lg hover:-translate-y-1 transition-all w-full sm:w-auto" onClick={() => setShowCreateDialog(true)}>
           <Plus className="w-5 h-5 mr-2" />
           Nueva Clase
         </Button>

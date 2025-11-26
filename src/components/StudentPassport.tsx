@@ -37,12 +37,14 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
   const [editingGrade, setEditingGrade] = useState('');
   const [editingFeedback, setEditingFeedback] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [currentCorrections, setCurrentCorrections] = useState<any[]>([]); // ✅ NUEVO: Estado local para correcciones
 
   // ✅ PRECARGAR DATOS AL ABRIR MODAL
   useEffect(() => {
     if (selectedSubmission) {
       setEditingGrade(selectedSubmission.grade?.toString() || '0');
       setEditingFeedback(selectedSubmission.teacher_feedback || '');
+      setCurrentCorrections(selectedSubmission.corrections || []); // ✅ CARGAR CORRECCIONES
     }
   }, [selectedSubmission]);
 
@@ -113,14 +115,21 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
         score: selectedSubmission.score,
         total: selectedSubmission.total,
         answers: selectedSubmission.answers,
+        textContent: selectedSubmission.textContent, // ✅ Incluir texto
         timestamp: selectedSubmission.submitted_at
       };
       
       // Usar postId o limpiar el id
       const targetId = selectedSubmission.postId || selectedSubmission.id.replace('post-', '');
       
-      // ✅ PASAR EL PAYLOAD COMPLETO
-      await gradeSubmission(targetId, grade, editingFeedback, safePayload);
+      // ✅ PASAR EL PAYLOAD COMPLETO + CORRECCIONES ACTUALIZADAS
+      await gradeSubmission(
+        targetId, 
+        grade, 
+        editingFeedback, 
+        safePayload, 
+        currentCorrections // ✅ USAR ESTADO LOCAL DE CORRECCIONES
+      );
       
       toast.dismiss();
       toast.success("Calificación actualizada correctamente");
@@ -140,6 +149,22 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
     }
   };
 
+  // ✅ HANDLERS PARA TEXTANNOTATOR (Gestión de correcciones)
+  const handleAddCorrection = (ann: any) => {
+    setCurrentCorrections([...currentCorrections, ann]);
+    toast.success("Corrección añadida");
+  };
+  
+  const handleRemoveCorrection = (id: string) => {
+    setCurrentCorrections(currentCorrections.filter(c => c.id !== id));
+    toast.success("Corrección eliminada");
+  };
+  
+  const handleUpdateCorrection = (ann: any) => {
+    setCurrentCorrections(currentCorrections.map(c => c.id === ann.id ? ann : c));
+    toast.success("Corrección actualizada");
+  };
+  
   // --- LÓGICA DE DATOS ---
   const totalXP = submissions.length * 15;
   const currentLevelInfo = LUINGO_LEVELS.slice().reverse().find(l => totalXP >= l.min_xp) || LUINGO_LEVELS[0];
@@ -183,13 +208,13 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
          <div className="max-w-3xl mx-auto">
             
             {/* TARJETA PERFIL */}
-            <div className="bg-white rounded-3xl shadow-lg border border-slate-100 p-5 md:p-6">
-                <div className="flex flex-row gap-5 items-center">
+            <div className="bg-white rounded-3xl shadow-lg border border-slate-100 p-3 md:p-6">
+                <div className="flex flex-row gap-2 md:gap-5 items-center">
                     <div className="shrink-0 relative -mt-4 mb-2"> 
-                        <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-white p-1 shadow-md">
+                        <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl bg-white p-1 shadow-md">
                             <img src={student.avatar_url} alt={student.name} className="w-full h-full object-cover rounded-xl bg-slate-100" />
                         </div>
-                        <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow text-lg border border-slate-50" title={currentLevelInfo.label}>
+                        <div className="absolute -bottom-2 -right-2 w-7 h-7 md:w-8 md:h-8 bg-white rounded-full flex items-center justify-center shadow text-base md:text-lg border border-slate-50" title={currentLevelInfo.label}>
                             {currentLevelInfo.icon}
                         </div>
                     </div>
@@ -197,17 +222,17 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                         <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wide mb-1`}>
                             <Medal className="w-3 h-3 text-amber-500" /> {currentLevelInfo.label}
                         </div>
-                        <h1 className="text-xl md:text-2xl font-black text-slate-800 truncate leading-tight mb-0.5">{student.name}</h1>
+                        <h1 className="text-lg md:text-2xl font-black text-slate-800 truncate leading-tight mb-0.5">{student.name}</h1>
                         <p className="text-slate-400 text-xs font-medium truncate mb-3">{student.email}</p>
-                        <div className="flex gap-2">
-                            <Button onClick={onAssignTask} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 rounded-lg text-xs shadow-sm">✨ Nueva Misión</Button>
-                            <Button variant="outline" onClick={onBack} className="px-4 border-slate-200 text-slate-500 font-bold h-9 rounded-lg text-xs hover:bg-slate-50">Cerrar</Button>
+                        <div className="flex gap-1 md:gap-2">
+                            <Button onClick={onAssignTask} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 rounded-lg text-[10px] md:text-xs shadow-sm min-w-0">✨ Nueva Misión</Button>
+                            <Button variant="outline" onClick={onBack} className="px-2 md:px-4 border-slate-200 text-slate-500 font-bold h-9 rounded-lg text-[10px] md:text-xs hover:bg-slate-50 shrink-0">Cerrar</Button>
                         </div>
                     </div>
                 </div>
                 
                 {/* Stats Bar */}
-                <div className="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-slate-50 bg-slate-50/50 -mx-5 -mb-5 px-5 py-4 rounded-b-3xl">
+                <div className="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-slate-50 bg-slate-50/50 -mx-3 md:-mx-6 -mb-3 md:-mb-6 px-3 md:px-5 py-4 rounded-b-3xl">
                     <div className="text-center"><div className="text-xl font-black text-amber-500">{totalXP}</div><div className="text-[9px] font-bold text-slate-400 uppercase">XP Total</div></div>
                     <div className="text-center border-l border-slate-200"><div className="text-xl font-black text-purple-500">{submissions.length}</div><div className="text-[9px] font-bold text-slate-400 uppercase">Misiones</div></div>
                     <div className="text-center border-l border-slate-200"><div className="text-xl font-black text-emerald-500">{averageGrade.toFixed(1)}</div><div className="text-[9px] font-bold text-slate-400 uppercase">Nota</div></div>
@@ -345,9 +370,10 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                 <TextAnnotator 
                   text={selectedSubmission.textContent}
                   annotations={selectedSubmission.corrections || []}
-                  onAddAnnotation={() => {}} // No-op en modo estudiante
-                  onRemoveAnnotation={() => {}} // No-op en modo estudiante
-                  readOnly={true}
+                  onAddAnnotation={handleAddCorrection} // ✅ USAR HANDLER
+                  onRemoveAnnotation={handleRemoveCorrection} // ✅ USAR HANDLER
+                  onUpdateAnnotation={handleUpdateCorrection} // ✅ USAR HANDLER
+                  readOnly={!isTeacher} // ✅ HACER EDITABLE SOLO PARA PROFESOR
                 />
                 <div className="mt-4 pt-4 border-t border-slate-300 flex items-center justify-between text-xs">
                   <span className="text-slate-600 font-bold">

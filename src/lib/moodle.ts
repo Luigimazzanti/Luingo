@@ -413,7 +413,8 @@ export const gradeSubmission = async (
   postId: string | number,
   grade: number,
   feedback: string,
-  originalPayload: any
+  originalPayload: any,
+  corrections?: any[] // ✅ NUEVO ARGUMENTO PARA GUARDAR CORRECCIONES
 ) => {
   const cleanId = String(postId).replace(/post-|sub-/g, '');
   
@@ -421,6 +422,7 @@ export const gradeSubmission = async (
     ...originalPayload,
     grade: grade,
     teacher_feedback: feedback,
+    corrections: corrections || originalPayload.corrections || [], // ✅ GUARDAR CORRECCIONES AQUÍ
     graded_at: new Date().toISOString(),
     status: 'graded'
   };
@@ -435,7 +437,7 @@ export const gradeSubmission = async (
   <br/>
   <span style="display:none;">[LUINGO_DATA]${jsonString}[/LUINGO_DATA]</span>`;
 
-  console.log(`✅ Calificando post ${cleanId} con datos fusionados`);
+  console.log(`✅ Calificando post ${cleanId} con datos fusionados (incluyendo ${corrections?.length || 0} correcciones)`);
 
   return await callMoodle("mod_forum_update_discussion_post", {
     postid: cleanId,
