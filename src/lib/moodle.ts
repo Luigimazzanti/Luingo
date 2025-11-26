@@ -3,9 +3,10 @@ import { projectId, publicAnonKey } from '../utils/supabase/info';
 // ========== CONFIGURACIÓN ==========
 const MOODLE_URL = "https://luingo.moodiy.com/webservice/rest/server.php";
 const MOODLE_TOKEN = "8b1869dbac3f73adb6ed03421fdd8535";
+
 const TASKS_FORUM_ID = 4;
 const SUBMISSIONS_FORUM_ID = 7;
-const COMMUNITY_FORUM_ID = 5; // ✅ NUEVO: FORO DE COMUNIDAD
+const COMMUNITY_FORUM_ID = 13; // ✅ ID CORRECTO
 
 interface MoodleParams {
   [key: string]: string | number | boolean;
