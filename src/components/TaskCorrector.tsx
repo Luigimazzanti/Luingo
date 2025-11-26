@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Submission } from '../types';
 import { Button } from './ui/button';
 import { ArrowLeft, Save, GraduationCap } from 'lucide-react';
@@ -17,22 +17,33 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
   const isWriting = !!submission.textContent;
   const [grade, setGrade] = useState(submission.grade?.toString() || '');
   const [feedback, setFeedback] = useState(submission.teacher_feedback || '');
-  // Estado de correcciones (annotations)
+  
+  // ✅ ESTADO LOCAL REACTIVO
   const [corrections, setCorrections] = useState<Annotation[]>(submission.corrections || []);
 
+  // ✅ Forzar actualización si cambia la prop submission
+  useEffect(() => {
+    setCorrections(submission.corrections || []);
+  }, [submission.corrections]);
+
   const handleAddAnnotation = (ann: Annotation) => {
-    setCorrections([...corrections, ann]);
+    // ✅ Crear NUEVA referencia de array para disparar render
+    const newCorrections = [...corrections, ann];
+    setCorrections(newCorrections);
     toast.success("Anotación añadida");
   };
 
-  // ✅ EL FIX: Función para actualizar al instante
   const handleUpdateAnnotation = (updatedAnn: Annotation) => {
-    setCorrections(corrections.map(c => c.id === updatedAnn.id ? updatedAnn : c));
+    // ✅ Crear NUEVA referencia
+    const newCorrections = corrections.map(c => c.id === updatedAnn.id ? updatedAnn : c);
+    setCorrections(newCorrections);
     toast.success("Anotación actualizada");
   };
 
   const handleRemoveAnnotation = (id: string) => {
-    setCorrections(corrections.filter(c => c.id !== id));
+    // ✅ Crear NUEVA referencia
+    const newCorrections = corrections.filter(c => c.id !== id);
+    setCorrections(newCorrections);
     toast.success("Anotación borrada");
   };
 
@@ -42,6 +53,7 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
       toast.error("Nota inválida (0-10)");
       return;
     }
+    // ✅ ENVIAR ESTADO LOCAL ACTUALIZADO
     onSaveCorrection(numGrade, feedback, corrections);
   };
 
@@ -73,6 +85,7 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
 
           {isWriting ? (
             <TextAnnotator 
+              key={`annotator-${corrections.length}`} // ✅ KEY PARA FORZAR RENDER SI CAMBIA LA LONGITUD
               text={submission.textContent || ''} 
               annotations={corrections}
               onAddAnnotation={handleAddAnnotation}

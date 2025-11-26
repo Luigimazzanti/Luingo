@@ -458,26 +458,26 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                 <button
                   onClick={() => setTaskType('quiz')}
                   className={cn(
-                    "flex-1 py-4 px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
+                    "flex-1 py-4 px-3 sm:px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
                     taskType === 'quiz'
                       ? "bg-indigo-100 border-indigo-500 text-indigo-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
                   )}
                 >
                   <CheckSquare className="w-5 h-5" />
-                  <span>Cuestionario</span>
+                  <span className="hidden sm:inline">Cuestionario</span>
                 </button>
                 <button
                   onClick={() => setTaskType('writing')}
                   className={cn(
-                    "flex-1 py-4 px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
+                    "flex-1 py-4 px-3 sm:px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
                     taskType === 'writing'
                       ? "bg-emerald-100 border-emerald-500 text-emerald-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300"
                   )}
                 >
                   <FileText className="w-5 h-5" />
-                  <span>Redacción</span>
+                  <span className="hidden sm:inline">Redacción</span>
                 </button>
               </div>
             </div>
@@ -500,7 +500,9 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                 placeholder="Instrucciones claras para el alumno..."
               />
             </div>
-            <div className="flex gap-4">
+            
+            {/* ✅ LAYOUT RESPONSIVE: Columna en mobile, fila en desktop */}
+            <div className="flex flex-col sm:flex-row gap-4">
               {taskType === 'quiz' && (
                 <div className="flex-1">
                   <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Intentos Máx.</label>
@@ -517,7 +519,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
               {taskType === 'quiz' && (
                 <Button
                   onClick={() => setShowAiModal(true)}
-                  className="bg-gradient-to-r from-orange-500 to-pink-500 text-white font-black px-6 rounded-xl h-10 mt-6 shadow-lg hover:shadow-xl transition-all"
+                  className="bg-gradient-to-r from-orange-500 to-pink-500 text-white font-black px-6 rounded-xl h-10 shadow-lg hover:shadow-xl transition-all sm:mt-6 w-full sm:w-auto"
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
                   Generar con IA
@@ -726,13 +728,13 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
 
         {/* ========== MODAL IA ========== */}
         <Dialog open={showAiModal} onOpenChange={setShowAiModal}>
-          <DialogContent className="w-[90%] max-w-lg rounded-2xl p-6 border-4 border-orange-200">
+          <DialogContent className="w-[95%] sm:w-[90%] max-w-lg rounded-2xl p-4 sm:p-6 border-4 border-orange-200 max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-black text-orange-900 flex items-center gap-2">
-                <Sparkles className="w-6 h-6" />
+              <DialogTitle className="text-xl sm:text-2xl font-black text-orange-900 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
                 Generador Groq AI
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-sm">
                 Describe el tema y deja que la IA cree las preguntas por ti.
               </DialogDescription>
             </DialogHeader>
@@ -740,9 +742,9 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
               value={aiPrompt}
               onChange={e => setAiPrompt(e.target.value)}
               placeholder="Ej: Verbos irregulares en pasado, Vocabulario de la familia, etc."
-              className="h-24 text-lg bg-orange-50 border-orange-200 rounded-xl mb-4"
+              className="h-20 sm:h-24 text-base sm:text-lg bg-orange-50 border-orange-200 rounded-xl mb-4"
             />
-            <div className="flex gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
               <div className="space-y-1 flex-1">
                 <label className="text-[10px] font-black text-orange-800 uppercase">
                   Cantidad: {aiNumQuestions}
@@ -756,31 +758,33 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                   className="w-full accent-orange-500"
                 />
               </div>
-              <div className="space-y-1 w-24">
-                <label className="text-[10px] font-black text-orange-800 uppercase">Nivel</label>
-                <select
-                  value={aiLevel}
-                  onChange={e => setAiLevel(e.target.value)}
-                  className="w-full h-8 bg-white border border-orange-200 rounded font-bold text-xs"
-                >
-                  <option>A1</option>
-                  <option>A2</option>
-                  <option>B1</option>
-                  <option>B2</option>
-                  <option>C1</option>
-                </select>
-              </div>
-              <div className="space-y-1 w-24">
-                <label className="text-[10px] font-black text-orange-800 uppercase">Dificultad</label>
-                <select
-                  value={aiDifficulty}
-                  onChange={e => setAiDifficulty(e.target.value)}
-                  className="w-full h-8 bg-white border border-orange-200 rounded font-bold text-xs"
-                >
-                  <option>Básico</option>
-                  <option>Medio</option>
-                  <option>Reto</option>
-                </select>
+              <div className="flex gap-3 sm:gap-4">
+                <div className="space-y-1 flex-1 sm:w-24">
+                  <label className="text-[10px] font-black text-orange-800 uppercase">Nivel</label>
+                  <select
+                    value={aiLevel}
+                    onChange={e => setAiLevel(e.target.value)}
+                    className="w-full h-8 bg-white border border-orange-200 rounded font-bold text-xs"
+                  >
+                    <option>A1</option>
+                    <option>A2</option>
+                    <option>B1</option>
+                    <option>B2</option>
+                    <option>C1</option>
+                  </select>
+                </div>
+                <div className="space-y-1 flex-1 sm:w-24">
+                  <label className="text-[10px] font-black text-orange-800 uppercase">Dificultad</label>
+                  <select
+                    value={aiDifficulty}
+                    onChange={e => setAiDifficulty(e.target.value)}
+                    className="w-full h-8 bg-white border border-orange-200 rounded font-bold text-xs"
+                  >
+                    <option>Básico</option>
+                    <option>Medio</option>
+                    <option>Reto</option>
+                  </select>
+                </div>
               </div>
             </div>
             <Button
