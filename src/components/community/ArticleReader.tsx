@@ -1,19 +1,61 @@
-import React, { useState } from 'react';
-import { X, Send, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Send, MessageCircle, Heart, User } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { addCommunityComment } from '../../lib/moodle';
+import { addCommunityComment, getPostComments, toggleLike } from '../../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 
 export const ArticleReader: React.FC<{ material: any, onClose: () => void }> = ({ material, onClose }) => {
   const [comment, setComment] = useState('');
+  const [commentsList, setCommentsList] = useState<any[]>([]);
+  const [likes, setLikes] = useState(material.likes || 0);
+  const [isLiking, setIsLiking] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // ✅ Cargar comentarios al abrir
+  useEffect(() => {
+    const loadComments = async () => {
+      setLoading(true);
+      const comments = await getPostComments(material.discussionId);
+      setCommentsList(comments);
+      setLoading(false);
+    };
+    loadComments();
+  }, [material.discussionId]);
+
+  // ✅ Enviar comentario
   const handleSend = async () => {
     if (!comment.trim()) return;
     
-    await addCommunityComment(material.discussionId, comment);
-    toast.success("💬 Comentario enviado");
-    setComment('');
+    const success = await addCommunityComment(material.discussionId, comment);
+    
+    if (success) {
+      toast.success("💬 Comentario enviado");
+      setComment('');
+      // Recargar comentarios
+      const updatedComments = await getPostComments(material.discussionId);
+      setCommentsList(updatedComments);
+    } else {
+      toast.error("❌ No tienes permiso para comentar. Verifica configuración en Moodle.");
+    }
+  };
+
+  // ✅ Toggle Like con Optimistic UI
+  const handleLike = async () => {
+    if (isLiking) return; // Prevenir múltiples clicks
+    
+    setIsLiking(true);
+    setLikes(l => l + 1); // Optimistic UI
+    
+    const success = await toggleLike(material);
+    
+    if (!success) {
+      // Rollback si falla
+      setLikes(l => l - 1);
+      toast.error("❌ Error al guardar like");
+    }
+    
+    setIsLiking(false);
   };
 
   // ✅ RENDERIZADOR DE BLOQUES EN EL CLIENTE
@@ -145,13 +187,25 @@ export const ArticleReader: React.FC<{ material: any, onClose: () => void }> = (
               {material.title}
             </h1>
             
-            {material.targetLevel && material.targetLevel !== 'ALL' && (
-              <div className="mt-4 inline-block px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
-                <span className="text-white text-xs font-bold">
-                  🎯 Nivel {material.targetLevel}
-                </span>
-              </div>
-            )}
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              {material.targetLevel && material.targetLevel !== 'ALL' && (
+                <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+                  <span className="text-white text-xs font-bold">
+                    🎯 Nivel {material.targetLevel}
+                  </span>
+                </div>
+              )}
+              
+              {/* ✅ Botón de Like */}
+              <button
+                onClick={handleLike}
+                disabled={isLiking}
+                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full transition-all group"
+              >
+                <Heart className={`w-4 h-4 text-white transition-all ${isLiking ? 'fill-rose-500 scale-110' : 'group-hover:fill-white'}`} />
+                <span className="text-white text-sm font-bold">{likes}</span>
+              </button>
+            </div>
           </div>
         </div>
         
@@ -171,34 +225,73 @@ export const ArticleReader: React.FC<{ material: any, onClose: () => void }> = (
           </div>
         </div>
         
-        {/* Comentarios */}
+        {/* ✅ Sección de Comentarios */}
         <div className="bg-slate-50 p-8 md:p-12 border-t border-slate-200">
           <h3 className="font-black text-slate-800 mb-6 flex gap-2 items-center">
             <MessageCircle className="w-5 h-5 text-indigo-600" /> 
-            Comentarios
+            Comentarios ({commentsList.length})
           </h3>
           
-          <div className="flex gap-4">
+          {/* Input de comentario */}
+          <div className="flex gap-4 mb-8">
             <div className="flex-1 relative">
               <Input 
                 value={comment} 
                 onChange={e => setComment(e.target.value)} 
                 placeholder="Comenta algo..." 
                 className="w-full h-12 rounded-2xl pr-12 bg-white border-slate-200" 
-                onKeyDown={e => e.key === 'Enter' && handleSend()}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
               />
               <button 
                 onClick={handleSend} 
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all"
+                disabled={!comment.trim()}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />
               </button>
             </div>
           </div>
           
-          {material.commentsCount > 0 && (
-            <div className="mt-6 text-sm text-slate-400 text-center">
-              {material.commentsCount} comentario{material.commentsCount !== 1 ? 's' : ''}
+          {/* ✅ Lista de comentarios */}
+          {loading ? (
+            <div className="text-center py-8 text-slate-400">
+              Cargando comentarios...
+            </div>
+          ) : commentsList.length > 0 ? (
+            <div className="space-y-4">
+              {commentsList.map(c => (
+                <div key={c.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                  <div className="flex items-start gap-3">
+                    <img 
+                      src={c.avatar || 'https://ui-avatars.com/api/?name=Usuario&background=94a3b8&color=fff'} 
+                      className="w-8 h-8 rounded-full flex-shrink-0" 
+                      alt={c.author}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-slate-800 text-sm">
+                          {c.author}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(c.date).toLocaleDateString('es-ES', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
+                        {c.content}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-slate-400">
+              No hay comentarios aún. ¡Sé el primero en comentar!
             </div>
           )}
         </div>

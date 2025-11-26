@@ -494,7 +494,8 @@ export const getCommunityPosts = async () => {
       targetLevel: meta.level || 'ALL',
       likes: meta.likes || 0,
       date: new Date(disc.created * 1000).toISOString(),
-      commentsCount: disc.numreplies || 0
+      commentsCount: disc.numreplies || 0,
+      meta: meta // ✅ GUARDAR META COMPLETO PARA toggleLike
     };
   });
 };
@@ -589,4 +590,80 @@ export const addCommunityComment = async (postId: string | number, message: stri
     subject: "Comentario",
     message: message
   });
+};
+
+// ✅ TOGGLE LIKE (Incrementar contador de likes)
+export const toggleLike = async (post: any) => {
+  console.log("❤️ Incrementando like en post:", post.postId);
+  
+  // 1. Incrementar contador
+  const newLikes = (post.likes || 0) + 1;
+  
+  // 2. Actualizar metadata
+  const updatedMeta = {
+    ...post.meta,
+    likes: newLikes
+  };
+  
+  // 3. Reconstruir mensaje con bloques
+  const summary = (post.blocks || [])
+    .map((b: any) => b.type === 'text' ? b.content.substring(0, 50) : `[${b.type}]`)
+    .join(' ');
+  
+  const message = `${summary}...<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(updatedMeta)}[/LUINGO_DATA]</span>`;
+  
+  // 4. Guardar en Moodle
+  const cleanId = String(post.postId).replace(/\D/g, '');
+  const res = await callMoodle("mod_forum_update_discussion_post", {
+    postid: cleanId,
+    subject: post.title,
+    message
+  });
+  
+  if (res && res.status !== false) {
+    console.log("✅ Like guardado:", newLikes);
+    return true;
+  }
+  
+  console.error("❌ Error al guardar like");
+  return false;
+};
+
+// ✅ LEER COMENTARIOS DE UN POST
+export const getPostComments = async (discussionId: string | number) => {
+  const cleanId = String(discussionId).replace(/\D/g, '');
+  
+  console.log("💬 Cargando comentarios de discusión:", cleanId);
+  
+  const data = await callMoodle("mod_forum_get_discussion_posts", {
+    discussionid: cleanId
+  });
+  
+  if (!data || !data.posts) {
+    console.warn("⚠️ No se pudieron cargar comentarios");
+    return [];
+  }
+  
+  // Filtrar el post inicial (que es el contenido, no un comentario)
+  // El post con parentid = 0 o el primero es el post principal
+  const allPosts = Array.isArray(data.posts) ? data.posts : [];
+  
+  // Ordenar por fecha para identificar el post principal (el más antiguo)
+  const sorted = allPosts.sort((a: any, b: any) => a.created - b.created);
+  const mainPostId = sorted[0]?.id;
+  
+  // Filtrar comentarios (excluyendo el post principal)
+  const comments = allPosts
+    .filter((p: any) => p.id !== mainPostId)
+    .map((c: any) => ({
+      id: c.id,
+      author: c.userfullname || 'Usuario',
+      avatar: c.userpictureurl || '',
+      content: c.message.replace(/<[^>]*>?/gm, '').replace(/\[LUINGO_DATA\].*?\[\/LUINGO_DATA\]/g, '').trim(),
+      date: new Date(c.created * 1000).toISOString()
+    }))
+    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Más antiguos primero
+  
+  console.log(`✅ ${comments.length} comentarios cargados`);
+  return comments;
 };
