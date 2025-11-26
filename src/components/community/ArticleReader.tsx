@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Send, MessageCircle, Calendar, User } from 'lucide-react';
+import { X, Send, MessageCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { addCommunityComment } from '../../lib/moodle';
@@ -7,68 +7,132 @@ import { toast } from 'sonner@2.0.3';
 
 export const ArticleReader: React.FC<{ material: any, onClose: () => void }> = ({ material, onClose }) => {
   const [comment, setComment] = useState('');
-  const [isSending, setIsSending] = useState(false);
 
   const handleSend = async () => {
-    if (!comment.trim()) {
-      toast.error("Escribe algo primero");
-      return;
+    if (!comment.trim()) return;
+    
+    await addCommunityComment(material.discussionId, comment);
+    toast.success("💬 Comentario enviado");
+    setComment('');
+  };
+
+  // ✅ RENDERIZADOR DE BLOQUES EN EL CLIENTE
+  const renderBlock = (b: any, idx: number) => {
+    if (!b.content) return null;
+
+    switch (b.type) {
+      case 'text':
+        return (
+          <p 
+            key={idx} 
+            className="text-lg text-slate-700 leading-relaxed whitespace-pre-wrap"
+          >
+            {b.content}
+          </p>
+        );
+      
+      case 'image':
+        return (
+          <img 
+            key={idx} 
+            src={b.content} 
+            className="w-full rounded-2xl shadow-sm border border-slate-100" 
+            alt="Imagen del post"
+          />
+        );
+      
+      case 'video':
+        // ✅ Parser de YouTube en el Cliente
+        const vId = b.content.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([^&?]*)/)?.[1] || '';
+        
+        if (vId) {
+          return (
+            <div 
+              key={idx} 
+              className="aspect-video rounded-2xl overflow-hidden shadow-lg bg-black"
+            >
+              <iframe 
+                src={`https://www.youtube.com/embed/${vId}`} 
+                className="w-full h-full" 
+                allowFullScreen 
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              />
+            </div>
+          );
+        } else {
+          // Fallback: Enlace directo si no se detecta el ID
+          return (
+            <a
+              key={idx}
+              href={b.content}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block p-6 bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200 rounded-2xl text-center hover:shadow-lg transition-all"
+            >
+              <div className="text-red-600 font-black text-lg mb-2">
+                🎬 Ver Video en YouTube
+              </div>
+              <div className="text-slate-500 text-sm break-all">
+                {b.content}
+              </div>
+            </a>
+          );
+        }
+      
+      case 'genially':
+        return (
+          <div 
+            key={idx} 
+            className="w-full rounded-2xl overflow-hidden shadow-lg border border-slate-100" 
+            style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}
+          >
+            <iframe 
+              src={b.content} 
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} 
+              allowFullScreen 
+              frameBorder="0"
+              scrolling="yes"
+            />
+          </div>
+        );
+      
+      case 'audio':
+        return (
+          <div key={idx} className="bg-slate-100 p-4 rounded-2xl flex justify-center">
+            <audio controls src={b.content} className="w-full" />
+          </div>
+        );
+      
+      default:
+        return null;
     }
-    
-    setIsSending(true);
-    const success = await addCommunityComment(material.postId, comment);
-    
-    if (success) { 
-      toast.success("💬 Comentario enviado"); 
-      setComment(''); 
-    } else { 
-      toast.error("❌ Error al enviar"); 
-    }
-    
-    setIsSending(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/95 z-50 flex flex-col backdrop-blur-sm">
-      
-      {/* Header */}
-      <div className="bg-white/95 backdrop-blur-md border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0">
-        <div className="flex-1">
-          <h1 className="text-2xl font-black text-slate-800 line-clamp-1">
-            {material.title}
-          </h1>
-        </div>
-        <Button
-          onClick={onClose}
-          variant="ghost"
-          size="icon"
-          className="rounded-full hover:bg-slate-100 ml-4 shrink-0"
-        >
-          <X className="w-6 h-6" />
-        </Button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto bg-[#F8FAFC]">
-        <div className="max-w-4xl mx-auto bg-white min-h-full shadow-sm border-x border-slate-100">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-4 md:p-8">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full my-8 overflow-hidden border border-slate-200 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        
+        {/* Header */}
+        <div className="relative bg-gradient-to-r from-indigo-600 to-purple-600 px-8 md:px-12 py-12 md:py-16">
+          <button 
+            onClick={onClose} 
+            className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-full text-white backdrop-blur-sm transition-all"
+          >
+            <X className="w-5 h-5" />
+          </button>
           
-          {/* Contenido Principal */}
-          <div className="p-8 md:p-12">
-            <div className="flex items-center gap-4 mb-8 pb-8 border-b border-slate-100">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-3 mb-4">
               <img 
                 src={material.avatar || 'https://ui-avatars.com/api/?name=Profesor&background=6366f1&color=fff'} 
-                className="w-14 h-14 rounded-full bg-slate-200 border-4 border-white shadow-sm" 
+                className="w-12 h-12 rounded-full ring-4 ring-white/30 shadow-lg" 
                 alt={material.author}
               />
               <div>
-                <p className="font-bold text-slate-800 text-lg flex items-center gap-2">
-                  <User className="w-4 h-4 text-indigo-500" />
-                  {material.author}
-                </p>
-                <p className="text-sm text-slate-500 font-medium flex items-center gap-2">
-                  <Calendar className="w-3 h-3" />
+                <p className="font-black text-white text-lg">{material.author}</p>
+                <p className="text-indigo-100 text-sm">
                   {new Date(material.date).toLocaleDateString('es-ES', { 
-                    weekday: 'long', 
                     year: 'numeric', 
                     month: 'long', 
                     day: 'numeric' 
@@ -77,55 +141,66 @@ export const ArticleReader: React.FC<{ material: any, onClose: () => void }> = (
               </div>
             </div>
             
-            {/* ✅ RENDER HTML LIMPIO CON ESTILOS MEJORADOS PARA IFRAMES */}
-            <div 
-              className="prose prose-lg prose-indigo max-w-none text-slate-700 leading-loose [&_iframe]:rounded-2xl [&_iframe]:shadow-lg [&_iframe]:w-full [&_img]:rounded-2xl [&_img]:shadow-md [&_img]:w-full [&_audio]:w-full"
-              dangerouslySetInnerHTML={{ __html: material.content }} 
-            />
-          </div>
-
-          {/* Sección Comentarios */}
-          <div className="bg-slate-50 p-8 md:p-12 border-t border-slate-200">
-            <h3 className="font-black text-slate-800 mb-6 flex items-center gap-2">
-              <MessageCircle className="w-5 h-5 text-indigo-500"/> 
-              Comentarios ({material.commentsCount || 0})
-            </h3>
+            <h1 className="text-3xl md:text-4xl font-black text-white leading-tight">
+              {material.title}
+            </h1>
             
-            {/* Input Comentario */}
-            <div className="flex gap-4 mb-8">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 shrink-0 flex items-center justify-center text-white font-bold text-sm">
-                U
+            {material.targetLevel && material.targetLevel !== 'ALL' && (
+              <div className="mt-4 inline-block px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+                <span className="text-white text-xs font-bold">
+                  🎯 Nivel {material.targetLevel}
+                </span>
               </div>
-              <div className="flex-1 relative">
-                <Input 
-                  value={comment} 
-                  onChange={e => setComment(e.target.value)} 
-                  placeholder="Escribe un comentario..." 
-                  className="w-full h-12 rounded-2xl border-2 border-slate-200 pr-12 focus:border-indigo-500 bg-white"
-                  onKeyDown={e => e.key === 'Enter' && !isSending && handleSend()}
-                  disabled={isSending}
-                />
-                <button 
-                  onClick={handleSend} 
-                  disabled={isSending || !comment.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
-                >
-                  {isSending ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Lista de Comentarios (Placeholder - Se llenará si implementamos lectura de replies) */}
-            <div className="text-center text-slate-400 text-sm py-8 bg-white rounded-2xl border-2 border-dashed border-slate-200">
-              <MessageCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="font-bold">Sé el primero en comentar</p>
-              <p className="text-xs mt-1">Los comentarios aparecerán aquí</p>
+            )}
+          </div>
+        </div>
+        
+        {/* Content */}
+        <div className="px-8 md:px-12 py-8 md:py-12 bg-white">
+          {/* ✅ RENDERIZAR BLOQUES DEL JSON */}
+          <div className="space-y-8">
+            {material.blocks?.length > 0 ? (
+              material.blocks.map((b: any, i: number) => renderBlock(b, i))
+            ) : (
+              // Fallback para posts antiguos sin bloques
+              <div 
+                className="prose prose-slate max-w-none text-lg leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: material.content || 'Sin contenido' }}
+              />
+            )}
+          </div>
+        </div>
+        
+        {/* Comentarios */}
+        <div className="bg-slate-50 p-8 md:p-12 border-t border-slate-200">
+          <h3 className="font-black text-slate-800 mb-6 flex gap-2 items-center">
+            <MessageCircle className="w-5 h-5 text-indigo-600" /> 
+            Comentarios
+          </h3>
+          
+          <div className="flex gap-4">
+            <div className="flex-1 relative">
+              <Input 
+                value={comment} 
+                onChange={e => setComment(e.target.value)} 
+                placeholder="Comenta algo..." 
+                className="w-full h-12 rounded-2xl pr-12 bg-white border-slate-200" 
+                onKeyDown={e => e.key === 'Enter' && handleSend()}
+              />
+              <button 
+                onClick={handleSend} 
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all"
+              >
+                <Send className="w-4 h-4" />
+              </button>
             </div>
           </div>
+          
+          {material.commentsCount > 0 && (
+            <div className="mt-6 text-sm text-slate-400 text-center">
+              {material.commentsCount} comentario{material.commentsCount !== 1 ? 's' : ''}
+            </div>
+          )}
         </div>
       </div>
     </div>

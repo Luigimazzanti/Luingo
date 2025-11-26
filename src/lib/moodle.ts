@@ -457,7 +457,7 @@ export const gradeSubmission = async (
 
 // ========== 📱 COMUNIDAD (SOCIAL FEED) ==========
 
-// ✅ LEER POSTS DE COMUNIDAD (Parseo HTML mejorado con decodificación)
+// ✅ LEER POSTS DE COMUNIDAD (Ahora recupera BLOQUES del JSON)
 export const getCommunityPosts = async () => {
   console.log("📱 Cargando posts de comunidad...");
   
@@ -468,41 +468,29 @@ export const getCommunityPosts = async () => {
   if (!data || !data.discussions) return [];
   
   return data.discussions.map((disc: any) => {
-    // 1️⃣ Decodificar primero para recuperar las etiquetas reales
-    const rawMessage = decodeHTML(disc.message);
+    // Extraer metadata JSON
+    const match = disc.message.match(/\[LUINGO_DATA\](.*?)\[\/LUINGO_DATA\]/);
+    const meta = match ? JSON.parse(match[1]) : {};
     
-    // 2️⃣ Extraer Metadata del span oculto
-    const match = rawMessage.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
-    let meta = { type: 'mixed', level: 'ALL', likes: 0 };
+    // ✅ NUEVA ARQUITECTURA: Recuperar bloques del JSON
+    const blocks = meta.blocks || [];
     
-    if (match) {
-      try {
-        meta = JSON.parse(match[1]);
-      } catch (e) {
-        console.warn('⚠️ Error parseando metadata de post:', e);
-      }
+    // Fallback: si es post antiguo sin bloques, extraer contenido HTML
+    let contentFallback = '';
+    if (blocks.length === 0) {
+      const decoded = disc.message.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+      contentFallback = decoded.split('<span')[0].replace(/<[^>]*>?/gm, '');
     }
-    
-    // 3️⃣ Limpiar Contenido (Quitar el span de metadata completo)
-    let contentHtml = rawMessage.split('<span style="display:none;">')[0];
-    
-    // Fallback: si el split no funcionó, usar replace
-    if (contentHtml.length === rawMessage.length) {
-      contentHtml = rawMessage.replace(/<span style="display:none;">[\s\S]*?<\/span>/g, '');
-      contentHtml = contentHtml.replace(/\[LUINGO_DATA\][\s\S]*?\[\/LUINGO_DATA\]/g, '');
-    }
-    
-    // Limpiar <br/> sobrantes al final
-    contentHtml = contentHtml.replace(/<br\s*\/?>\s*$/gi, '').trim();
-    
+
     return {
       id: `comm-${disc.discussion}`,
       discussionId: disc.discussion,
       postId: disc.id,
-      author: disc.userfullname || 'Profesor',
+      author: disc.userfullname || 'Usuario',
       avatar: disc.userpictureurl || '',
       title: disc.subject,
-      content: contentHtml, // ✅ HTML LIMPIO Y DECODIFICADO (Texto + Iframes)
+      blocks: blocks, // ✅ BLOQUES PUROS (array de {type, content})
+      content: contentFallback, // Fallback para posts viejos
       targetLevel: meta.level || 'ALL',
       likes: meta.likes || 0,
       date: new Date(disc.created * 1000).toISOString(),
@@ -511,22 +499,35 @@ export const getCommunityPosts = async () => {
   });
 };
 
-// ✅ CREAR POST (Ahora acepta HTML directo)
+// ✅ CREAR POST (Ahora guarda BLOQUES en el JSON)
 export const createCommunityPost = async (
   title: string, 
-  htmlContent: string, 
+  blocks: any[], 
   level: string
 ) => {
-  console.log("📤 Publicando en comunidad:", title);
+  console.log("📤 Publicando en comunidad:", title, "con", blocks.length, "bloques");
   
-  // Metadata mínima para filtros
-  const meta = { level, type: 'mixed', likes: 0 };
-  const message = `${htmlContent}<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  // ✅ GUARDAR TODO EN EL JSON (Moodle no toca el JSON)
+  const meta = { 
+    level, 
+    type: 'mixed', 
+    blocks: blocks, // ✅ Array de bloques
+    likes: 0 
+  };
   
-  const res = await callMoodle("mod_forum_add_discussion", {
-    forumid: COMMUNITY_FORUM_ID,
-    subject: title,
-    message: message
+  // Mensaje visible en Moodle (resumen simple para compatibilidad)
+  const summary = blocks
+    .map(b => b.type === 'text' ? b.content.substring(0, 50) : `[${b.type}]`)
+    .join(' ');
+  
+  const message = `${summary}...<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  
+  console.log("📦 Metadata enviada:", meta);
+  
+  const res = await callMoodle("mod_forum_add_discussion", { 
+    forumid: COMMUNITY_FORUM_ID, 
+    subject: title, 
+    message 
   });
   
   if (res && (res.discussionid || res.discussion)) {
@@ -538,27 +539,38 @@ export const createCommunityPost = async (
   return false;
 };
 
-// ✅ ACTUALIZAR POST (EDITAR)
+// ✅ ACTUALIZAR POST (Editar bloques)
 export const updateCommunityPost = async (
   postId: string | number, 
   title: string, 
-  htmlContent: string, 
+  blocks: any[], 
   level: string
 ) => {
-  const cleanId = String(postId).replace(/\D/g, ''); // Limpiar ID
-  console.log("📝 Actualizando post:", cleanId);
+  const cleanId = String(postId).replace(/\D/g, '');
+  console.log("📝 Actualizando post:", cleanId, "con", blocks.length, "bloques");
   
-  const meta = { level, type: 'mixed', likes: 0 };
-  const message = `${htmlContent}<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  // ✅ GUARDAR BLOQUES EN JSON
+  const meta = { 
+    level, 
+    type: 'mixed', 
+    blocks: blocks, 
+    likes: 0 
+  };
   
-  const res = await callMoodle("mod_forum_update_discussion_post", {
-    postid: cleanId,
-    subject: title,
-    message: message
+  const summary = blocks
+    .map(b => b.type === 'text' ? b.content.substring(0, 50) : `[${b.type}]`)
+    .join(' ');
+  
+  const message = `${summary}...<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  
+  const res = await callMoodle("mod_forum_update_discussion_post", { 
+    postid: cleanId, 
+    subject: title, 
+    message 
   });
   
-  if (res) {
-    console.log("✅ Post actualizado correctamente");
+  if (res && res.status !== false) {
+    console.log("✅ Post actualizado");
     return true;
   }
   

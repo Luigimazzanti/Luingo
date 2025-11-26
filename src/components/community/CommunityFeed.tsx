@@ -43,28 +43,26 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ student, isTeacher
   });
 
   // ✅ HANDLER UNIFICADO (Crear o Editar)
-  const handlePublish = async (title: string, html: string, level: string) => {
+  const handlePublish = async (title: string, blocks: any[], level: string) => {
     let success = false;
+    toast.loading("Publicando...");
     
-    toast.loading(editingPost ? "Actualizando post..." : "Publicando...");
-    
+    // ✅ PASAMOS 'blocks' DIRECTAMENTE A LA API
     if (editingPost) {
-      // Modo edición
-      success = await updateCommunityPost(editingPost.postId, title, html, level);
+      success = await updateCommunityPost(editingPost.postId, title, blocks, level);
     } else {
-      // Modo creación
-      success = await createCommunityPost(title, html, level);
+      success = await createCommunityPost(title, blocks, level);
     }
     
     toast.dismiss();
     
-    if (success) { 
-      toast.success(editingPost ? "✅ Post actualizado" : "✅ Publicado con éxito"); 
+    if (success) {
+      toast.success(editingPost ? "✅ Post actualizado" : "✅ Publicado correctamente");
       setShowCreate(false);
-      setEditingPost(null); // Limpiar estado de edición
-      loadPosts(); 
-    } else { 
-      toast.error("❌ Error al conectar con Moodle"); 
+      setEditingPost(null);
+      loadPosts();
+    } else {
+      toast.error("❌ Error. Verifica la consola.");
     }
   };
 
@@ -196,7 +194,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ student, isTeacher
             <ResourceComposer 
               initialData={editingPost ? { 
                 title: editingPost.title, 
-                content: editingPost.content, 
+                blocks: editingPost.blocks, // ✅ PASAMOS BLOQUES EN LUGAR DE HTML
                 level: editingPost.targetLevel 
               } : undefined} // ✅ CORREGIDO: Pasar objeto initialData
               onPublish={handlePublish} 

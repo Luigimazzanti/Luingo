@@ -6,49 +6,17 @@ import { Image, Youtube, Mic, Type, X, MonitorPlay, UploadCloud, AlertCircle } f
 import { toast } from 'sonner@2.0.3';
 
 interface ResourceComposerProps {
-  initialData?: { title: string, content: string, level: string };
-  onPublish: (title: string, contentHtml: string, level: string) => void;
+  initialData?: { title: string, blocks: any[], level: string }; // ✅ CAMBIADO: blocks en lugar de content
+  onPublish: (title: string, blocks: any[], level: string) => void; // ✅ CAMBIADO: blocks en lugar de contentHtml
   onCancel: () => void;
 }
 
 export const ResourceComposer: React.FC<ResourceComposerProps> = ({ initialData, onPublish, onCancel }) => {
   const [title, setTitle] = useState(initialData?.title || '');
   const [level, setLevel] = useState(initialData?.level || 'ALL');
-  const [blocks, setBlocks] = useState<{type: string, content: string}[]>([{type: 'text', content: ''}]);
-
-  // ✅ RECUPERAR CONTENIDO AL EDITAR
-  useEffect(() => {
-    if (initialData?.content) {
-      console.log('🔍 Parseando contenido para edición...');
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(initialData.content, 'text/html');
-      const newBlocks: any[] = [];
-      
-      // Lógica simple de recuperación
-      doc.body.childNodes.forEach((node) => {
-        if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) return; // Ignorar espacios
-
-        if (node.nodeName === 'P' || (node.nodeName === 'DIV' && !node.hasChildNodes())) {
-          newBlocks.push({ type: 'text', content: node.textContent });
-        } else if (node.nodeName === 'IMG') {
-          newBlocks.push({ type: 'image', content: (node as HTMLImageElement).src });
-        } else if (node.nodeName === 'DIV' || node.nodeName === 'IFRAME') {
-          const el = node.nodeName === 'DIV' ? (node as Element).querySelector('iframe') : node as HTMLIFrameElement;
-          if (el) {
-            if (el.src.includes('youtube')) newBlocks.push({ type: 'video', content: el.src });
-            else if (el.src.includes('genial.ly')) newBlocks.push({ type: 'genially', content: el.src });
-          }
-          const audio = (node as Element).querySelector('audio');
-          if (audio) newBlocks.push({ type: 'audio', content: audio.src });
-        }
-      });
-      
-      if (newBlocks.length > 0) {
-        console.log('✅ Bloques recuperados:', newBlocks.length);
-        setBlocks(newBlocks);
-      }
-    }
-  }, [initialData]);
+  const [blocks, setBlocks] = useState<{type: string, content: string}[]>(
+    initialData?.blocks || [{type: 'text', content: ''}] // ✅ RECUPERAR BLOQUES DIRECTAMENTE
+  );
 
   const addBlock = (type: any) => setBlocks([...blocks, { type, content: '' }]);
   
@@ -66,74 +34,43 @@ export const ResourceComposer: React.FC<ResourceComposerProps> = ({ initialData,
     setBlocks(blocks.filter((_, i) => i !== idx));
   };
 
-  // ✅ GENERADOR DE HTML CON VALIDACIÓN DE URLs
+  // ✅ PUBLICAR BLOQUES PUROS (Sin convertir a HTML)
   const handlePublish = () => {
     if (!title.trim()) {
       toast.error("❌ Falta título");
       return;
     }
 
-    let html = `<div class="luingo-post space-y-8">`;
-    let hasError = false;
-
-    blocks.forEach((b, idx) => {
-      if (!b.content.trim()) return; // Ignorar bloques vacíos
-
-      if (b.type === 'text') {
-        // Texto con saltos de línea preservados
-        html += `<p style="font-size:1.1rem; line-height:1.6; color:#334155; white-space: pre-wrap;">${b.content}</p>`;
-      } 
-      else {
-        // ✅ VALIDACIÓN DE URL ESTRICTA
-        if (!b.content.startsWith('http://') && !b.content.startsWith('https://')) {
-          toast.error(`❌ Bloque #${idx+1} (${b.type}): Debe ser una URL válida que empiece con http:// o https://`);
-          hasError = true;
-          return;
-        }
-
-        if (b.type === 'image') {
-          html += `<img src="${b.content}" style="width:100%; border-radius:16px; box-shadow:0 4px 6px rgba(0,0,0,0.1);" alt="Recurso" />`;
-        } 
-        else if (b.type === 'video') {
-          // ✅ PARSER DE YOUTUBE TOLERANTE CON FALLBACK
-          let vId = '';
-          try {
-            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-            const match = b.content.match(regExp);
-            if (match && match[2].length === 11) vId = match[2];
-          } catch(e) {
-            console.error('Error parseando YouTube:', e);
-          }
-
-          if (vId) {
-            html += `<div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.15); margin-bottom:1rem;">
-              <iframe src="https://www.youtube.com/embed/${vId}" style="position:absolute; top:0; left:0; width:100%; height:100%;" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-            </div>`;
-          } else {
-            // Fallback: insertar como enlace si no se detecta el ID
-            toast.warning(`⚠️ URL de YouTube no reconocida en bloque #${idx+1}. Se insertará como enlace.`);
-            html += `<a href="${b.content}" target="_blank" rel="noopener noreferrer" style="display:block; padding:1rem; background:#f8fafc; border:2px solid #e2e8f0; border-radius:12px; text-align:center; color:#4f46e5; font-weight:bold; text-decoration:none;">🎬 Ver Video en YouTube</a>`;
-          }
-        } 
-        else if (b.type === 'genially') {
-          html += `<div style="width: 100%;"><div style="position: relative; padding-bottom: 56.25%; padding-top: 0; height: 0; box-shadow: 0px 10px 20px rgba(0,0,0,0.08); border-radius: 16px; overflow:hidden;"><iframe src="${b.content}" frameborder="0" width="1200" height="675" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" allowscriptaccess="always" allowfullscreen="true" scrolling="yes" allownetworking="all"></iframe></div></div>`;
-        } 
-        else if (b.type === 'audio') {
-          html += `<div style="background:#f1f5f9; padding:1rem; border-radius:12px; display:flex; align-items:center;"><audio controls style="width:100%;" src="${b.content}"></audio></div>`;
-        }
+    // ✅ VALIDACIÓN BÁSICA DE URLs
+    const hasErrors = blocks.some((b, idx) => {
+      if (b.type === 'text') return false; // Texto no necesita validación
+      if (!b.content.trim()) return false; // Vacío, será ignorado
+      
+      // Validar que sea URL
+      if (!b.content.startsWith('http://') && !b.content.startsWith('https://')) {
+        toast.error(`❌ Bloque #${idx+1} (${b.type}): Debe ser una URL válida que empiece con http:// o https://`);
+        return true;
       }
+      return false;
     });
 
-    html += `</div>`;
-
-    // ✅ SOLO PUBLICAR SI NO HAY ERRORES
-    if (hasError) {
+    if (hasErrors) {
       toast.error("⚠️ Corrige los errores antes de publicar");
       return;
     }
 
-    console.log("📤 Generando HTML:", html.substring(0, 200) + '...');
-    onPublish(title, html, level);
+    // Filtrar bloques vacíos
+    const validBlocks = blocks.filter(b => b.content.trim());
+    
+    if (validBlocks.length === 0) {
+      toast.error("❌ Debes añadir al menos un bloque con contenido");
+      return;
+    }
+
+    console.log("📤 Publicando bloques puros:", validBlocks);
+    
+    // ✅ ENVIAR BLOQUES DIRECTAMENTE (No HTML)
+    onPublish(title, validBlocks, level);
   };
 
   return (
