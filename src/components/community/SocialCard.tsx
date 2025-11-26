@@ -1,12 +1,13 @@
 import React from 'react';
-import { Heart, MessageCircle, Share2, Play, FileText, Image as ImageIcon, MonitorPlay, Mic, Edit2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Play, FileText, Image as ImageIcon, MonitorPlay, Mic, Edit2, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export const SocialCard: React.FC<{ 
   post: any, 
   onClick: () => void, 
-  onEdit?: () => void // ✅ NUEVO: Callback para editar
-}> = ({ post, onClick, onEdit }) => {
+  onEdit?: () => void, // ✅ Callback para editar
+  onDelete?: () => void // ✅ NUEVO: Callback para borrar
+}> = ({ post, onClick, onEdit, onDelete }) => {
   
   // Detectar contenido HTML
   const hasVideo = post.content.includes('youtube.com/embed') || post.content.includes('youtu.be');
@@ -170,6 +171,17 @@ export const SocialCard: React.FC<{
               title="Editar post"
             >
               <Edit2 className="w-4 h-4 group-hover/edit:scale-110 transition-transform" />
+            </button>
+          )}
+          
+          {/* ✅ BOTÓN BORRAR (Solo si onDelete existe) */}
+          {onDelete && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="flex items-center gap-1.5 text-slate-400 hover:text-red-500 transition-colors group/delete"
+              title="Borrar post"
+            >
+              <Trash2 className="w-4 h-4 group-hover/delete:scale-110 transition-transform" />
             </button>
           )}
         </div>

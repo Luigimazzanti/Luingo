@@ -73,6 +73,8 @@
     --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     --color-red-50: oklch(.971 .013 17.38);
+    --color-red-300: oklch(.808 .114 19.571);
+    --color-red-500: oklch(.637 .237 25.331);
     --color-red-600: oklch(.577 .245 27.325);
     --color-orange-50: oklch(.98 .016 73.684);
     --color-orange-200: oklch(.901 .076 70.697);
@@ -132,7 +134,6 @@
     --color-purple-50: oklch(.977 .014 308.299);
     --color-purple-100: oklch(.946 .033 307.174);
     --color-purple-200: oklch(.902 .063 306.703);
-    --color-purple-300: oklch(.827 .119 306.383);
     --color-purple-400: oklch(.714 .203 305.504);
     --color-purple-500: oklch(.627 .265 303.9);
     --color-purple-600: oklch(.558 .288 302.321);
@@ -954,10 +955,6 @@
     height: calc(var(--spacing) * 10);
   }
 
-  .h-11 {
-    height: calc(var(--spacing) * 11);
-  }
-
   .h-12 {
     height: calc(var(--spacing) * 12);
   }
@@ -1532,6 +1529,10 @@
     border-color: var(--color-amber-200);
   }
 
+  .border-amber-300 {
+    border-color: var(--color-amber-300);
+  }
+
   .border-amber-400 {
     border-color: var(--color-amber-400);
   }
@@ -1610,6 +1611,10 @@
 
   .border-purple-200 {
     border-color: var(--color-purple-200);
+  }
+
+  .border-red-300 {
+    border-color: var(--color-red-300);
   }
 
   .border-rose-200 {
@@ -2368,6 +2373,10 @@
     padding-top: calc(var(--spacing) * 6);
   }
 
+  .pt-8 {
+    padding-top: calc(var(--spacing) * 8);
+  }
+
   .pr-8 {
     padding-right: calc(var(--spacing) * 8);
   }
@@ -2658,6 +2667,14 @@
 
   .text-purple-700 {
     color: var(--color-purple-700);
+  }
+
+  .text-red-500 {
+    color: var(--color-red-500);
+  }
+
+  .text-red-600 {
+    color: var(--color-red-600);
   }
 
   .text-rose-400 {
@@ -3059,6 +3076,15 @@
   }
 
   @media (hover: hover) {
+    .group-hover\/delete\:scale-110:is(:where(.group\/delete):hover *) {
+      --tw-scale-x: 110%;
+      --tw-scale-y: 110%;
+      --tw-scale-z: 110%;
+      scale: var(--tw-scale-x) var(--tw-scale-y);
+    }
+  }
+
+  @media (hover: hover) {
     .group-hover\/edit\:scale-110:is(:where(.group\/edit):hover *) {
       --tw-scale-x: 110%;
       --tw-scale-y: 110%;
@@ -3197,32 +3223,20 @@
   }
 
   @media (hover: hover) {
-    .hover\:border-purple-300:hover {
-      border-color: var(--color-purple-300);
-    }
-  }
-
-  @media (hover: hover) {
-    .hover\:border-rose-300:hover {
-      border-color: var(--color-rose-300);
-    }
-  }
-
-  @media (hover: hover) {
     .hover\:border-slate-200:hover {
       border-color: var(--color-slate-200);
     }
   }
 
   @media (hover: hover) {
-    .hover\:border-slate-300:hover {
-      border-color: var(--color-slate-300);
+    .hover\:bg-accent:hover {
+      background-color: var(--accent);
     }
   }
 
   @media (hover: hover) {
-    .hover\:bg-accent:hover {
-      background-color: var(--accent);
+    .hover\:bg-amber-50:hover {
+      background-color: var(--color-amber-50);
     }
   }
 
@@ -3323,8 +3337,8 @@
   }
 
   @media (hover: hover) {
-    .hover\:bg-purple-50:hover {
-      background-color: var(--color-purple-50);
+    .hover\:bg-red-50:hover {
+      background-color: var(--color-red-50);
     }
   }
 
@@ -3445,6 +3459,12 @@
   }
 
   @media (hover: hover) {
+    .hover\:text-red-500:hover {
+      color: var(--color-red-500);
+    }
+  }
+
+  @media (hover: hover) {
     .hover\:text-rose-500:hover {
       color: var(--color-rose-500);
     }
@@ -3518,6 +3538,11 @@
 
   .focus\:bg-white:focus {
     background-color: var(--color-white);
+  }
+
+  .focus\:ring-0:focus {
+    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
   .focus\:ring-2:focus {
@@ -4020,12 +4045,6 @@
   @media (width >= 48rem) {
     .md\:grid-cols-3 {
       grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-  }
-
-  @media (width >= 48rem) {
-    .md\:grid-cols-5 {
-      grid-template-columns: repeat(5, minmax(0, 1fr));
     }
   }
 

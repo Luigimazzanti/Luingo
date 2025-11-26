@@ -3,7 +3,7 @@ import { SocialCard } from './SocialCard';
 import { Button } from '../ui/button';
 import { Globe, Lock, Plus, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { getCommunityPosts, createCommunityPost, updateCommunityPost } from '../../lib/moodle'; // ✅ AÑADIDO updateCommunityPost
+import { getCommunityPosts, createCommunityPost, updateCommunityPost, deleteMoodleTask } from '../../lib/moodle'; // ✅ AÑADIDO deleteMoodleTask
 // ✅ AÑADIDO DialogDescription para accesibilidad
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { ResourceComposer } from './ResourceComposer';
@@ -72,6 +72,27 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ student, isTeacher
   const openEdit = (post: any) => {
     setEditingPost(post);
     setShowCreate(true); // Reutilizamos el modal de creación
+  };
+
+  // ✅ BORRAR POST DE COMUNIDAD
+  const handleDeletePost = async (post: any) => {
+    if (!window.confirm(`¿Borrar "${post.title}"? Esta acción eliminará la publicación de Moodle permanentemente.`)) {
+      return;
+    }
+
+    toast.loading("Borrando publicación...");
+    
+    // Los posts de comunidad son discusiones, así que borramos la discusión completa
+    const success = await deleteMoodleTask(post.discussionId);
+    
+    toast.dismiss();
+    
+    if (success) {
+      toast.success("🗑️ Post eliminado correctamente");
+      loadPosts(); // Recargar el feed
+    } else {
+      toast.error("❌ Error al borrar. Verifica permisos en Moodle.");
+    }
   };
 
   return (
@@ -143,6 +164,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({ student, isTeacher
               post={post} 
               onClick={() => setSelectedPost(post)} 
               onEdit={isTeacher ? () => openEdit(post) : undefined} // ✅ Solo mostrar editar si es profesor
+              onDelete={isTeacher ? () => handleDeletePost(post) : undefined} // ✅ Solo mostrar borrar si es profesor
             />
           ))}
           {filteredPosts.length === 0 && (
