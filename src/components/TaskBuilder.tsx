@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Link as LinkIcon } from 'lucide-react';
-import { cn, getSmartLink } from '../lib/utils';
+import { cn, getDriveDirectLink } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
 
@@ -163,31 +163,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     if (q.correct_answer === q.options[idx]) {
       updateQuestion(qId, 'correct_answer', val);
     }
-  };
-
-  // ========== LIMPIEZA DE ENLACES ONEDRIVE ==========
-  // ✅ FUNCIÓN DE LIMPIEZA MEJORADA para extraer URLs de iframes
-  const cleanOneDriveLink = (input: string) => {
-    let cleanUrl = input;
-
-    // 1. Extraer URL del iframe si existe
-    if (input.includes('<iframe')) {
-      const srcMatch = input.match(/src="([^"]+)"/);
-      if (srcMatch && srcMatch[1]) {
-        cleanUrl = srcMatch[1]; // Nos quedamos solo con la URL
-        toast.info("Enlace extraído del código iframe 👍");
-      }
-    }
-
-    // 2. Asegurar que sea un enlace válido antes de procesar
-    if (cleanUrl.startsWith('http')) {
-      // Detectar si ya es un smart link o necesita conversión
-      if (!cleanUrl.includes('onedrive-proxy') && !cleanUrl.includes('drive-proxy') && (cleanUrl.includes('onedrive.live.com') || cleanUrl.includes('1drv.ms') || cleanUrl.includes('drive.google.com'))) {
-        return getSmartLink(cleanUrl);
-      }
-    }
-    
-    return cleanUrl;
   };
 
   // ========== GUARDAR TAREA ==========
@@ -696,20 +671,18 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                     value={pdfUrl} 
                     onChange={e => {
                       const val = e.target.value;
-                      setPdfUrl(cleanOneDriveLink(val)); // ✅ Limpiar al vuelo
+                      // Si parece un link de drive, lo convertimos automáticamente
+                      if (val.includes('drive.google.com')) {
+                        setPdfUrl(getDriveDirectLink(val));
+                      } else {
+                        setPdfUrl(val);
+                      }
                     }} 
-                    onPaste={e => {
-                      // ✅ DOBLE SEGURIDAD AL PEGAR
-                      e.preventDefault();
-                      const pastedText = e.clipboardData.getData('text');
-                      const cleaned = cleanOneDriveLink(pastedText);
-                      setPdfUrl(cleaned);
-                    }}
-                    placeholder="Pega el código <iframe> o el enlace..." 
+                    placeholder="Pega aquí el enlace de compartir de Drive..." 
                     className="font-mono text-sm bg-white border-2 border-amber-300"
                   />
                   <div className="p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100">
-                    <strong>💡 Tip:</strong> Funciona con Google Drive y OneDrive. Puedes pegar el <strong>código &lt;iframe&gt;</strong> completo o solo el enlace directo. El sistema extraerá automáticamente la URL.
+                    <strong>💡 Tip:</strong> Puedes pegar un enlace de compartir de Google Drive y se convertirá automáticamente a un enlace directo.
                   </div>
                 </div>
               </div>
