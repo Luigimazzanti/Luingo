@@ -76,13 +76,13 @@ app.post("/make-server-ebbb5c67/moodle-proxy", async (c) => {
     }
 
     const url = new URL(MOODLE_URL);
-    // Mantenemos el token en la URL por compatibilidad máxima
+    // Solo enviamos el token y el formato en la URL
     url.searchParams.append("wstoken", MOODLE_TOKEN);
     url.searchParams.append("moodlewsrestformat", "json");
 
-    // CAMBIO CLAVE: Preparamos los datos para viajar en el cuerpo (POST) en lugar de la URL
+    // ✅ CORRECCIÓN: Preparamos los datos para enviarlos por POST en el body
     const formData = new URLSearchParams();
-    formData.append("wsfunction", functionName); // La función va en el cuerpo
+    formData.append("wsfunction", functionName);
     
     if (params) {
       Object.keys(params).forEach((key) => {
@@ -90,7 +90,7 @@ app.post("/make-server-ebbb5c67/moodle-proxy", async (c) => {
       });
     }
 
-    // Enviamos como POST
+    // ✅ CORRECCIÓN: Usamos POST para evitar errores de longitud de URL con comentarios largos
     const response = await fetch(url.toString(), {
         method: "POST",
         headers: {
