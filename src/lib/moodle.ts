@@ -64,13 +64,13 @@ const callMoodle = async (
       return data;
     } catch (parseError) {
       console.error(
-        `❌ Error JSON (${functionName}):`,
-        text.substring(0, 50),
+        `❌ Error parseando JSON de Moodle (${functionName}):`,
+        text.substring(0, 100),
       );
       return null;
     }
   } catch (error) {
-    console.error(`❌ Error Red (${functionName}):`, error);
+    console.error(`❌ Error de Red (${functionName}):`, error);
     return null;
   }
 };
@@ -149,7 +149,6 @@ export const updateMoodleTask = async (
   const cleanId = String(discussionId).replace(/\D/g, "");
   const message = `${description}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(jsonSettings)}[/LUINGO_DATA]</span>`;
 
-  // Intentar obtener postId si es necesario
   let postId = cleanId;
   const posts = await callMoodle(
     "mod_forum_get_discussion_posts",
@@ -173,7 +172,6 @@ const smartDelete = async (discussionId: string | number) => {
   );
   if (resDisc && !resDisc.exception) return true;
 
-  // Fallback
   const postsData = await callMoodle(
     "mod_forum_get_discussion_posts",
     { discussionid: cleanId },
@@ -230,7 +228,7 @@ export const getMoodleTasks = async () => {
   });
 };
 
-// ========== SUBMISSIONS ==========
+// ========== SUBMISSIONS & GRADING ==========
 export const getMoodleSubmissions = async () => {
   const data = await callMoodle(
     "mod_forum_get_forum_discussions",
@@ -440,9 +438,13 @@ export const updateCommunityPost = async (
     likes: existingLikes,
   };
   const message = `Update...<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+
+  // Asegurar que tenemos el post ID correcto
+  let targetPostId = String(postId).replace(/\D/g, "");
+
   return (
     await callMoodle("mod_forum_update_discussion_post", {
-      postid: String(postId).replace(/\D/g, ""),
+      postid: targetPostId,
       subject: title,
       message,
     })
@@ -468,8 +470,8 @@ export const toggleCommunityLike = async (
   };
   const message = `Like update...<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
 
-  // Limpiar ID
   let targetId = String(post.postId).replace(/\D/g, "");
+
   return (
     await callMoodle("mod_forum_update_discussion_post", {
       postid: targetId,
@@ -479,35 +481,73 @@ export const toggleCommunityLike = async (
   )?.status;
 };
 
+// ✅ COMENTARIOS CON FIRMA DIGITAL (FIX DEFINITIVO)
 export const addCommunityComment = async (
   discussionId: string | number,
   message: string,
+  author: { id: string; name: string; avatar?: string },
 ) => {
   const cleanDiscId = String(discussionId).replace(/\D/g, "");
+  console.log(
+    `💬 Intentando comentar en discusión ID: ${cleanDiscId}`,
+  );
+
   const postsData = await callMoodle(
     "mod_forum_get_discussion_posts",
     { discussionid: cleanDiscId },
   );
-  if (!postsData?.posts?.length) return false;
+
+  if (!postsData?.posts?.length) {
+    console.error(
+      "❌ No se encontraron posts. Verifica permisos de LECTURA.",
+    );
+    return false;
+  }
 
   const parentPost = postsData.posts.sort(
     (a: any, b: any) => a.id - b.id,
   )[0];
-  const subject = parentPost.subject.startsWith("Re:")
-    ? parentPost.subject
-    : `Re: ${parentPost.subject}`;
+
+  // ✅ FIX FINAL: Usar asunto con prefijo forzado si no lo tiene
+  let subject = parentPost.subject;
+  if (!subject.startsWith("Re:")) {
+    subject = `Re: ${subject}`;
+  }
+
+  console.log(
+    `📨 Reply a post ${parentPost.id} | Asunto: "${subject}"`,
+  );
+
+  // 🔥 FIRMA OCULTA: Metemos los datos reales del alumno en el HTML
+  // Así aunque Moodle diga que lo escribió el Admin, nuestro frontend sabrá la verdad.
+  const signedMessage = `
+    <div class="luingo-comment-content">${message}</div>
+    <span style="display:none;" data-luingo-author-id="${author.id}" data-luingo-author-name="${author.name}" data-luingo-avatar="${author.avatar || ""}">
+      [LUINGO_SIGNATURE]
+    </span>
+  `;
 
   const response = await callMoodle(
     "mod_forum_add_discussion_post",
     {
       postid: parentPost.id,
       subject: subject,
-      message: `<p>${message}</p>`,
+      message: signedMessage,
+      // Opciones explícitas
+      "options[0][name]": "discussionsubscribe",
+      "options[0][value]": true,
     },
   );
-  return response && response.postid;
+
+  if (response && response.postid) {
+    return response.postid;
+  } else {
+    console.error("❌ Fallo al escribir.", response);
+    return false;
+  }
 };
 
+// ✅ LECTURA DE COMENTARIOS (PARSEA LA FIRMA)
 export const getPostComments = async (
   discussionId: string | number,
 ) => {
@@ -524,14 +564,55 @@ export const getPostComments = async (
 
   return sorted
     .filter((p: any) => p.id !== parentId)
-    .map((p: any) => ({
-      id: p.id,
-      author: p.userfullname,
-      userId: p.userid, // ✅ ESTO ES LO NUEVO: Necesario para saber si es "Tú"
-      avatar: p.userpictureurl,
-      content: p.message.replace(/<[^>]*>?/gm, "").trim(),
-      date: safeDate(p.created),
-    }))
+    .map((p: any) => {
+      // 🔥 EXTRACCIÓN DE FIRMA
+      // Buscamos si hay una firma LuinGo en el mensaje
+      let realAuthorId = p.userid;
+      let realAuthorName = p.userfullname;
+      let realAvatar = p.userpictureurl;
+      let content = p.message;
+
+      // Regex para buscar los datos ocultos
+      const idMatch = p.message.match(
+        /data-luingo-author-id="([^"]+)"/,
+      );
+      const nameMatch = p.message.match(
+        /data-luingo-author-name="([^"]+)"/,
+      );
+      const avatarMatch = p.message.match(
+        /data-luingo-avatar="([^"]*)"/,
+      );
+
+      if (idMatch && idMatch[1]) {
+        realAuthorId = idMatch[1];
+        realAuthorName = nameMatch ? nameMatch[1] : p.userfullname;
+        if (avatarMatch && avatarMatch[1]) realAvatar = avatarMatch[1];
+
+        // Limpiar el mensaje para no mostrar la firma fea si el CSS falla
+        content = p.message
+          .split('<span style="display:none;"')[0]
+          .replace(/<[^>]*>?/gm, "")
+          .trim();
+        // Si la limpieza falla, usamos un fallback simple
+        if (!content)
+          content = p.message
+            .replace(/<[^>]*>?/gm, "")
+            .replace("[LUINGO_SIGNATURE]", "")
+            .trim();
+      } else {
+        // Limpieza estándar si no hay firma
+        content = p.message.replace(/<[^>]*>?/gm, "").trim();
+      }
+
+      return {
+        id: p.id,
+        author: realAuthorName,
+        userId: realAuthorId, // ✅ Aquí irá el ID del alumno real (si firmó), o el de Moodle
+        avatar: realAvatar,
+        content: content,
+        date: safeDate(p.created),
+      };
+    })
     .sort(
       (a: any, b: any) =>
         new Date(b.date).getTime() - new Date(a.date).getTime(),

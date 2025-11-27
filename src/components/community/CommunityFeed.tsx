@@ -252,7 +252,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
       {selectedPost && (
         <ArticleReader
           material={selectedPost}
-          currentUserId={student?.id || "0"}
+          currentUser={student} // ✅ CAMBIO: Pasamos el objeto entero, no solo el ID
           onClose={() => setSelectedPost(null)}
           onLikeUpdate={loadPosts} // ✅ Al dar like dentro, se actualiza afuera y se refresca el modal
         />

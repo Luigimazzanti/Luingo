@@ -17,12 +17,13 @@ import {
 import { toast } from "sonner@2.0.3";
 import { cn } from "../../lib/utils";
 
+// ✅ INTERFAZ ACTUALIZADA: Recibe currentUser completo
 export const ArticleReader: React.FC<{
   material: any;
-  currentUserId: string;
+  currentUser: any; // Objeto { id, name, avatar... }
   onClose: () => void;
   onLikeUpdate?: () => void;
-}> = ({ material, currentUserId, onClose, onLikeUpdate }) => {
+}> = ({ material, currentUser, onClose, onLikeUpdate }) => {
   const [comment, setComment] = useState("");
   const [commentsList, setCommentsList] = useState<any[]>([]);
 
@@ -32,6 +33,8 @@ export const ArticleReader: React.FC<{
   const [isLiking, setIsLiking] = useState(false);
 
   const [loading, setLoading] = useState(true);
+
+  const currentUserId = currentUser?.id || "0";
 
   // ✅ Sincronizar estado inicial de Likes desde el material
   useEffect(() => {
@@ -61,10 +64,18 @@ export const ArticleReader: React.FC<{
 
   const handleSend = async () => {
     if (!comment.trim()) return;
+
+    // ✅ ENVIAMOS EL USUARIO REAL PARA LA FIRMA
     const success = await addCommunityComment(
       material.discussionId,
       comment,
+      {
+        id: currentUser.id,
+        name: currentUser.name,
+        avatar: currentUser.avatar_url,
+      },
     );
+
     if (success) {
       toast.success("💬 Comentario enviado");
       setComment("");
