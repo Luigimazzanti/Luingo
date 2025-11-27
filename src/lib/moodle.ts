@@ -46,18 +46,37 @@ const callMoodle = async (functionName: string, params: MoodleParams = {}) => {
       const data = JSON.parse(text);
       if (data.exception) { 
         console.warn(`⚠️ Moodle Warning (${functionName}):`, data.message); 
-        if (data.errorcode === 'accessdenied') return null;
+        // Retornamos null para manejar el error en la función que llama
+        return null; 
       }
       return data;
-    } catch { return null; }
-  } catch (error) { return null; }
+    } catch (parseError) {
+      console.error(`❌ Error parseando JSON de Moodle (${functionName}):`, text.substring(0, 100));
+      return null;
+    }
+  } catch (error) {
+    console.error(`❌ Error de Red (${functionName}):`, error);
+    return null;
+  }
 };
 
+// ========== SANITIZER JSON ==========
 const cleanMoodleJSON = (raw: string) => {
   try {
-    let clean = raw.replace(/&quot;/g, '"').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/&#039;/g, "'").replace(/&apos;/g, "'").replace(/<[^>]*>/g, '').replace(/[\r\n]+/g, ' ').trim();
+    let clean = raw
+      .replace(/&quot;/g, '"')
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
+      .replace(/&#039;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/<[^>]*>/g, '')
+      .replace(/[\r\n]+/g, ' ')
+      .trim();
     return JSON.parse(clean);
-  } catch { return null; }
+  } catch (e) {
+    return null;
+  }
 };
 
 // ========== FUNCIONES BÁSICAS ==========
@@ -65,28 +84,52 @@ export const getSiteInfo = async () => callMoodle("core_webservice_get_site_info
 export const getCourses = async () => callMoodle("core_course_get_courses");
 export const getEnrolledUsers = async (courseId: number) => callMoodle("core_enrol_get_enrolled_users", { courseid: courseId });
 export const getUserByUsername = async (username: string) => {
-  const data = await callMoodle("core_user_get_users_by_field", { field: 'username', "values[0]": username.trim().toLowerCase() });
+  const data = await callMoodle("core_user_get_users_by_field", {
+    field: 'username', "values[0]": username.trim().toLowerCase()
+  });
   return (Array.isArray(data) && data.length > 0) ? data[0] : null;
 };
-export const createCourse = async (fullname: string, shortname: string) => callMoodle("core_course_create_courses", { "courses[0][fullname]": fullname, "courses[0][shortname]": shortname, "courses[0][categoryid]": 1, "courses[0][format]": "topics" });
+export const createCourse = async (fullname: string, shortname: string) => {
+  return await callMoodle("core_course_create_courses", {
+    "courses[0][fullname]": fullname,
+    "courses[0][shortname]": shortname,
+    "courses[0][categoryid]": 1,
+    "courses[0][format]": "topics"
+  });
+};
 
 // ========== TAREAS ==========
 export const createMoodleTask = async (title: string, description: string, jsonSettings: any) => {
   const message = `${description}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(jsonSettings)}[/LUINGO_DATA]</span>`;
-  return await callMoodle("mod_forum_add_discussion", { forumid: TASKS_FORUM_ID, subject: title, message });
+  return await callMoodle("mod_forum_add_discussion", {
+    forumid: TASKS_FORUM_ID,
+    subject: title,
+    message
+  });
 };
 export const updateMoodleTask = async (discussionId: string | number, title: string, description: string, jsonSettings: any) => {
   const cleanId = String(discussionId).replace(/\D/g, '');
   const message = `${description}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(jsonSettings)}[/LUINGO_DATA]</span>`;
+  
   let postId = cleanId;
   const posts = await callMoodle("mod_forum_get_discussion_posts", { discussionid: cleanId });
   if (posts?.posts?.length) postId = posts.posts[0].id;
-  return await callMoodle("mod_forum_update_discussion_post", { postid: postId, subject: title, message });
+
+  return await callMoodle("mod_forum_update_discussion_post", {
+    postid: postId,
+    subject: title,
+    message
+  });
 };
+
+// Helper borrado inteligente
 const smartDelete = async (discussionId: string | number) => {
     const cleanId = String(discussionId).replace(/\D/g, '');
+    if (!cleanId) return false; // Validación extra
+
     const resDisc = await callMoodle("mod_forum_delete_discussion", { discussionid: cleanId });
     if (resDisc && !resDisc.exception) return true;
+
     const postsData = await callMoodle("mod_forum_get_discussion_posts", { discussionid: cleanId });
     if (postsData?.posts?.length) {
         const parentPost = postsData.posts.sort((a: any, b: any) => a.id - b.id)[0];
@@ -95,7 +138,10 @@ const smartDelete = async (discussionId: string | number) => {
     }
     return false;
 };
-export const deleteMoodleTask = async (discussionId: string | number) => await smartDelete(discussionId);
+
+export const deleteMoodleTask = async (discussionId: string | number) => {
+  return await smartDelete(discussionId);
+};
 
 export const getMoodleTasks = async () => {
   const data = await callMoodle("mod_forum_get_forum_discussions", { forumid: TASKS_FORUM_ID });
@@ -104,18 +150,27 @@ export const getMoodleTasks = async () => {
     const match = disc.message.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
     const contentData = match ? cleanMoodleJSON(match[1]) || { type: 'quiz', questions: [] } : { type: 'quiz', questions: [] };
     return {
-      id: `discussion-${disc.discussion}`, postId: disc.id, discussionId: disc.discussion, title: disc.subject,
+      id: `discussion-${disc.discussion}`,
+      postId: disc.id,
+      discussionId: disc.discussion,
+      title: disc.subject,
       description: disc.message.split('[LUINGO_DATA]')[0].replace(/<[^>]*>?/gm, ''),
-      content_data: contentData, category: 'homework', status: 'published', level_tag: contentData.level || 'A1', due_date: contentData.due_date || null, created_at: safeDate(disc.created)
+      content_data: contentData,
+      category: 'homework',
+      status: 'published',
+      level_tag: contentData.level || 'A1',
+      due_date: contentData.due_date || null,
+      created_at: safeDate(disc.created)
     };
   });
 };
 
-// ========== SUBMISSIONS ==========
+// ========== SUBMISSIONS & GRADING ==========
 export const getMoodleSubmissions = async () => {
   const data = await callMoodle("mod_forum_get_forum_discussions", { forumid: SUBMISSIONS_FORUM_ID });
   if (!data?.discussions) return [];
   let allAttempts: any[] = [];
+  
   const BATCH_SIZE = 5;
   for (let i = 0; i < data.discussions.length; i += BATCH_SIZE) {
     const batch = data.discussions.slice(i, i + BATCH_SIZE);
@@ -127,10 +182,23 @@ export const getMoodleSubmissions = async () => {
         const json = match ? cleanMoodleJSON(match[1]) : null;
         if (!json) return null;
         return {
-          id: `post-${post.id}`, postId: post.id, discussionId: disc.discussion, task_id: json.taskId || 'unknown', task_title: json.taskTitle || disc.subject,
-          student_id: json.studentId || '', student_name: json.studentName || disc.userfullname, grade: json.grade || 0, score: json.score || 0, total: json.total || 0,
-          answers: json.answers || [], teacher_feedback: json.teacher_feedback || null, submitted_at: safeDate(post.created), status: json.status || 'submitted',
-          textContent: json.textContent || '', corrections: json.corrections || [], original_payload: json
+          id: `post-${post.id}`,
+          postId: post.id,
+          discussionId: disc.discussion,
+          task_id: json.taskId || 'unknown',
+          task_title: json.taskTitle || disc.subject,
+          student_id: json.studentId || '',
+          student_name: json.studentName || disc.userfullname,
+          grade: json.grade || 0,
+          score: json.score || 0,
+          total: json.total || 0,
+          answers: json.answers || [],
+          teacher_feedback: json.teacher_feedback || null,
+          submitted_at: safeDate(post.created),
+          status: json.status || 'submitted',
+          textContent: json.textContent || '',
+          corrections: json.corrections || [],
+          original_payload: json
         };
       }).filter(Boolean);
     });
@@ -139,20 +207,27 @@ export const getMoodleSubmissions = async () => {
   }
   return allAttempts.sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
 };
+
 export const submitTaskResult = async (taskId: string, taskTitle: string, studentId: string, studentName: string, score: number, total: number, answers: any[], textContent?: string, status = 'submitted', corrections?: any[]) => {
   const payload = { taskId, taskTitle, studentId, studentName, score, total, grade: (score/total)*10, answers, textContent, status, corrections, timestamp: new Date().toISOString() };
   const messageHtml = `<div class="luingo-res">Result</div><span style="display:none;">[LUINGO_DATA]${JSON.stringify(payload)}[/LUINGO_DATA]</span>`;
   const forumData = await callMoodle("mod_forum_get_forum_discussions", { forumid: SUBMISSIONS_FORUM_ID });
   const existing = forumData?.discussions?.find((d: any) => d.subject === `Entrega: ${taskTitle} - ${studentName}`);
-  if (existing) return await callMoodle("mod_forum_add_discussion_post", { postid: existing.id, subject: "Re: Entrega", message: messageHtml });
-  return await callMoodle("mod_forum_add_discussion", { forumid: SUBMISSIONS_FORUM_ID, subject: `Entrega: ${taskTitle} - ${studentName}`, message: messageHtml });
+
+  if (existing) {
+    return await callMoodle("mod_forum_add_discussion_post", { postid: existing.id, subject: "Re: Entrega", message: messageHtml });
+  } else {
+    return await callMoodle("mod_forum_add_discussion", { forumid: SUBMISSIONS_FORUM_ID, subject: `Entrega: ${taskTitle} - ${studentName}`, message: messageHtml });
+  }
 };
+
 export const gradeSubmission = async (postId: string | number, grade: number, feedback: string, originalPayload: any, corrections?: any[]) => {
   const cleanId = String(postId).replace(/\D/g, '');
   const payload = { ...originalPayload, grade, teacher_feedback: feedback, corrections: corrections || [], status: 'graded', graded_at: new Date().toISOString() };
   const message = `<div>Calificado: ${grade}/10</div><span style="display:none;">[LUINGO_DATA]${JSON.stringify(payload)}[/LUINGO_DATA]</span>`;
   return await callMoodle("mod_forum_update_discussion_post", { postid: cleanId, subject: `Calificado: ${payload.taskTitle}`, message });
 };
+
 export const deleteMoodlePost = async (postId: string | number, discussionId?: string | number) => {
   const cleanId = String(postId).replace(/\D/g, '');
   const res = await callMoodle("mod_forum_delete_post", { postid: cleanId });
@@ -183,7 +258,7 @@ export const getCommunityPosts = async () => {
       blocks: meta?.blocks || [], 
       content: disc.message.split('<span')[0].replace(/<[^>]*>?/gm, ''), 
       targetLevel: meta?.level || 'ALL',
-      likes: likesArray, // ✅ Usamos la variable segura
+      likes: likesArray, 
       date: safeDate(disc.created), 
       commentsCount: disc.numreplies || 0
     };
@@ -195,15 +270,22 @@ export const createCommunityPost = async (title: string, blocks: any[], level: s
   const message = `Post...<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
   return (await callMoodle("mod_forum_add_discussion", { forumid: COMMUNITY_FORUM_ID, subject: title, message }))?.discussionid;
 };
+
 export const updateCommunityPost = async (postId: string | number, title: string, blocks: any[], level: string, existingLikes: string[] = []) => {
   const meta = { level, type: 'mixed', blocks, likes: existingLikes };
   const message = `Update...<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
-  return (await callMoodle("mod_forum_update_discussion_post", { postid: String(postId).replace(/\D/g, ''), subject: title, message }))?.status;
+  let targetPostId = String(postId).replace(/\D/g, '');
+  return (await callMoodle("mod_forum_update_discussion_post", { postid: targetPostId, subject: title, message }))?.status;
 };
+
 export const toggleCommunityLike = async (post: any, userId: string) => {
   const currentLikes = Array.isArray(post.likes) ? post.likes : [];
-  const newLikes = currentLikes.includes(String(userId)) ? currentLikes.filter((id: string) => id !== String(userId)) : [...currentLikes, String(userId)];
+  const newLikes = currentLikes.includes(String(userId)) 
+    ? currentLikes.filter((id: string) => id !== String(userId)) 
+    : [...currentLikes, String(userId)];
+  
   const meta = { level: post.targetLevel, type: 'mixed', blocks: post.blocks, likes: newLikes };
+  
   // ✅ FIX: Reconstruir la vista previa HTML para no romper el post en Moodle Web
   let htmlPreview = '<div class="luingo-post">';
   if (Array.isArray(post.blocks)) {
@@ -215,24 +297,33 @@ export const toggleCommunityLike = async (post: any, userId: string) => {
   htmlPreview += '</div>';
 
   const message = `${htmlPreview}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  
   let targetId = String(post.postId).replace(/\D/g, '');
-  const result = await callMoodle("mod_forum_update_discussion_post", { postid: targetId, subject: post.title, message });
-  return result?.status === true || result?.status === 'true' || (result && !result.exception);
+  return (await callMoodle("mod_forum_update_discussion_post", { postid: targetId, subject: post.title, message }))?.status;
 };
 
-// ✅ COMENTARIOS CON FIRMA Y ROL
+// ✅ COMENTARIOS CON VALIDACIÓN DE SEGURIDAD
 export const addCommunityComment = async (discussionId: string | number, message: string, author: { id: string, name: string, avatar?: string, role?: string }, replyToId?: string) => {
   const cleanDiscId = String(discussionId).replace(/\D/g, '');
   
-  // Buscar padre para obtener subject
+  // 🔒 VALIDACIÓN DE SEGURIDAD: Si el ID está vacío, no llamamos a Moodle
+  if (!cleanDiscId) {
+      console.error("❌ addCommunityComment: ID de discusión inválido/vacío.");
+      return false;
+  }
+
+  console.log(`💬 Intentando comentar en discusión ID: ${cleanDiscId}`);
+
   const postsData = await callMoodle("mod_forum_get_discussion_posts", { discussionid: cleanDiscId });
-  if (!postsData?.posts?.length) return false;
   
-  // Determinar post padre real (si es reply o comentario raíz)
+  if (!postsData?.posts?.length) {
+    console.error("❌ No se encontraron posts. Verifica permisos de LECTURA o si el post fue borrado.");
+    return false;
+  }
+  
   let targetParentId = replyToId || postsData.posts.sort((a: any, b: any) => a.id - b.id)[0].id;
-  
-  // Obtener subject para replicarlo (Moodle estricto)
   const parentPost = postsData.posts.find((p: any) => String(p.id) === String(targetParentId)) || postsData.posts[0];
+  
   let subject = parentPost.subject;
   if (!subject.startsWith("Re:")) subject = `Re: ${subject}`;
   
@@ -249,33 +340,36 @@ export const addCommunityComment = async (discussionId: string | number, message
   return response && response.postid;
 };
 
-// ✅ EDITAR COMENTARIO (MANTENIENDO FIRMA)
+// ✅ EDICIÓN
 export const editCommunityComment = async (postId: string, message: string, author: { id: string, name: string, avatar?: string, role?: string }) => {
     const authorData = { id: author.id, name: author.name, avatar: author.avatar || '', role: author.role || 'student' };
     const signedMessage = `${message}\n\n[LUINGO_AUTHOR]${JSON.stringify(authorData)}[/LUINGO_AUTHOR]`;
     
     return (await callMoodle("mod_forum_update_discussion_post", {
         postid: String(postId).replace(/\D/g, ''),
-        subject: '', // Enviamos vacío para que Moodle mantenga el original
+        subject: '', // Moodle mantiene el subject si va vacío
         message: `<p>${signedMessage}</p>`
     }))?.status;
 };
 
-// ✅ FIX: LECTURA ROBUSTA DE FIRMA CON ROL Y PARENT
+// ✅ LECTURA SEGURA DE COMENTARIOS
 export const getPostComments = async (discussionId: string | number) => {
-  const data = await callMoodle("mod_forum_get_discussion_posts", { discussionid: String(discussionId).replace(/\D/g, '') });
+  const cleanDiscId = String(discussionId).replace(/\D/g, '');
+  
+  // 🔒 VALIDACIÓN DE SEGURIDAD
+  if (!cleanDiscId) return [];
+
+  const data = await callMoodle("mod_forum_get_discussion_posts", { discussionid: cleanDiscId });
   if (!data?.posts) return [];
   
   const sorted = data.posts.sort((a: any, b: any) => a.id - b.id);
-  const parentId = sorted[0]?.id; // El post principal del hilo (el Material)
+  const parentId = sorted[0]?.id;
   
-  return sorted
-    .filter((p: any) => p.id !== parentId)
-    .map((p: any) => {
+  return sorted.filter((p: any) => p.id !== parentId).map((p: any) => {
       let realAuthorId = p.userid;
       let realAuthorName = p.userfullname;
       let realAvatar = p.userpictureurl;
-      let realRole = 'student'; // Default
+      let realRole = 'student';
       let content = p.message;
 
       const metaMatch = p.message.match(/\[LUINGO_AUTHOR\]([\s\S]*?)\[\/LUINGO_AUTHOR\]/);
@@ -295,7 +389,7 @@ export const getPostComments = async (discussionId: string | number) => {
 
       return {
         id: p.id,
-        parentId: p.parentid, // Necesario para anidar
+        parentId: p.parentid,
         author: realAuthorName,
         userId: realAuthorId, 
         role: realRole,

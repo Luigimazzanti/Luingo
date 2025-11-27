@@ -146,63 +146,62 @@ app.get("/make-server-ebbb5c67/drive-proxy", async (c) => {
   }
 });
 
-// ✅ PROXY ONEDRIVE BLINDADO - A prueba de balas contra URLs inválidas
+// ✅ PROXY ONEDRIVE BLINDADO (A PRUEBA DE ERRORES)
 app.get("/make-server-ebbb5c67/onedrive-proxy", async (c) => {
   let fileUrl = c.req.query("url");
-  if (!fileUrl) {
-    return c.json({ error: "Falta URL" }, 400);
-  }
+  if (!fileUrl) return c.json({ error: "Falta URL" }, 400);
+
+  console.log("Proxy OneDrive recibió:", fileUrl);
 
   // 1. LIMPIEZA DE EMERGENCIA: Si llega un <iframe>, extraemos el link
   if (fileUrl.includes('<iframe')) {
-    const srcMatch = fileUrl.match(/src="([^"]+)"/);
-    if (srcMatch && srcMatch[1]) {
-      fileUrl = srcMatch[1]; // Nos quedamos solo con la URL limpia
-      console.log("🧹 Iframe detectado y limpiado en servidor");
-    } else {
-      console.error("❌ No se pudo extraer URL del iframe");
-      return c.json({ error: "No se pudo extraer URL del iframe" }, 400);
-    }
+      const srcMatch = fileUrl.match(/src="([^"]+)"/);
+      if (srcMatch && srcMatch[1]) {
+          fileUrl = srcMatch[1]; // Nos quedamos solo con la URL limpia
+          console.log("URL extraída del iframe:", fileUrl);
+      } else {
+          return c.json({ error: "No se pudo extraer URL del iframe" }, 400);
+      }
   }
 
-  // 2. VALIDACIÓN: ¿Es una URL válida?
+  // 2. Limpieza extra de comillas o espacios
+  fileUrl = fileUrl.replace(/["']/g, "").trim();
+
+  // 3. VALIDACIÓN: ¿Es una URL válida?
   try {
-    new URL(fileUrl);
+      new URL(fileUrl);
   } catch (e) {
-    console.error("❌ URL inválida recibida:", fileUrl);
-    return c.json({ error: "URL inválida recibida: " + fileUrl }, 400);
+      console.error("URL inválida:", fileUrl);
+      return c.json({ error: "URL inválida recibida" }, 400);
   }
 
   try {
-    // 3. CONVERSIÓN: De 'Visualizar' a 'Descargar'
+    // 4. CONVERSIÓN: De 'Visualizar' a 'Descargar'
+    // OneDrive suele dar links de 'embed' o 'redir' que no son el archivo directo
     let downloadUrl = fileUrl
       .replace("onedrive.live.com/embed", "onedrive.live.com/download")
-      .replace("1drv.ms/b/s!", "1drv.ms/u/s!");
+      .replace("1drv.ms/b/s!", "1drv.ms/u/s!"); // Intento para shortlinks
 
-    console.log(`📄 OneDrive Proxy: Procesando URL válida`);
-    
+    // Hacemos la petición. Fetch seguirá las redirecciones automáticamente.
     const response = await fetch(downloadUrl);
     
     if (!response.ok) {
-      console.error(`❌ Error al obtener archivo de OneDrive: ${response.status}`);
-      return c.json({ error: "No se pudo obtener el archivo de OneDrive" }, response.status);
+        console.error("Error fetching from OneDrive:", response.status);
+        return c.json({ error: "No se pudo descargar el archivo de OneDrive" }, 500);
     }
     
-    // 4. RESPUESTA: Entregar PDF con permisos CORS
+    // 5. RESPUESTA: Entregar PDF con permisos CORS
     const newHeaders = new Headers(response.headers);
     newHeaders.set("Access-Control-Allow-Origin", "*");
-    newHeaders.set("Content-Type", "application/pdf");
-    newHeaders.set("Cache-Control", "public, max-age=3600");
-
-    console.log(`✅ Archivo de OneDrive servido correctamente`);
+    newHeaders.set("Content-Type", "application/pdf"); // Forzamos tipo PDF
 
     return new Response(response.body, {
       status: response.status,
       headers: newHeaders
     });
   } catch (e) {
-    console.error("OneDrive Error:", e);
-    return c.json({ error: "Error de conexión con OneDrive" }, 500);
+    console.error("OneDrive Proxy Exception:", e);
+    return c.json({ error: "Error interno en proxy OneDrive" }, 500);
   }
 });
 

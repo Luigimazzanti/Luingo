@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { cn } from '../lib/utils';
 import { publicAnonKey } from '../utils/supabase/info';
 
-// Configuración Worker
+// Configuración Worker (Obligatoria)
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface Annotation {
@@ -29,7 +29,7 @@ interface PDFAnnotatorProps {
 export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData = [], readOnly = false, onSave }) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [scale, setScale] = useState(1.0);
+  const [scale, setScale] = useState(1.0); // Zoom inicial al 100%
   
   const [tool, setTool] = useState<'pencil' | 'text' | 'eraser' | 'move'>('move');
   const [color, setColor] = useState('#EF4444'); 
@@ -39,9 +39,11 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
   
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pdfWrapperRef = useRef<HTMLDivElement>(null); // Nuevo ref para el wrapper del PDF
+  
   const colors = ['#000000', '#EF4444', '#3B82F6', '#10B981', '#F59E0B'];
 
-  // Configuración segura para el Proxy
+  // Configuración Proxy
   const fileOptions = useMemo(() => {
     if (pdfUrl.includes('onedrive-proxy') || pdfUrl.includes('drive-proxy')) {
       return {
@@ -62,12 +64,14 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
   const handleZoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.6));
   const handleResetZoom = () => setScale(1.0);
 
-  // Lógica Canvas
+  // Lógica de Coordenadas AJUSTADA
   const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    
+    // Importante: Las coordenadas se guardan "puras" (sin zoom)
     return {
       x: (clientX - rect.left) / scale,
       y: (clientY - rect.top) / scale
@@ -105,7 +109,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
     const coords = getCoordinates(e);
 
     if (tool === 'text') {
-      const text = prompt("Texto:");
+      const text = prompt("Escribe texto:");
       if (text) {
         const newAnns = [...annotations, {
           id: crypto.randomUUID(), type: 'text' as const, content: text,
@@ -131,15 +135,18 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
     }
   };
 
+  // Renderizado del Canvas (Sincronizado con PDF y Zoom)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Limpiar todo
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
     ctx.save();
-    ctx.scale(scale, scale);
+    ctx.scale(scale, scale); // Aplicar Zoom al contexto
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -167,11 +174,12 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
       currentPath.forEach(p => ctx.lineTo(p.x, p.y));
       ctx.stroke();
     }
+    
     ctx.restore();
   }, [annotations, currentPath, currentPage, scale, color]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-200 rounded-xl overflow-hidden border border-slate-300">
+    <div className="flex flex-col h-full bg-slate-100 rounded-xl overflow-hidden border border-slate-300">
       {/* Toolbar */}
       <div className="bg-white p-2 border-b flex items-center justify-between gap-2 shadow-sm z-10 flex-wrap">
         {!readOnly && (
@@ -205,14 +213,15 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
         </div>
       </div>
 
-      {/* PDF Viewer */}
-      <div className="flex-1 overflow-auto relative bg-slate-100 flex justify-center p-8" ref={containerRef}>
-        <div className="relative shadow-2xl border border-slate-300 bg-white origin-top" style={{ width: 'fit-content', height: 'fit-content' }}>
+      {/* VISOR PDF + CANVAS */}
+      <div className="flex-1 overflow-auto relative bg-slate-200 flex justify-center p-8" ref={containerRef}>
+        {/* Wrapper para centrar y escalar */}
+        <div className="relative shadow-2xl border border-slate-300 bg-white" style={{ width: 'fit-content', height: 'fit-content' }}>
             <Document 
                 file={fileOptions} 
                 onLoadSuccess={onDocumentLoadSuccess} 
-                loading={<div className="p-20 flex flex-col items-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mb-2"/>Cargando...</div>}
-                error={<div className="p-20 text-red-500 font-bold">Error al cargar.</div>}
+                loading={<div className="p-20 flex flex-col items-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mb-2"/>Cargando PDF...</div>}
+                error={<div className="p-20 text-red-500 font-bold">No se pudo cargar el documento.</div>}
             >
                 <Page 
                     pageNumber={currentPage} 
@@ -220,6 +229,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
                     renderTextLayer={false} 
                     renderAnnotationLayer={false}
                     onLoadSuccess={(page) => {
+                        // ✅ TRUCO: Ajustar el tamaño del Canvas al tamaño REAL del PDF renderizado
                         if (canvasRef.current) {
                             canvasRef.current.width = page.width;
                             canvasRef.current.height = page.height;
@@ -227,9 +237,12 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
                     }}
                 />
             </Document>
+            
+            {/* CAPA DE DIBUJO */}
             <canvas 
                 ref={canvasRef} 
                 className={cn("absolute inset-0 z-10 touch-none", tool==='move'?'pointer-events-none':'cursor-crosshair')}
+                style={{ width: '100%', height: '100%' }} // Asegurar que cubra todo
                 onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
                 onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} onClick={handleCanvasClick}
             />
