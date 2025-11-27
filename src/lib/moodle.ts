@@ -455,9 +455,9 @@ export const gradeSubmission = async (
   });
 };
 
-// ========== 📱 COMUNIDAD (SOCIAL FEED) ==========
+// ========== 📱 COMUNIDAD (SOCIAL FEED - SISTEMA HÍBRIDO) ==========
 
-// ✅ LEER POSTS DE COMUNIDAD (Ahora recupera BLOQUES del JSON)
+// ✅ LEER POSTS DE COMUNIDAD (JSON para Likes/Metadata + Replies Nativos)
 export const getCommunityPosts = async () => {
   console.log("📱 Cargando posts de comunidad...");
   
@@ -468,20 +468,21 @@ export const getCommunityPosts = async () => {
   if (!data || !data.discussions) return [];
   
   return data.discussions.map((disc: any) => {
-    // Extraer metadata JSON
-    const match = disc.message.match(/\[LUINGO_DATA\](.*?)\[\/LUINGO_DATA\]/);
-    const meta = match ? JSON.parse(match[1]) : {};
+    // Extraer metadata JSON con sanitizer
+    const match = disc.message.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
+    let meta: any = { level: 'ALL', type: 'mixed', blocks: [], likes: [] };
     
-    // ✅ NUEVA ARQUITECTURA: Recuperar bloques del JSON
-    const blocks = meta.blocks || [];
-    
-    // Fallback: si es post antiguo sin bloques, extraer contenido HTML
-    let contentFallback = '';
-    if (blocks.length === 0) {
-      const decoded = disc.message.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-      contentFallback = decoded.split('<span')[0].replace(/<[^>]*>?/gm, '');
+    if (match) {
+      try {
+        meta = cleanMoodleJSON(match[1]) || meta;
+      } catch (e) {
+        console.warn("⚠️ Error parseando metadata de post:", e);
+      }
     }
-
+    
+    // Extraer contenido HTML limpio para preview
+    const contentHtml = disc.message.split('<span')[0].replace(/<[^>]*>?/gm, '').trim();
+    
     return {
       id: `comm-${disc.discussion}`,
       discussionId: disc.discussion,
@@ -489,18 +490,20 @@ export const getCommunityPosts = async () => {
       author: disc.userfullname || 'Usuario',
       avatar: disc.userpictureurl || '',
       title: disc.subject,
-      blocks: blocks, // ✅ BLOQUES PUROS (array de {type, content})
-      content: contentFallback, // Fallback para posts viejos
+      content: contentHtml,
+      // Datos ricos del JSON
+      blocks: Array.isArray(meta.blocks) ? meta.blocks : [],
+      type: meta.type || 'mixed',
+      url: meta.url || '',
       targetLevel: meta.level || 'ALL',
-      likes: meta.likes || 0,
+      likes: Array.isArray(meta.likes) ? meta.likes : [], // ✅ ARRAY DE USER IDs
       date: new Date(disc.created * 1000).toISOString(),
-      commentsCount: disc.numreplies || 0,
-      meta: meta // ✅ GUARDAR META COMPLETO PARA toggleLike
+      commentsCount: disc.numreplies || 0 // ✅ CONTADOR NATIVO DE MOODLE
     };
   });
 };
 
-// ✅ CREAR POST (Ahora guarda BLOQUES en el JSON)
+// ✅ CREAR POST (Guarda BLOQUES en JSON, Likes como Array)
 export const createCommunityPost = async (
   title: string, 
   blocks: any[], 
@@ -508,22 +511,23 @@ export const createCommunityPost = async (
 ) => {
   console.log("📤 Publicando en comunidad:", title, "con", blocks.length, "bloques");
   
-  // ✅ GUARDAR TODO EN EL JSON (Moodle no toca el JSON)
+  // Metadata para Likes y Renderizado
   const meta = { 
     level, 
     type: 'mixed', 
-    blocks: blocks, // ✅ Array de bloques
-    likes: 0 
+    blocks: blocks,
+    likes: [] // ✅ Array de user IDs
   };
   
-  // Mensaje visible en Moodle (resumen simple para compatibilidad)
-  const summary = blocks
-    .map(b => b.type === 'text' ? b.content.substring(0, 50) : `[${b.type}]`)
-    .join(' ');
+  // Generar HTML básico para Moodle Web (fallback)
+  let htmlPreview = '<div class="luingo-post">';
+  blocks.forEach(b => {
+    if (b.type === 'text') htmlPreview += `<p>${b.content}</p>`;
+    else htmlPreview += `<p>[Recurso: ${b.type}]</p>`;
+  });
+  htmlPreview += '</div>';
   
-  const message = `${summary}...<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
-  
-  console.log("📦 Metadata enviada:", meta);
+  const message = `${htmlPreview}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
   
   const res = await callMoodle("mod_forum_add_discussion", { 
     forumid: COMMUNITY_FORUM_ID, 
@@ -540,29 +544,32 @@ export const createCommunityPost = async (
   return false;
 };
 
-// ✅ ACTUALIZAR POST (Editar bloques)
+// ✅ ACTUALIZAR POST (Editar bloques - Mantener Likes)
 export const updateCommunityPost = async (
   postId: string | number, 
   title: string, 
   blocks: any[], 
-  level: string
+  level: string,
+  existingLikes: string[] = []
 ) => {
   const cleanId = String(postId).replace(/\D/g, '');
   console.log("📝 Actualizando post:", cleanId, "con", blocks.length, "bloques");
   
-  // ✅ GUARDAR BLOQUES EN JSON
   const meta = { 
     level, 
     type: 'mixed', 
     blocks: blocks, 
-    likes: 0 
+    likes: existingLikes // ✅ MANTENER LIKES EXISTENTES
   };
   
-  const summary = blocks
-    .map(b => b.type === 'text' ? b.content.substring(0, 50) : `[${b.type}]`)
-    .join(' ');
+  let htmlPreview = '<div class="luingo-post">';
+  blocks.forEach(b => {
+    if (b.type === 'text') htmlPreview += `<p>${b.content}</p>`;
+    else htmlPreview += `<p>[Recurso: ${b.type}]</p>`;
+  });
+  htmlPreview += '</div>';
   
-  const message = `${summary}...<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  const message = `${htmlPreview}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
   
   const res = await callMoodle("mod_forum_update_discussion_post", { 
     postid: cleanId, 
@@ -579,49 +586,89 @@ export const updateCommunityPost = async (
   return false;
 };
 
-// ✅ COMENTAR EN POST (OPCIONAL - Para futuro)
-export const addCommunityComment = async (postId: string | number, message: string) => {
-  const cleanId = String(postId).replace(/comm-/g, '');
+// ✅ AÑADIR COMENTARIO (REPLY NATIVO - SIN JSON)
+export const addCommunityComment = async (discussionId: string | number, message: string) => {
+  const cleanDiscId = String(discussionId).replace(/\D/g, '');
   
-  console.log("💬 Añadiendo comentario al post:", cleanId);
-  
-  return await callMoodle("mod_forum_add_discussion_post", {
-    postid: cleanId,
-    subject: "Comentario",
-    message: message
+  console.log("💬 Iniciando comentario en discusión:", cleanDiscId);
+
+  // 1. Buscar el ID del post padre (el origen del hilo)
+  const postsData = await callMoodle("mod_forum_get_discussion_posts", { 
+    discussionid: cleanDiscId 
   });
+
+  if (!postsData?.posts?.length) {
+    console.error("❌ Error: Discusión vacía o no encontrada:", cleanDiscId);
+    return false;
+  }
+
+  console.log(`📋 ${postsData.posts.length} posts encontrados en la discusión`);
+
+  // 2. El padre es el que tiene id más bajo (creado primero)
+  const parentPost = postsData.posts.sort((a: any, b: any) => a.id - b.id)[0];
+
+  console.log(`💬 Respondiendo a Post ${parentPost.id} en Discusión ${cleanDiscId}`);
+
+  // 3. Enviar Reply Nativo (SIN groupid, SIN [LUINGO_DATA])
+  // IMPORTANTE: Es un comentario de texto plano, no tiene metadata JSON
+  const response = await callMoodle("mod_forum_add_discussion_post", {
+    postid: parentPost.id,
+    subject: "Re: Comentario",
+    message: `<p>${message}</p>`
+  });
+
+  if (response && response.postid) {
+    console.log("✅ Comentario creado con ID:", response.postid);
+    return true;
+  }
+
+  console.error("❌ Error Moodle al comentar:", response);
+  return false;
 };
 
-// ✅ TOGGLE LIKE (Incrementar contador de likes)
-export const toggleLike = async (post: any) => {
-  console.log("❤️ Incrementando like en post:", post.postId);
+// ✅ TOGGLE LIKE (Sistema JSON con Array de User IDs)
+export const toggleCommunityLike = async (post: any, userId: string) => {
+  console.log("❤️ Toggle like en post:", post.postId, "por usuario:", userId);
   
-  // 1. Incrementar contador
-  const newLikes = (post.likes || 0) + 1;
+  const currentLikes = Array.isArray(post.likes) ? post.likes : [];
+  let newLikes: string[] = [];
   
-  // 2. Actualizar metadata
-  const updatedMeta = {
-    ...post.meta,
+  // Toggle: Si ya dio like, quitar. Si no, añadir.
+  if (currentLikes.includes(String(userId))) {
+    newLikes = currentLikes.filter((id: string) => id !== String(userId));
+    console.log("💔 Quitando like");
+  } else {
+    newLikes = [...currentLikes, String(userId)];
+    console.log("❤️ Añadiendo like");
+  }
+  
+  // Metadata actualizada (mantener blocks, level, etc.)
+  const meta = {
+    level: post.targetLevel,
+    type: post.type || 'mixed',
+    blocks: post.blocks || [],
     likes: newLikes
   };
   
-  // 3. Reconstruir mensaje con bloques
-  const summary = (post.blocks || [])
-    .map((b: any) => b.type === 'text' ? b.content.substring(0, 50) : `[${b.type}]`)
-    .join(' ');
+  // Reconstruir HTML preview
+  let htmlPreview = '<div class="luingo-post">';
+  (post.blocks || []).forEach((b: any) => {
+    if (b.type === 'text') htmlPreview += `<p>${b.content}</p>`;
+    else htmlPreview += `<p>[Recurso: ${b.type}]</p>`;
+  });
+  htmlPreview += '</div>';
   
-  const message = `${summary}...<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(updatedMeta)}[/LUINGO_DATA]</span>`;
+  const message = `${htmlPreview}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
   
-  // 4. Guardar en Moodle
-  const cleanId = String(post.postId).replace(/\D/g, '');
-  const res = await callMoodle("mod_forum_update_discussion_post", {
-    postid: cleanId,
-    subject: post.title,
-    message
+  const cleanPostId = String(post.postId).replace(/\D/g, '');
+  const res = await callMoodle("mod_forum_update_discussion_post", { 
+    postid: cleanPostId, 
+    subject: post.title, 
+    message 
   });
   
   if (res && res.status !== false) {
-    console.log("✅ Like guardado:", newLikes);
+    console.log(`✅ Like guardado. Total: ${newLikes.length}`);
     return true;
   }
   
@@ -629,41 +676,70 @@ export const toggleLike = async (post: any) => {
   return false;
 };
 
-// ✅ LEER COMENTARIOS DE UN POST
+// ✅ LEER COMENTARIOS (REPLIES NATIVOS)
 export const getPostComments = async (discussionId: string | number) => {
-  const cleanId = String(discussionId).replace(/\D/g, '');
+  const cleanDiscId = String(discussionId).replace(/\D/g, '');
   
-  console.log("💬 Cargando comentarios de discusión:", cleanId);
+  console.log("💬 Cargando comentarios de discusión:", cleanDiscId);
   
   const data = await callMoodle("mod_forum_get_discussion_posts", {
-    discussionid: cleanId
+    discussionid: cleanDiscId
   });
   
-  if (!data || !data.posts) {
+  if (!data?.posts) {
     console.warn("⚠️ No se pudieron cargar comentarios");
     return [];
   }
+
+  // Ordenar por ID para identificar al padre (el de menor ID)
+  const sorted = data.posts.sort((a: any, b: any) => a.id - b.id);
+  const parentId = sorted[0]?.id;
   
-  // Filtrar el post inicial (que es el contenido, no un comentario)
-  // El post con parentid = 0 o el primero es el post principal
-  const allPosts = Array.isArray(data.posts) ? data.posts : [];
+  console.log(`📌 Post raíz identificado: ${parentId}`);
   
-  // Ordenar por fecha para identificar el post principal (el más antiguo)
-  const sorted = allPosts.sort((a: any, b: any) => a.created - b.created);
-  const mainPostId = sorted[0]?.id;
+  // Los comentarios son todos MENOS el padre
+  return sorted
+    .filter((p: any) => p.id !== parentId)
+    .map((p: any) => {
+      // ✅ MANEJO SEGURO DE FECHAS
+      let dateStr = new Date().toISOString();
+      try {
+        if (p.created && !isNaN(p.created) && p.created > 0) {
+          const timestamp = Number(p.created) * 1000;
+          const date = new Date(timestamp);
+          if (!isNaN(date.getTime())) {
+            dateStr = date.toISOString();
+          }
+        }
+      } catch (e) {
+        console.warn(`⚠️ Error parseando fecha en comentario ${p.id}:`, e);
+      }
+
+      return {
+        id: p.id,
+        author: p.userfullname || 'Usuario',
+        avatar: p.userpictureurl || '',
+        content: p.message.replace(/<[^>]*>?/gm, '').trim(), // ✅ Texto limpio (sin HTML)
+        date: dateStr,
+        isMine: false // TODO: Comparar con userId actual si está disponible
+      };
+    });
+};
+
+// ✅ BORRAR POST DE COMUNIDAD
+export const deleteCommunityPost = async (discussionId: string | number) => {
+  const cleanId = String(discussionId).replace(/\D/g, '');
+  console.log("🗑️ Borrando discusión de comunidad:", cleanId);
   
-  // Filtrar comentarios (excluyendo el post principal)
-  const comments = allPosts
-    .filter((p: any) => p.id !== mainPostId)
-    .map((c: any) => ({
-      id: c.id,
-      author: c.userfullname || 'Usuario',
-      avatar: c.userpictureurl || '',
-      content: c.message.replace(/<[^>]*>?/gm, '').replace(/\[LUINGO_DATA\].*?\[\/LUINGO_DATA\]/g, '').trim(),
-      date: new Date(c.created * 1000).toISOString()
-    }))
-    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Más antiguos primero
+  const res = await callMoodle("mod_forum_delete_discussion", { 
+    discussionid: cleanId 
+  });
   
-  console.log(`✅ ${comments.length} comentarios cargados`);
-  return comments;
+  if (res && (res.status === true || res.warnings?.length === 0)) {
+    console.log("✅ Discusión borrada");
+    return true;
+  }
+  
+  console.error("❌ Error al borrar discusión:", res);
+  return false;
 };
