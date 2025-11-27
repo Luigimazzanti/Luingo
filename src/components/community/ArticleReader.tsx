@@ -1,58 +1,39 @@
-import React, { useState, useEffect } from "react";
-import {
-  X,
-  Send,
-  MessageCircle,
-  Heart,
-  Trash2,
-} from "lucide-react";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import {
-  addCommunityComment,
-  getPostComments,
-  toggleCommunityLike,
-  deleteMoodlePost,
-} from "../../lib/moodle";
-import { toast } from "sonner@2.0.3";
-import { cn } from "../../lib/utils";
+import React, { useState, useEffect } from 'react';
+import { X, Send, MessageCircle, Heart, Trash2 } from 'lucide-react';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { addCommunityComment, getPostComments, toggleCommunityLike, deleteMoodlePost } from '../../lib/moodle';
+import { toast } from 'sonner@2.0.3';
+import { cn } from '../../lib/utils';
 
-// ✅ INTERFAZ ACTUALIZADA: Recibe currentUser completo
-export const ArticleReader: React.FC<{
-  material: any;
-  currentUser: any; // Objeto { id, name, avatar... }
-  onClose: () => void;
-  onLikeUpdate?: () => void;
+// INTERFAZ CORRECTA: Recibimos el usuario completo para firmar
+export const ArticleReader: React.FC<{ 
+  material: any, 
+  currentUser: any, // Objeto { id, name, avatar... }
+  onClose: () => void,
+  onLikeUpdate?: () => void
 }> = ({ material, currentUser, onClose, onLikeUpdate }) => {
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = useState('');
   const [commentsList, setCommentsList] = useState<any[]>([]);
-
-  // Estados para Likes Sincronizados
+  
   const [likesCount, setLikesCount] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
-
   const [loading, setLoading] = useState(true);
 
-  const currentUserId = currentUser?.id || "0";
+  // Aseguramos que tenemos un ID válido para comparar
+  const currentUserId = currentUser?.id ? String(currentUser.id) : '0';
 
-  // ✅ Sincronizar estado inicial de Likes desde el material
   useEffect(() => {
     if (material) {
-      const likes = Array.isArray(material.likes)
-        ? material.likes
-        : [];
+      const likes = Array.isArray(material.likes) ? material.likes : [];
       setLikesCount(likes.length);
-      setIsLiked(likes.includes(String(currentUserId)));
+      setIsLiked(likes.includes(currentUserId));
     }
   }, [material, currentUserId]);
 
-  // Cargar comentarios
   const loadComments = async () => {
-    // No ponemos loading true aquí para evitar parpadeos al enviar/borrar
-    const comments = await getPostComments(
-      material.discussionId,
-    );
+    const comments = await getPostComments(material.discussionId);
     setCommentsList(comments);
     setLoading(false);
   };
@@ -64,322 +45,155 @@ export const ArticleReader: React.FC<{
 
   const handleSend = async () => {
     if (!comment.trim()) return;
-
+    
     // ✅ ENVIAMOS EL USUARIO REAL PARA LA FIRMA
     const success = await addCommunityComment(
-      material.discussionId,
-      comment,
-      {
-        id: currentUser.id,
-        name: currentUser.name,
-        avatar: currentUser.avatar_url,
-      },
+        material.discussionId, 
+        comment, 
+        { id: currentUser.id, name: currentUser.name, avatar: currentUser.avatar_url }
     );
 
     if (success) {
       toast.success("💬 Comentario enviado");
-      setComment("");
-      loadComments(); // Recargar lista
+      setComment('');
+      loadComments();
     } else {
       toast.error("❌ Error al comentar");
     }
   };
 
-  // ✅ FUNCION PARA BORRAR (Nueva)
   const handleDeleteComment = async (commentId: string) => {
     if (!confirm("¿Borrar este comentario?")) return;
-
     const success = await deleteMoodlePost(commentId);
     if (success) {
-      toast.success("🗑️ Comentario eliminado");
-      loadComments(); // Recargar lista
+      toast.success("🗑️ Eliminado");
+      loadComments();
     } else {
-      toast.error("No se pudo borrar");
+      toast.error("Error al borrar");
     }
   };
 
-  // ✅ FUNCION PARA DAR LIKE (Sincronizada)
   const handleLike = async () => {
-    if (isLiking) return;
+    if (isLiking) return; 
     setIsLiking(true);
-
-    // Optimistic UI (cambio visual inmediato)
     const wasLiked = isLiked;
     setIsLiked(!wasLiked);
-    setLikesCount((prev) => (wasLiked ? prev - 1 : prev + 1));
-
-    const success = await toggleCommunityLike(
-      material,
-      currentUserId,
-    );
-
-    if (success) {
-      onLikeUpdate?.(); // 🔄 Avisar al componente padre (Feed) para que se actualice
-    } else {
-      // Si falla, revertimos
+    setLikesCount(prev => wasLiked ? prev - 1 : prev + 1);
+    
+    const success = await toggleCommunityLike(material, currentUserId);
+    if (success) onLikeUpdate?.();
+    else {
       setIsLiked(wasLiked);
-      setLikesCount((prev) => (wasLiked ? prev + 1 : prev - 1));
-      toast.error("Error de conexión");
+      setLikesCount(prev => wasLiked ? prev + 1 : prev - 1);
+      toast.error("Error al guardar like");
     }
     setIsLiking(false);
   };
 
-  const renderBlock = (b: any, idx: number) => {
-    if (!b.content) return null;
-    switch (b.type) {
-      case "text":
-        return (
-          <p
-            key={idx}
-            className="text-lg text-slate-700 leading-relaxed whitespace-pre-wrap"
-          >
-            {b.content}
-          </p>
-        );
-      case "image":
-        return (
-          <img
-            key={idx}
-            src={b.content}
-            className="w-full rounded-2xl shadow-sm border border-slate-100"
-            alt="Post"
-          />
-        );
-      case "video":
-        const vId = b.content.match(
-          /(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([^&?]*)/,
-        )?.[1];
-        return vId ? (
-          <div
-            key={idx}
-            className="aspect-video rounded-2xl overflow-hidden shadow-lg bg-black"
-          >
-            <iframe
-              src={`https://www.youtube.com/embed/${vId}`}
-              className="w-full h-full"
-              allowFullScreen
-              frameBorder="0"
-            />
-          </div>
-        ) : null;
-      case "genially":
-        return (
-          <div
-            key={idx}
-            className="w-full rounded-2xl overflow-hidden shadow-lg border border-slate-100"
-            style={{
-              position: "relative",
-              paddingBottom: "56.25%",
-              height: 0,
-            }}
-          >
-            <iframe
-              src={b.content}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-              }}
-              allowFullScreen
-              frameBorder="0"
-            />
-          </div>
-        );
-      case "audio":
-        return (
-          <div
-            key={idx}
-            className="bg-slate-100 p-4 rounded-2xl flex justify-center"
-          >
-            <audio
-              controls
-              src={b.content}
-              className="w-full"
-            />
-          </div>
-        );
-      default:
-        return null;
-    }
+  const renderBlock = (b: any, i: number) => {
+      if(!b.content) return null;
+      if(b.type==='text') return <p key={i} className="mb-4 text-slate-700 text-lg leading-relaxed">{b.content}</p>;
+      if(b.type==='image') return <img key={i} src={b.content} className="w-full rounded-xl mb-4 shadow-sm border" alt="Contenido" />;
+      if(b.type==='video') {
+          const vId = b.content.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([^&?]*)/)?.[1];
+          return vId ? <div key={i} className="aspect-video rounded-xl overflow-hidden mb-4 shadow-lg"><iframe src={`https://www.youtube.com/embed/${vId}`} className="w-full h-full" allowFullScreen /></div> : null;
+      }
+      return null;
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-4 md:p-8">
       <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full my-8 overflow-hidden border border-slate-200 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        
         {/* Header */}
-        <div className="relative bg-gradient-to-r from-indigo-600 to-purple-600 px-8 md:px-12 py-12 md:py-16">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-full text-white backdrop-blur-sm transition-all"
-          >
-            <X className="w-5 h-5" />
-          </button>
-
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-3 mb-4">
-              <img
-                src={
-                  material.avatar ||
-                  "https://ui-avatars.com/api/?name=U&background=6366f1&color=fff"
-                }
-                className="w-12 h-12 rounded-full ring-4 ring-white/30 shadow-lg"
-                alt={material.author}
-              />
-              <div>
-                <p className="font-black text-white text-lg">
-                  {material.author}
-                </p>
-                <p className="text-indigo-100 text-sm">
-                  {new Date(material.date).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-
-            <h1 className="text-3xl md:text-4xl font-black text-white leading-tight">
-              {material.title}
-            </h1>
-
-            <div className="mt-4 flex items-center gap-3 flex-wrap">
-              {material.targetLevel &&
-                material.targetLevel !== "ALL" && (
-                  <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
-                    <span className="text-white text-xs font-bold">
-                      🎯 Nivel {material.targetLevel}
-                    </span>
-                  </div>
-                )}
-
-              {/* ✅ BOTÓN LIKE INTERACTIVO */}
-              <button
-                onClick={handleLike}
-                disabled={isLiking}
-                className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full transition-all group"
-              >
-                <Heart
-                  className={cn(
-                    "w-4 h-4 text-white transition-all",
-                    isLiked
-                      ? "fill-white scale-110"
-                      : "group-hover:fill-white",
-                  )}
-                />
-                <span className="text-white text-sm font-bold">
-                  {likesCount}
-                </span>
-              </button>
-            </div>
-          </div>
+        <div className="bg-indigo-600 p-6 flex justify-between items-center text-white sticky top-0 z-10 shadow-md">
+            <h2 className="font-bold text-xl truncate flex-1">{material.title}</h2>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><X className="w-6 h-6" /></button>
+        </div>
+        
+        {/* Contenido */}
+        <div className="p-8 bg-white min-h-[200px]">
+             {material.blocks?.length > 0 ? material.blocks.map((b:any,i:number)=>renderBlock(b,i)) : <div className="prose max-w-none" dangerouslySetInnerHTML={{__html: material.content}}/>}
+             
+             {/* Botón Like */}
+             <div className="mt-8 flex gap-4">
+                 <button onClick={handleLike} disabled={isLiking} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all shadow-sm active:scale-95 ${isLiked ? 'bg-rose-100 text-rose-600 border border-rose-200' : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'}`}>
+                     <Heart className={cn("w-6 h-6", isLiked && "fill-current")} />
+                     {likesCount} Me gusta
+                 </button>
+             </div>
         </div>
 
-        {/* Content */}
-        <div className="px-8 md:px-12 py-8 md:py-12 bg-white">
-          <div className="space-y-8">
-            {material.blocks?.length > 0 ? (
-              material.blocks.map((b: any, i: number) =>
-                renderBlock(b, i),
-              )
-            ) : (
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: material.content,
-                }}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Sección de Comentarios */}
-        <div className="bg-slate-50 p-8 md:p-12 border-t border-slate-200">
-          <h3 className="font-black text-slate-800 mb-6 flex gap-2 items-center">
-            <MessageCircle className="w-5 h-5 text-indigo-600" />
-            Comentarios ({commentsList.length})
+        {/* Comentarios */}
+        <div className="bg-slate-50 p-8 border-t border-slate-200">
+          <h3 className="font-black text-slate-800 mb-6 flex gap-2 items-center text-xl">
+              <MessageCircle className="w-6 h-6 text-indigo-600" /> 
+              Comentarios ({commentsList.length})
           </h3>
-
-          <div className="flex gap-4 mb-8">
-            <div className="flex-1 relative">
-              <Input
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Escribe un comentario..."
-                className="w-full h-12 rounded-2xl pr-12 bg-white border-slate-200"
-                onKeyDown={(e) =>
-                  e.key === "Enter" &&
-                  !e.shiftKey &&
-                  handleSend()
-                }
-              />
-              <button
-                onClick={handleSend}
-                disabled={!comment.trim()}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50"
-              >
-                <Send className="w-4 h-4" />
-              </button>
+          
+          <div className="flex gap-3 mb-8">
+            <div className="relative flex-1">
+                <Input 
+                    value={comment} 
+                    onChange={e => setComment(e.target.value)} 
+                    placeholder="Escribe tu opinión..." 
+                    className="w-full h-14 rounded-2xl pl-5 pr-14 bg-white border-2 border-slate-200 focus:border-indigo-500 text-lg shadow-sm" 
+                    onKeyDown={e => e.key === 'Enter' && handleSend()} 
+                />
+                <button 
+                    onClick={handleSend} 
+                    disabled={!comment.trim()}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-md"
+                >
+                    <Send className="w-5 h-5" />
+                </button>
             </div>
           </div>
 
           <div className="space-y-4">
-            {commentsList.map((c) => {
-              // ✅ LÓGICA PARA IDENTIFICAR AL AUTOR
-              const isMine =
-                String(c.userId) === String(currentUserId);
+            {commentsList.map(c => {
+              // ✅ LOG: Verificamos quién es quién en la consola
+              const commentUserId = String(c.userId);
+              const myId = String(currentUserId);
+              const isMine = commentUserId === myId;
+              
+              // console.log(`Comentario ${c.id}: AutorID=${commentUserId} vs MiID=${myId} -> Es mío? ${isMine}`);
 
               return (
-                <div
-                  key={c.id}
-                  className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-100 transition-colors group"
-                >
-                  <div className="flex items-start gap-3">
-                    <img
-                      src={
-                        c.avatar ||
-                        "https://ui-avatars.com/api/?name=U&background=94a3b8&color=fff"
-                      }
-                      className="w-8 h-8 rounded-full flex-shrink-0"
-                      alt={c.author}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-slate-800 text-sm">
-                            {c.author}
-                          </span>
-                          {/* ✅ ETIQUETA "TÚ" */}
-                          {isMine && (
-                            <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">
-                              TÚ
-                            </span>
-                          )}
-                          <span className="text-xs text-slate-400">
-                            {new Date(
-                              c.date,
-                            ).toLocaleDateString()}
-                          </span>
-                        </div>
-
-                        {/* ✅ BOTÓN BORRAR (SOLO SI ES MÍO) */}
-                        {isMine && (
-                          <button
-                            onClick={() =>
-                              handleDeleteComment(c.id)
-                            }
-                            className="text-slate-300 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
+                <div key={c.id} className={`p-5 rounded-2xl shadow-sm border transition-all ${isMine ? 'bg-indigo-50/50 border-indigo-100' : 'bg-white border-slate-100'}`}>
+                  <div className="flex justify-between items-start gap-4">
+                      <div className="flex items-start gap-3 flex-1">
+                          <img src={c.avatar || 'https://ui-avatars.com/api/?name=U&background=94a3b8&color=fff'} className="w-10 h-10 rounded-full flex-shrink-0 shadow-sm border border-white" alt={c.author} />
+                          <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-black text-slate-800 text-sm">{c.author}</span>
+                                  {isMine && <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm">TÚ</span>}
+                                  <span className="text-xs text-slate-400 font-medium">• {new Date(c.date).toLocaleDateString()}</span>
+                              </div>
+                              <p className="text-slate-600 text-base leading-relaxed whitespace-pre-wrap">{c.content}</p>
+                          </div>
                       </div>
-                      <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
-                        {c.content}
-                      </p>
-                    </div>
+                      
+                      {/* ✅ BOTÓN BORRAR SIEMPRE VISIBLE SI ES MÍO */}
+                      {isMine && (
+                          <button 
+                            onClick={() => handleDeleteComment(c.id)} 
+                            className="text-slate-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-xl transition-all"
+                            title="Borrar comentario"
+                          >
+                              <Trash2 className="w-5 h-5" />
+                          </button>
+                      )}
                   </div>
                 </div>
               );
             })}
+            
+            {commentsList.length === 0 && !loading && (
+                <div className="text-center py-10 text-slate-400 italic">
+                    Sé la primera persona en comentar 👇
+                </div>
+            )}
           </div>
         </div>
       </div>
