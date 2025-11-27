@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { Pencil, Type, Eraser, Move, MousePointer2, Loader2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Pencil, Type, Eraser, MousePointer2, Loader2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '../lib/utils';
-import { publicAnonKey } from '../utils/supabase/info'; 
+import { publicAnonKey } from '../utils/supabase/info';
 
 // Configuración Worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -29,8 +29,6 @@ interface PDFAnnotatorProps {
 export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData = [], readOnly = false, onSave }) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  
-  // ✅ ESTADO PARA ZOOM (Empezamos al 100%)
   const [scale, setScale] = useState(1.0);
   
   const [tool, setTool] = useState<'pencil' | 'text' | 'eraser' | 'move'>('move');
@@ -44,7 +42,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
   const colors = ['#000000', '#EF4444', '#3B82F6', '#10B981', '#F59E0B'];
 
   // Configuración segura para el Proxy
-  const fileOptions = React.useMemo(() => {
+  const fileOptions = useMemo(() => {
     if (pdfUrl.includes('onedrive-proxy') || pdfUrl.includes('drive-proxy')) {
       return {
         url: pdfUrl,
@@ -59,19 +57,17 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
     setNumPages(numPages);
   }
 
-  // ✅ FUNCIONES DE ZOOM
-  const handleZoomIn = () => setScale(prev => Math.min(prev + 0.2, 3.0)); // Máx 300%
-  const handleZoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.6)); // Mín 60%
+  // Funciones Zoom
+  const handleZoomIn = () => setScale(prev => Math.min(prev + 0.2, 3.0));
+  const handleZoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.6));
   const handleResetZoom = () => setScale(1.0);
 
-  // Lógica de coordenadas (Ajustada al ZOOM)
+  // Lógica Canvas
   const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-    
-    // Dividimos por 'scale' para guardar la coordenada "pura" (independiente del zoom)
     return {
       x: (clientX - rect.left) / scale,
       y: (clientY - rect.top) / scale
@@ -109,7 +105,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
     const coords = getCoordinates(e);
 
     if (tool === 'text') {
-      const text = prompt("Escribe texto:");
+      const text = prompt("Texto:");
       if (text) {
         const newAnns = [...annotations, {
           id: crypto.randomUUID(), type: 'text' as const, content: text,
@@ -120,7 +116,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
         setTool('move');
       }
     } else if (tool === 'eraser') {
-      const threshold = 20; // Tolerancia de borrado
+      const threshold = 20;
       const toDelete = annotations.find(ann => {
         if (ann.page !== currentPage) return false;
         if (ann.type === 'text') return Math.abs((ann.x||0) - coords.x) < threshold && Math.abs((ann.y||0) - coords.y) < threshold;
@@ -135,7 +131,6 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
     }
   };
 
-  // Renderizado del Canvas (Sincronizado con Zoom)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -143,8 +138,6 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // ✅ CLAVE: Escalamos el contexto para que coincida con el PDF
     ctx.save();
     ctx.scale(scale, scale);
     ctx.lineCap = 'round';
@@ -155,7 +148,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
       if (ann.type === 'path' && ann.points) {
         ctx.beginPath();
         ctx.strokeStyle = ann.color;
-        ctx.lineWidth = 3; // Grosor constante
+        ctx.lineWidth = 3;
         ctx.moveTo(ann.points[0].x, ann.points[0].y);
         ann.points.forEach(p => ctx.lineTo(p.x, p.y));
         ctx.stroke();
@@ -174,17 +167,13 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
       currentPath.forEach(p => ctx.lineTo(p.x, p.y));
       ctx.stroke();
     }
-    
     ctx.restore();
   }, [annotations, currentPath, currentPage, scale, color]);
 
   return (
     <div className="flex flex-col h-full bg-slate-200 rounded-xl overflow-hidden border border-slate-300">
-      
-      {/* BARRA SUPERIOR: Herramientas + Zoom + Paginación */}
+      {/* Toolbar */}
       <div className="bg-white p-2 border-b flex items-center justify-between gap-2 shadow-sm z-10 flex-wrap">
-        
-        {/* Izquierda: Herramientas de Dibujo */}
         {!readOnly && (
           <div className="flex items-center gap-2">
             <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
@@ -193,7 +182,6 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
                 <Button variant={tool==='text'?'default':'ghost'} size="icon" className="h-8 w-8" onClick={()=>setTool('text')} title="Texto"><Type className="w-4 h-4"/></Button>
                 <Button variant={tool==='eraser'?'default':'ghost'} size="icon" className="h-8 w-8" onClick={()=>setTool('eraser')} title="Borrador"><Eraser className="w-4 h-4"/></Button>
             </div>
-            <div className="h-6 w-px bg-slate-300"></div>
             <div className="flex gap-1">
                 {colors.map(c => (
                     <button key={c} onClick={()=>setColor(c)} className={cn("w-6 h-6 rounded-full border-2", color===c ? "border-slate-800 scale-110" : "border-white")} style={{backgroundColor: c}}/>
@@ -202,41 +190,36 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
           </div>
         )}
 
-        {/* Derecha: Zoom y Paginación */}
         <div className="flex items-center gap-3">
-            {/* CONTROLES ZOOM */}
-            <div className="flex items-center bg-slate-100 rounded-lg border border-slate-200 p-0.5">
+            <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleZoomOut} disabled={scale <= 0.6}><ZoomOut className="w-3.5 h-3.5"/></Button>
-                <span className="text-[10px] font-bold w-12 text-center">{Math.round(scale * 100)}%</span>
+                <span className="text-[10px] font-bold w-8 text-center">{Math.round(scale * 100)}%</span>
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleZoomIn} disabled={scale >= 3.0}><ZoomIn className="w-3.5 h-3.5"/></Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-600" onClick={handleResetZoom} title="Reset"><RotateCcw className="w-3 h-3"/></Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleResetZoom}><RotateCcw className="w-3 h-3"/></Button>
             </div>
-
-            {/* PAGINACIÓN */}
-            <div className="flex items-center gap-2 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 text-xs font-bold">
-                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentPage<=1} onClick={()=>setCurrentPage(p=>p-1)}>&lt;</Button>
+            <div className="flex items-center bg-slate-100 px-2 py-1 rounded-lg text-xs font-bold">
+                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentPage<=1} onClick={()=>setCurrentPage(p=>p-1)}>{'<'}</Button>
                 <span>{currentPage} / {numPages||'--'}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentPage>=numPages} onClick={()=>setCurrentPage(p=>p+1)}>&gt;</Button>
+                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentPage>=numPages} onClick={()=>setCurrentPage(p=>p+1)}>{'>'}</Button>
             </div>
         </div>
       </div>
 
-      {/* ÁREA DEL DOCUMENTO SCROLLABLE */}
-      <div className="flex-1 overflow-auto relative bg-slate-500/10 flex justify-center p-8" ref={containerRef}>
+      {/* PDF Viewer */}
+      <div className="flex-1 overflow-auto relative bg-slate-100 flex justify-center p-8" ref={containerRef}>
         <div className="relative shadow-2xl border border-slate-300 bg-white origin-top" style={{ width: 'fit-content', height: 'fit-content' }}>
             <Document 
                 file={fileOptions} 
                 onLoadSuccess={onDocumentLoadSuccess} 
-                loading={<div className="p-20 flex flex-col items-center gap-4 text-slate-500"><Loader2 className="w-8 h-8 animate-spin"/> Cargando documento...</div>} 
-                error={<div className="p-20 text-center text-red-500 font-bold bg-red-50 rounded-xl border border-red-100">⚠️ No se pudo cargar el PDF.<br/><span className="text-xs font-normal text-red-400">Verifica que el enlace de OneDrive/Drive sea público.</span></div>}
+                loading={<div className="p-20 flex flex-col items-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mb-2"/>Cargando...</div>}
+                error={<div className="p-20 text-red-500 font-bold">Error al cargar.</div>}
             >
                 <Page 
                     pageNumber={currentPage} 
                     scale={scale} 
                     renderTextLayer={false} 
-                    renderAnnotationLayer={false} 
+                    renderAnnotationLayer={false}
                     onLoadSuccess={(page) => {
-                        // Sincronizar tamaño del canvas de dibujo con el PDF
                         if (canvasRef.current) {
                             canvasRef.current.width = page.width;
                             canvasRef.current.height = page.height;
@@ -244,8 +227,6 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
                     }}
                 />
             </Document>
-            
-            {/* CAPA DE DIBUJO (Se ajusta sola porque width/height se setean en onLoadSuccess) */}
             <canvas 
                 ref={canvasRef} 
                 className={cn("absolute inset-0 z-10 touch-none", tool==='move'?'pointer-events-none':'cursor-crosshair')}

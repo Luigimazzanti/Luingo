@@ -73,9 +73,7 @@
     --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     --color-red-50: oklch(.971 .013 17.38);
-    --color-red-100: oklch(.936 .032 17.717);
     --color-red-300: oklch(.808 .114 19.571);
-    --color-red-400: oklch(.704 .191 22.216);
     --color-red-500: oklch(.637 .237 25.331);
     --color-red-600: oklch(.577 .245 27.325);
     --color-orange-50: oklch(.98 .016 73.684);
@@ -1183,10 +1181,6 @@
     width: 100%;
   }
 
-  .w-px {
-    width: 1px;
-  }
-
   .max-w-2xl {
     max-width: var(--container-2xl);
   }
@@ -1704,10 +1698,6 @@
     border-color: var(--color-purple-200);
   }
 
-  .border-red-100 {
-    border-color: var(--color-red-100);
-  }
-
   .border-red-300 {
     border-color: var(--color-red-300);
   }
@@ -1962,10 +1952,6 @@
     background-color: var(--color-purple-100);
   }
 
-  .bg-red-50 {
-    background-color: var(--color-red-50);
-  }
-
   .bg-rose-50 {
     background-color: var(--color-rose-50);
   }
@@ -2010,20 +1996,6 @@
 
   .bg-slate-200 {
     background-color: var(--color-slate-200);
-  }
-
-  .bg-slate-300 {
-    background-color: var(--color-slate-300);
-  }
-
-  .bg-slate-500\/10 {
-    background-color: color-mix(in srgb, oklch(.554 .046 257.417) 10%, transparent);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-slate-500\/10 {
-      background-color: color-mix(in oklab, var(--color-slate-500) 10%, transparent);
-    }
   }
 
   .bg-slate-700 {
@@ -2612,11 +2584,6 @@
     font-weight: var(--font-weight-medium);
   }
 
-  .font-normal {
-    --tw-font-weight: var(--font-weight-normal);
-    font-weight: var(--font-weight-normal);
-  }
-
   .font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
@@ -2772,10 +2739,6 @@
 
   .text-purple-700 {
     color: var(--color-purple-700);
-  }
-
-  .text-red-400 {
-    color: var(--color-red-400);
   }
 
   .text-red-500 {

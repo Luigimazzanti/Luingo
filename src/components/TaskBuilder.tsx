@@ -165,6 +165,31 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     }
   };
 
+  // ========== LIMPIEZA DE ENLACES ONEDRIVE ==========
+  // ✅ FUNCIÓN DE LIMPIEZA MEJORADA para extraer URLs de iframes
+  const cleanOneDriveLink = (input: string) => {
+    let cleanUrl = input;
+
+    // 1. Extraer URL del iframe si existe
+    if (input.includes('<iframe')) {
+      const srcMatch = input.match(/src="([^"]+)"/);
+      if (srcMatch && srcMatch[1]) {
+        cleanUrl = srcMatch[1]; // Nos quedamos solo con la URL
+        toast.info("Enlace extraído del código iframe 👍");
+      }
+    }
+
+    // 2. Asegurar que sea un enlace válido antes de procesar
+    if (cleanUrl.startsWith('http')) {
+      // Detectar si ya es un smart link o necesita conversión
+      if (!cleanUrl.includes('onedrive-proxy') && !cleanUrl.includes('drive-proxy') && (cleanUrl.includes('onedrive.live.com') || cleanUrl.includes('1drv.ms') || cleanUrl.includes('drive.google.com'))) {
+        return getSmartLink(cleanUrl);
+      }
+    }
+    
+    return cleanUrl;
+  };
+
   // ========== GUARDAR TAREA ==========
   const handleSave = () => {
     if (!title.trim()) {
@@ -671,14 +696,20 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                     value={pdfUrl} 
                     onChange={e => {
                       const val = e.target.value;
-                      // Convertimos al vuelo usando el proxy inteligente (Drive + OneDrive)
-                      setPdfUrl(getSmartLink(val));
+                      setPdfUrl(cleanOneDriveLink(val)); // ✅ Limpiar al vuelo
                     }} 
-                    placeholder="https://onedrive.live.com/embed?... o https://drive.google.com/..." 
+                    onPaste={e => {
+                      // ✅ DOBLE SEGURIDAD AL PEGAR
+                      e.preventDefault();
+                      const pastedText = e.clipboardData.getData('text');
+                      const cleaned = cleanOneDriveLink(pastedText);
+                      setPdfUrl(cleaned);
+                    }}
+                    placeholder="Pega el código <iframe> o el enlace..." 
                     className="font-mono text-sm bg-white border-2 border-amber-300"
                   />
                   <div className="p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100">
-                    <strong>💡 Tip:</strong> Funciona con Google Drive y OneDrive. En OneDrive, haz clic derecho en el archivo PDF → <strong>Insertar (Embed)</strong> y copia ese enlace.
+                    <strong>💡 Tip:</strong> Funciona con Google Drive y OneDrive. Puedes pegar el <strong>código &lt;iframe&gt;</strong> completo o solo el enlace directo. El sistema extraerá automáticamente la URL.
                   </div>
                 </div>
               </div>
