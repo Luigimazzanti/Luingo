@@ -5,7 +5,6 @@ import {
   MessageCircle,
   Heart,
   Trash2,
-  Smile,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -27,13 +26,14 @@ export const ArticleReader: React.FC<{
   const [comment, setComment] = useState("");
   const [commentsList, setCommentsList] = useState<any[]>([]);
 
-  // Sincronización de Likes desde las props
+  // Estados para Likes Sincronizados
   const [likesCount, setLikesCount] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
+
   const [loading, setLoading] = useState(true);
 
-  // ✅ EFECTO PARA SINCRONIZAR LIKES SI EL PADRE CAMBIA
+  // ✅ Sincronizar estado inicial de Likes desde el material
   useEffect(() => {
     if (material) {
       const likes = Array.isArray(material.likes)
@@ -44,8 +44,9 @@ export const ArticleReader: React.FC<{
     }
   }, [material, currentUserId]);
 
+  // Cargar comentarios
   const loadComments = async () => {
-    // No ponemos loading true aquí para evitar parpadeos al borrar/añadir
+    // No ponemos loading true aquí para evitar parpadeos al enviar/borrar
     const comments = await getPostComments(
       material.discussionId,
     );
@@ -67,30 +68,31 @@ export const ArticleReader: React.FC<{
     if (success) {
       toast.success("💬 Comentario enviado");
       setComment("");
-      loadComments(); // Recarga silenciosa
+      loadComments(); // Recargar lista
     } else {
       toast.error("❌ Error al comentar");
     }
   };
 
-  // ✅ BORRAR COMENTARIO
+  // ✅ FUNCION PARA BORRAR (Nueva)
   const handleDeleteComment = async (commentId: string) => {
     if (!confirm("¿Borrar este comentario?")) return;
 
     const success = await deleteMoodlePost(commentId);
     if (success) {
       toast.success("🗑️ Comentario eliminado");
-      loadComments();
+      loadComments(); // Recargar lista
     } else {
-      toast.error("Error al borrar");
+      toast.error("No se pudo borrar");
     }
   };
 
+  // ✅ FUNCION PARA DAR LIKE (Sincronizada)
   const handleLike = async () => {
     if (isLiking) return;
     setIsLiking(true);
 
-    // Optimistic UI
+    // Optimistic UI (cambio visual inmediato)
     const wasLiked = isLiked;
     setIsLiked(!wasLiked);
     setLikesCount((prev) => (wasLiked ? prev - 1 : prev + 1));
@@ -101,12 +103,12 @@ export const ArticleReader: React.FC<{
     );
 
     if (success) {
-      onLikeUpdate?.(); // ✅ Avisar al padre para recargar el feed
+      onLikeUpdate?.(); // 🔄 Avisar al componente padre (Feed) para que se actualice
     } else {
-      // Rollback
+      // Si falla, revertimos
       setIsLiked(wasLiked);
       setLikesCount((prev) => (wasLiked ? prev + 1 : prev - 1));
-      toast.error("Error al guardar like");
+      toast.error("Error de conexión");
     }
     setIsLiking(false);
   };
@@ -148,17 +150,7 @@ export const ArticleReader: React.FC<{
               frameBorder="0"
             />
           </div>
-        ) : (
-          <a
-            key={idx}
-            href={b.content}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block p-6 bg-slate-100 rounded-2xl text-center text-blue-600 font-bold"
-          >
-            🎬 Ver Video
-          </a>
-        );
+        ) : null;
       case "genially":
         return (
           <div
@@ -219,7 +211,7 @@ export const ArticleReader: React.FC<{
               <img
                 src={
                   material.avatar ||
-                  "https://ui-avatars.com/api/?name=User&background=6366f1&color=fff"
+                  "https://ui-avatars.com/api/?name=U&background=6366f1&color=fff"
                 }
                 className="w-12 h-12 rounded-full ring-4 ring-white/30 shadow-lg"
                 alt={material.author}
@@ -248,6 +240,7 @@ export const ArticleReader: React.FC<{
                   </div>
                 )}
 
+              {/* ✅ BOTÓN LIKE INTERACTIVO */}
               <button
                 onClick={handleLike}
                 disabled={isLiking}
@@ -278,29 +271,27 @@ export const ArticleReader: React.FC<{
               )
             ) : (
               <div
-                className="prose prose-slate max-w-none text-lg leading-relaxed"
                 dangerouslySetInnerHTML={{
-                  __html: material.content || "Sin contenido",
+                  __html: material.content,
                 }}
               />
             )}
           </div>
         </div>
 
-        {/* Sección de Comentarios Mejorada */}
+        {/* Sección de Comentarios */}
         <div className="bg-slate-50 p-8 md:p-12 border-t border-slate-200">
           <h3 className="font-black text-slate-800 mb-6 flex gap-2 items-center">
             <MessageCircle className="w-5 h-5 text-indigo-600" />
             Comentarios ({commentsList.length})
           </h3>
 
-          {/* Input */}
           <div className="flex gap-4 mb-8">
             <div className="flex-1 relative">
               <Input
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Escribe tu opinión..."
+                placeholder="Escribe un comentario..."
                 className="w-full h-12 rounded-2xl pr-12 bg-white border-slate-200"
                 onKeyDown={(e) =>
                   e.key === "Enter" &&
@@ -318,83 +309,67 @@ export const ArticleReader: React.FC<{
             </div>
           </div>
 
-          {/* Lista de Comentarios con Acciones */}
-          {loading ? (
-            <div className="text-center py-8 text-slate-400">
-              Cargando comentarios...
-            </div>
-          ) : commentsList.length > 0 ? (
-            <div className="space-y-4">
-              {commentsList.map((c) => {
-                const isMine =
-                  String(c.userId) === String(currentUserId);
-                return (
-                  <div
-                    key={c.id}
-                    className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-100 transition-colors group"
-                  >
-                    <div className="flex items-start gap-3">
-                      <img
-                        src={
-                          c.avatar ||
-                          "https://ui-avatars.com/api/?name=U&background=94a3b8&color=fff"
-                        }
-                        className="w-8 h-8 rounded-full flex-shrink-0"
-                        alt={c.author}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-slate-800 text-sm">
-                              {c.author}
-                            </span>
-                            {isMine && (
-                              <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">
-                                TÚ
-                              </span>
-                            )}
-                            <span className="text-xs text-slate-400">
-                              {new Date(
-                                c.date,
-                              ).toLocaleDateString()}
-                            </span>
-                          </div>
+          <div className="space-y-4">
+            {commentsList.map((c) => {
+              // ✅ LÓGICA PARA IDENTIFICAR AL AUTOR
+              const isMine =
+                String(c.userId) === String(currentUserId);
 
-                          {/* Acciones: Borrar (solo mío) + Like (Visual) */}
-                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              className="text-slate-300 hover:text-rose-500 transition-colors"
-                              title="Me gusta"
-                            >
-                              <Heart className="w-3 h-3" />
-                            </button>
-                            {isMine && (
-                              <button
-                                onClick={() =>
-                                  handleDeleteComment(c.id)
-                                }
-                                className="text-slate-300 hover:text-red-600 transition-colors"
-                                title="Eliminar comentario"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
+              return (
+                <div
+                  key={c.id}
+                  className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-100 transition-colors group"
+                >
+                  <div className="flex items-start gap-3">
+                    <img
+                      src={
+                        c.avatar ||
+                        "https://ui-avatars.com/api/?name=U&background=94a3b8&color=fff"
+                      }
+                      className="w-8 h-8 rounded-full flex-shrink-0"
+                      alt={c.author}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-slate-800 text-sm">
+                            {c.author}
+                          </span>
+                          {/* ✅ ETIQUETA "TÚ" */}
+                          {isMine && (
+                            <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">
+                              TÚ
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-400">
+                            {new Date(
+                              c.date,
+                            ).toLocaleDateString()}
+                          </span>
                         </div>
-                        <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
-                          {c.content}
-                        </p>
+
+                        {/* ✅ BOTÓN BORRAR (SOLO SI ES MÍO) */}
+                        {isMine && (
+                          <button
+                            onClick={() =>
+                              handleDeleteComment(c.id)
+                            }
+                            className="text-slate-300 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
+                      <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
+                        {c.content}
+                      </p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-slate-400">
-              No hay comentarios aún. ¡Sé el primero!
-            </div>
-          )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

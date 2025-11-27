@@ -516,16 +516,18 @@ export const getPostComments = async (
     { discussionid: String(discussionId).replace(/\D/g, "") },
   );
   if (!data?.posts) return [];
+
   const sorted = data.posts.sort(
     (a: any, b: any) => a.id - b.id,
   );
   const parentId = sorted[0]?.id;
+
   return sorted
     .filter((p: any) => p.id !== parentId)
     .map((p: any) => ({
       id: p.id,
       author: p.userfullname,
-      userId: p.userid, // ✅ AHORA DEVUELVE USER ID
+      userId: p.userid, // ✅ ESTO ES LO NUEVO: Necesario para saber si es "Tú"
       avatar: p.userpictureurl,
       content: p.message.replace(/<[^>]*>?/gm, "").trim(),
       date: safeDate(p.created),
