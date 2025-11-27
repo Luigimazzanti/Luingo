@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Student, Task, Classroom, Submission } from '../types';
+import { Student, Task, Classroom, Submission, User } from '../types';
 import { StudentCard } from './StudentCard';
 import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock } from 'lucide-react';
 import { Button } from './ui/button';
@@ -10,12 +10,13 @@ import { Textarea } from './ui/textarea';
 import { gradeSubmission } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 import { TextAnnotator, Annotation } from './TextAnnotator';
-import { CommunityFeed } from './community/CommunityFeed'; // ✅ IMPORTAR COMUNIDAD
+import { CommunityFeed } from './community/CommunityFeed';
 
 interface TeacherDashboardProps {
   classroom: Classroom;
   students: Student[];
   tasks: Task[];
+  currentUser: User; // ✅ NUEVO: Usuario actual (profesor)
   submissions?: Submission[];
   onSelectStudent: (studentId: string) => void;
   onGenerateTask: () => void;
@@ -29,6 +30,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   classroom,
   students,
   tasks,
+  currentUser, // ✅ Recibimos currentUser
   submissions = [],
   onSelectStudent,
   onGenerateTask,
@@ -357,7 +359,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
           {/* ✅ VISTA COMUNIDAD */}
           {viewMode === 'community' && (
-            <CommunityFeed student={students[0] || null} isTeacher={true} />
+            <CommunityFeed 
+              student={currentUser} // ✅ Pasamos currentUser para que el profesor pueda firmar sus comentarios
+              isTeacher={true} 
+            />
           )}
         </div>
       </div>

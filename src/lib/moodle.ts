@@ -195,33 +195,54 @@ export const toggleCommunityLike = async (post: any, userId: string) => {
   return (await callMoodle("mod_forum_update_discussion_post", { postid: targetId, subject: post.title, message }))?.status;
 };
 
-// ✅ FIX: COMENTARIOS CON FIRMA TEXTUAL (NO HTML)
-export const addCommunityComment = async (discussionId: string | number, message: string, author: { id: string, name: string, avatar?: string }) => {
+// ✅ COMENTARIOS CON FIRMA Y ROL
+export const addCommunityComment = async (discussionId: string | number, message: string, author: { id: string, name: string, avatar?: string, role?: string }, replyToId?: string) => {
   const cleanDiscId = String(discussionId).replace(/\D/g, '');
+  
+  // Buscar padre para obtener subject
   const postsData = await callMoodle("mod_forum_get_discussion_posts", { discussionid: cleanDiscId });
   if (!postsData?.posts?.length) return false;
   
-  const parentPost = postsData.posts.sort((a: any, b: any) => a.id - b.id)[0];
-  const subject = parentPost.subject.startsWith("Re:") ? parentPost.subject : `Re: ${parentPost.subject}`;
+  // Determinar post padre real (si es reply o comentario raíz)
+  let targetParentId = replyToId || postsData.posts.sort((a: any, b: any) => a.id - b.id)[0].id;
   
-  const authorData = { id: author.id, name: author.name, avatar: author.avatar || '' };
-  // 🔥 USAMOS UN BLOQUE TIPO SHORTCODE QUE MOODLE NO ROMPE
+  // Obtener subject para replicarlo (Moodle estricto)
+  const parentPost = postsData.posts.find((p: any) => String(p.id) === String(targetParentId)) || postsData.posts[0];
+  let subject = parentPost.subject;
+  if (!subject.startsWith("Re:")) subject = `Re: ${subject}`;
+  
+  const authorData = { id: author.id, name: author.name, avatar: author.avatar || '', role: author.role || 'student' };
   const signedMessage = `${message}\n\n[LUINGO_AUTHOR]${JSON.stringify(authorData)}[/LUINGO_AUTHOR]`;
 
   const response = await callMoodle("mod_forum_add_discussion_post", {
-    postid: parentPost.id, subject: subject, message: signedMessage,
+    postid: targetParentId,
+    subject: subject,
+    message: `<p>${signedMessage}</p>`,
     "options[0][name]": "discussionsubscribe", "options[0][value]": true
   });
+
   return response && response.postid;
 };
 
-// ✅ FIX: LECTURA ROBUSTA DE FIRMA
+// ✅ EDITAR COMENTARIO (MANTENIENDO FIRMA)
+export const editCommunityComment = async (postId: string, message: string, author: { id: string, name: string, avatar?: string, role?: string }) => {
+    const authorData = { id: author.id, name: author.name, avatar: author.avatar || '', role: author.role || 'student' };
+    const signedMessage = `${message}\n\n[LUINGO_AUTHOR]${JSON.stringify(authorData)}[/LUINGO_AUTHOR]`;
+    
+    return (await callMoodle("mod_forum_update_discussion_post", {
+        postid: String(postId).replace(/\D/g, ''),
+        subject: '', // Enviamos vacío para que Moodle mantenga el original
+        message: `<p>${signedMessage}</p>`
+    }))?.status;
+};
+
+// ✅ FIX: LECTURA ROBUSTA DE FIRMA CON ROL Y PARENT
 export const getPostComments = async (discussionId: string | number) => {
   const data = await callMoodle("mod_forum_get_discussion_posts", { discussionid: String(discussionId).replace(/\D/g, '') });
   if (!data?.posts) return [];
   
   const sorted = data.posts.sort((a: any, b: any) => a.id - b.id);
-  const parentId = sorted[0]?.id;
+  const parentId = sorted[0]?.id; // El post principal del hilo (el Material)
   
   return sorted
     .filter((p: any) => p.id !== parentId)
@@ -229,32 +250,30 @@ export const getPostComments = async (discussionId: string | number) => {
       let realAuthorId = p.userid;
       let realAuthorName = p.userfullname;
       let realAvatar = p.userpictureurl;
+      let realRole = 'student'; // Default
       let content = p.message;
 
-      // Buscar firma [LUINGO_AUTHOR]...[/LUINGO_AUTHOR]
-      const metaMatch = p.message.match(/\[LUINGO_AUTHOR\](.*?)\[\/LUINGO_AUTHOR\]/s);
+      const metaMatch = p.message.match(/\[LUINGO_AUTHOR\]([\s\S]*?)\[\/LUINGO_AUTHOR\]/);
       
       if (metaMatch && metaMatch[1]) {
         try {
-            // Intentar limpiar HTML residual que Moodle pueda haber metido dentro del JSON
-            const rawJson = metaMatch[1].replace(/<[^>]+>/g, ''); 
+            const rawJson = metaMatch[1].replace(/<[^>]+>/g, '').trim(); 
             const authorData = JSON.parse(rawJson);
             realAuthorId = authorData.id;
             realAuthorName = authorData.name;
             realAvatar = authorData.avatar;
-            
-            // Quitar la firma del contenido visible
+            realRole = authorData.role || 'student';
             content = p.message.replace(metaMatch[0], '').trim();
         } catch (e) { }
       } 
-      
-      // Limpieza final de HTML
       content = content.replace(/<[^>]*>?/gm, '').trim();
 
       return {
         id: p.id,
+        parentId: p.parentid, // Necesario para anidar
         author: realAuthorName,
-        userId: realAuthorId,
+        userId: realAuthorId, 
+        role: realRole,
         avatar: realAvatar,
         content: content,
         date: safeDate(p.created)

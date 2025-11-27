@@ -542,7 +542,8 @@ export default function App() {
               classroom={classroom}
               students={students}
               tasks={tasks}
-              submissions={realSubmissions} // ✅ AÑADIDO: Pasar TODAS las entregas al profesor
+              currentUser={currentUser} // ✅ NUEVO: Pasar el usuario logueado para firmar comentarios
+              submissions={realSubmissions}
               onSelectStudent={handleSelectStudent}
               onGenerateTask={() => {
                 setStartBuilderWithAI(true);
@@ -551,7 +552,6 @@ export default function App() {
               onDeleteTask={handleDeleteTask}
               onEditTask={handleEditTask}
               onRefreshSubmissions={async () => {
-                // ✅ AÑADIDO: Función para refrescar entregas después de calificar
                 try {
                   const updatedSubs = await getMoodleSubmissions();
                   setRealSubmissions(updatedSubs);
@@ -561,6 +561,7 @@ export default function App() {
                   toast.error('Error al actualizar entregas');
                 }
               }}
+              onLogout={handleLogout} // ✅ NUEVO: Pasar logout también
             />
 
             {/* ========== STUDENT PASSPORT SHEET ========== */}

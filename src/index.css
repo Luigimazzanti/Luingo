@@ -96,6 +96,7 @@
     --color-yellow-50: oklch(.987 .026 102.212);
     --color-yellow-400: oklch(.852 .199 91.936);
     --color-green-600: oklch(.627 .194 149.214);
+    --color-green-700: oklch(.527 .154 150.069);
     --color-emerald-50: oklch(.979 .021 166.113);
     --color-emerald-100: oklch(.95 .052 163.051);
     --color-emerald-200: oklch(.905 .093 164.15);
@@ -118,6 +119,7 @@
     --color-blue-200: oklch(.882 .059 254.128);
     --color-blue-400: oklch(.707 .165 254.624);
     --color-blue-500: oklch(.623 .214 259.815);
+    --color-blue-600: oklch(.546 .245 262.881);
     --color-blue-700: oklch(.488 .243 264.376);
     --color-blue-900: oklch(.379 .146 265.522);
     --color-indigo-50: oklch(.962 .018 272.314);
@@ -539,10 +541,6 @@
 @layer utilities {
   .pointer-events-none {
     pointer-events: none;
-  }
-
-  .visible {
-    visibility: visible;
   }
 
   .sr-only {
@@ -1059,6 +1057,10 @@
     min-height: 68px;
   }
 
+  .min-h-\[80px\] {
+    min-height: 80px;
+  }
+
   .min-h-\[120px\] {
     min-height: 120px;
   }
@@ -1113,6 +1115,10 @@
 
   .w-8 {
     width: calc(var(--spacing) * 8);
+  }
+
+  .w-9 {
+    width: calc(var(--spacing) * 9);
   }
 
   .w-10 {
@@ -1219,7 +1225,7 @@
     flex: 1;
   }
 
-  .flex-shrink-0, .shrink-0 {
+  .shrink-0 {
     flex-shrink: 0;
   }
 
@@ -1560,6 +1566,10 @@
     border-style: dashed;
   }
 
+  .border-amber-100 {
+    border-color: var(--color-amber-100);
+  }
+
   .border-amber-200 {
     border-color: var(--color-amber-200);
   }
@@ -1732,6 +1742,10 @@
     border-top-color: #0000;
   }
 
+  .border-l-slate-200 {
+    border-left-color: var(--color-slate-200);
+  }
+
   .bg-\[\#F0F4F8\] {
     background-color: #f0f4f8;
   }
@@ -1742,6 +1756,16 @@
 
   .bg-amber-50 {
     background-color: var(--color-amber-50);
+  }
+
+  .bg-amber-50\/40 {
+    background-color: color-mix(in srgb, oklch(.987 .022 95.277) 40%, transparent);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-amber-50\/40 {
+      background-color: color-mix(in oklab, var(--color-amber-50) 40%, transparent);
+    }
   }
 
   .bg-amber-100 {
@@ -1826,17 +1850,21 @@
     background-color: var(--color-emerald-600);
   }
 
+  .bg-green-600 {
+    background-color: var(--color-green-600);
+  }
+
   .bg-indigo-50 {
     background-color: var(--color-indigo-50);
   }
 
-  .bg-indigo-50\/50 {
-    background-color: color-mix(in srgb, oklch(.962 .018 272.314) 50%, transparent);
+  .bg-indigo-50\/40 {
+    background-color: color-mix(in srgb, oklch(.962 .018 272.314) 40%, transparent);
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .bg-indigo-50\/50 {
-      background-color: color-mix(in oklab, var(--color-indigo-50) 50%, transparent);
+    .bg-indigo-50\/40 {
+      background-color: color-mix(in oklab, var(--color-indigo-50) 40%, transparent);
     }
   }
 
@@ -2961,8 +2989,16 @@
     --tw-enter-translate-y: calc(1 * 100%);
   }
 
+  .slide-in-from-top-1 {
+    --tw-enter-translate-y: calc(1 * var(--spacing) * -1);
+  }
+
   .zoom-in {
     --tw-enter-scale: 0;
+  }
+
+  .zoom-in-95 {
+    --tw-enter-scale: .95;
   }
 
   @media (hover: hover) {
@@ -3178,6 +3214,12 @@
   }
 
   @media (hover: hover) {
+    .hover\:bg-green-700:hover {
+      background-color: var(--color-green-700);
+    }
+  }
+
+  @media (hover: hover) {
     .hover\:bg-indigo-50:hover {
       background-color: var(--color-indigo-50);
     }
@@ -3322,6 +3364,12 @@
   }
 
   @media (hover: hover) {
+    .hover\:text-blue-600:hover {
+      color: var(--color-blue-600);
+    }
+  }
+
+  @media (hover: hover) {
     .hover\:text-indigo-500:hover {
       color: var(--color-indigo-500);
     }
@@ -3336,6 +3384,12 @@
   @media (hover: hover) {
     .hover\:text-red-500:hover {
       color: var(--color-red-500);
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:text-red-600:hover {
+      color: var(--color-red-600);
     }
   }
 
@@ -3837,6 +3891,12 @@
   @media (width >= 48rem) {
     .md\:mb-8 {
       margin-bottom: calc(var(--spacing) * 8);
+    }
+  }
+
+  @media (width >= 48rem) {
+    .md\:ml-8 {
+      margin-left: calc(var(--spacing) * 8);
     }
   }
 
