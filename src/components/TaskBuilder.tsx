@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Link as LinkIcon } from 'lucide-react';
+import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Link as LinkIcon, Upload, ExternalLink } from 'lucide-react';
 import { cn, getDriveDirectLink } from '../lib/utils';
+import { UploadButton } from '../lib/uploadthing';
+import { projectId } from '../utils/supabase/info';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
 
@@ -658,32 +660,105 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
           {/* ✅ CONFIGURACIÓN ESPECÍFICA PARA DOCUMENT */}
           {taskType === 'document' && (
             <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-8 rounded-2xl shadow-sm border-2 border-amber-200">
-              <div className="flex gap-4">
-                <div className="p-3 bg-amber-100 rounded-xl h-fit text-amber-600">
-                  <LinkIcon className="w-6 h-6"/>
+              <div className="space-y-6">
+                <div className="flex gap-4">
+                  <div className="p-3 bg-amber-100 rounded-xl h-fit text-amber-600">
+                    <Upload className="w-6 h-6"/>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-amber-900 text-lg">Documento PDF</h3>
+                    <p className="text-amber-700 text-sm">Los alumnos podrán ver este PDF y dibujar/escribir sobre él.</p>
+                  </div>
                 </div>
-                <div className="flex-1 space-y-4">
-                  <div>
-                    <h3 className="font-bold text-amber-900 text-lg">Enlace del Documento PDF</h3>
-                    <p className="text-amber-700 text-sm">El alumno podrá ver este PDF y dibujar/escribir sobre él.</p>
+
+                {!pdfUrl ? (
+                  <div className="space-y-4">
+                    {/* ✅ BOTÓN DE UPLOADTHING */}
+                    <div className="flex flex-col items-center justify-center py-8 bg-white/50 rounded-xl border-2 border-dashed border-amber-300">
+                      <div className="p-4 bg-amber-100 rounded-full mb-4">
+                        <FileIcon className="w-8 h-8 text-amber-600"/>
+                      </div>
+                      <h4 className="font-bold text-amber-900 mb-2">Sube tu documento PDF</h4>
+                      <p className="text-sm text-amber-700 mb-4">Máximo 4MB</p>
+                      
+                      <UploadButton
+                        endpoint="pdfUploader"
+                        url={`https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/api/uploadthing`}
+                        onClientUploadComplete={(res) => {
+                          if (res && res[0]) {
+                            setPdfUrl(res[0].url);
+                            toast.success("✅ PDF subido correctamente");
+                          }
+                        }}
+                        onUploadError={(error: Error) => {
+                          toast.error(`❌ Error: ${error.message}`);
+                        }}
+                        appearance={{
+                          button: "bg-amber-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-amber-700 transition-all shadow-md hover:shadow-lg ut-ready:bg-amber-600 ut-uploading:bg-amber-400 ut-uploading:cursor-not-allowed",
+                          container: "flex flex-col items-center gap-2",
+                          allowedContent: "text-amber-600 text-xs mt-2"
+                        }}
+                      />
+                    </div>
+
+                    {/* ALTERNATIVA: Pegar enlace de Drive */}
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-amber-300"></div>
+                      </div>
+                      <div className="relative flex justify-center text-xs">
+                        <span className="bg-gradient-to-br from-amber-50 to-orange-50 px-3 py-1 text-amber-700 rounded-full font-bold">
+                          O pega un enlace de Google Drive
+                        </span>
+                      </div>
+                    </div>
+
+                    <Input 
+                      value={pdfUrl} 
+                      onChange={e => {
+                        const val = e.target.value;
+                        // Si parece un link de drive, lo convertimos automáticamente
+                        if (val.includes('drive.google.com')) {
+                          setPdfUrl(getDriveDirectLink(val));
+                          toast.success("🔗 Enlace de Drive convertido");
+                        } else {
+                          setPdfUrl(val);
+                        }
+                      }} 
+                      placeholder="https://drive.google.com/file/d/..." 
+                      className="font-mono text-sm bg-white border-2 border-amber-300"
+                    />
                   </div>
-                  <Input 
-                    value={pdfUrl} 
-                    onChange={e => {
-                      const val = e.target.value;
-                      // Si parece un link de drive, lo convertimos automáticamente
-                      if (val.includes('drive.google.com')) {
-                        setPdfUrl(getDriveDirectLink(val));
-                      } else {
-                        setPdfUrl(val);
-                      }
-                    }} 
-                    placeholder="Pega aquí el enlace de compartir de Drive..." 
-                    className="font-mono text-sm bg-white border-2 border-amber-300"
-                  />
-                  <div className="p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100">
-                    <strong>💡 Tip:</strong> Puedes pegar un enlace de compartir de Google Drive y se convertirá automáticamente a un enlace directo.
+                ) : (
+                  <div className="flex items-center justify-between p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-100 rounded-lg text-green-700">
+                        <FileIcon className="w-5 h-5"/>
+                      </div>
+                      <div>
+                        <p className="font-bold text-green-800 text-sm">✅ Documento cargado</p>
+                        <a 
+                          href={pdfUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-xs text-green-600 hover:underline flex items-center gap-1"
+                        >
+                          Ver archivo <ExternalLink className="w-3 h-3"/>
+                        </a>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => setPdfUrl('')} 
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4"/>
+                    </Button>
                   </div>
+                )}
+
+                <div className="p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100">
+                  <strong>💡 Tip:</strong> Puedes subir directamente el PDF o pegar un enlace de Google Drive (se convertirá automáticamente).
                 </div>
               </div>
             </div>

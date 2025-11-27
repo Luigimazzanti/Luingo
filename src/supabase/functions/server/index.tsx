@@ -3,18 +3,54 @@ import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import { createClient } from "jsr:@supabase/supabase-js@2.49.8";
 import * as kv from "./kv_store.tsx";
+import { createUploadthing, type FileRouter } from "npm:uploadthing@6.5.2/server";
+import { createRouteHandler } from "npm:uploadthing@6.5.2/server";
+
+// ==========================================
+// 🔐 CONFIGURACIÓN DE UPLOADTHING
+// ==========================================
+const UT_SECRET = "sk_live_8897a3944568b699bc1b52dc60c0ebfb5dd8a69bed042fc5325e999b91d5bcd2";
+const UT_APP_ID = "w0lp8qyjh1"; // Extraído de la secret key
+
+// Inicializar UploadThing
+const f = createUploadthing();
+
+const uploadRouter = {
+  // Ruta para subir PDFs (máx 4MB, 1 archivo)
+  pdfUploader: f({ pdf: { maxFileSize: "4MB", maxFileCount: 1 } })
+    .middleware(async ({ req }) => {
+      // Aquí podrías verificar auth, por ahora público para facilitar
+      console.log("📤 Iniciando subida de PDF...");
+      return { userId: "user_123" };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("✅ Subida completada:", file.url);
+      console.log("📁 Archivo:", file.name, "Tamaño:", file.size);
+      return { uploadedBy: metadata.userId };
+    }),
+} satisfies FileRouter;
+
+export type OurFileRouter = typeof uploadRouter;
 
 const app = new Hono();
 
 // Enable logger
 app.use('*', logger(console.log));
 
-// Enable CORS for all routes and methods
+// Enable CORS for all routes and methods (incluyendo headers de UploadThing)
 app.use(
   "/*",
   cors({
     origin: "*",
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: [
+      "Content-Type", 
+      "Authorization", 
+      "x-uploadthing-package", 
+      "x-uploadthing-version",
+      "x-uploadthing-api-key",
+      "x-uploadthing-fe-package",
+      "x-uploadthing-be-adapter"
+    ],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
@@ -25,6 +61,21 @@ app.use(
 app.get("/make-server-ebbb5c67/health", (c) => {
   return c.json({ status: "ok" });
 });
+
+// 🚀 RUTAS DE UPLOADTHING
+// Configuramos las rutas de UploadThing con las claves
+const { GET, POST } = createRouteHandler({
+  router: uploadRouter,
+  config: {
+    token: UT_SECRET,
+    isDev: true,
+    logLevel: "info",
+  },
+});
+
+// Montar rutas en la URL específica del proyecto
+app.get("/make-server-ebbb5c67/api/uploadthing", (c) => GET(c.req.raw));
+app.post("/make-server-ebbb5c67/api/uploadthing", (c) => POST(c.req.raw));
 
 // Sign up endpoint
 app.post("/make-server-ebbb5c67/signup", async (c) => {

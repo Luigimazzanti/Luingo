@@ -268,3 +268,6 @@ html {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* ✅ ESTILOS DE UPLOADTHING */
+@import "@uploadthing/react/styles.css";
