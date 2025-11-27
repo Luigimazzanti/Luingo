@@ -26,7 +26,6 @@ const CommentItem: React.FC<{
   const isMine = String(comment.userId) === String(currentUserId);
   const isTeacher = comment.role === 'teacher';
   
-  // Buscar respuestas directas
   const replies = allComments.filter(c => String(c.parentId) === String(comment.id));
 
   const handleSubmitReply = () => {
@@ -128,8 +127,6 @@ export const ArticleReader: React.FC<{
   const [isLiked, setIsLiked] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   const [loading, setLoading] = useState(true);
-  
-  // ✅ ESTADO PARA PAGINACIÓN ("VER MÁS")
   const [visibleCount, setVisibleCount] = useState(5);
 
   const currentUserId = currentUser?.id ? String(currentUser.id) : '0';
@@ -219,36 +216,63 @@ export const ArticleReader: React.FC<{
     setIsLiking(false);
   };
 
+  // ✅ CORRECCIÓN: Renderizado completo de bloques (Genially, Audio, Video, Imagen)
   const renderBlock = (b: any, i: number) => {
       if(!b.content) return null;
-      if(b.type==='text') return <p key={i} className="mb-4 text-slate-700 text-lg leading-relaxed">{b.content}</p>;
-      if(b.type==='image') return <img key={i} src={b.content} className="w-full rounded-xl mb-4 shadow-sm border" alt="Contenido" />;
-      if(b.type==='video') {
-          const vId = b.content.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([^&?]*)/)?.[1];
-          return vId ? <div key={i} className="aspect-video rounded-xl overflow-hidden mb-4 shadow-lg"><iframe src={`https://www.youtube.com/embed/${vId}`} className="w-full h-full" allowFullScreen /></div> : null;
+      
+      switch (b.type) {
+        case 'text': 
+            return <p key={i} className="mb-4 text-slate-700 text-lg leading-relaxed whitespace-pre-wrap">{b.content}</p>;
+        
+        case 'image': 
+            return <img key={i} src={b.content} className="w-full rounded-xl mb-4 shadow-sm border border-slate-100" alt="Contenido" />;
+        
+        case 'video': {
+            const vId = b.content.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([^&?]*)/)?.[1];
+            return vId ? (
+                <div key={i} className="aspect-video rounded-xl overflow-hidden mb-4 shadow-lg bg-black">
+                    <iframe src={`https://www.youtube.com/embed/${vId}`} className="w-full h-full" allowFullScreen frameBorder="0" />
+                </div>
+            ) : null;
+        }
+
+        case 'genially': 
+            return (
+                <div key={i} className="w-full rounded-xl overflow-hidden mb-4 shadow-lg border border-slate-100 relative bg-slate-50" style={{ paddingBottom: '56.25%', height: 0 }}>
+                    <iframe src={b.content} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} allowFullScreen frameBorder="0" />
+                </div>
+            );
+
+        case 'audio': 
+            return (
+                <div key={i} className="bg-slate-50 p-4 rounded-xl flex justify-center mb-4 border border-slate-100 shadow-sm">
+                    <audio controls src={b.content} className="w-full" />
+                </div>
+            );
+
+        default: return null;
       }
-      return null;
   };
 
-  // Filtrar comentarios raíz
   const rootComments = commentsList.filter(c => !commentsList.some(other => String(other.id) === String(c.parentId)));
-  
-  // ✅ LOGICA DE CORTE: Solo mostramos los visibles
   const visibleRootComments = rootComments.slice(0, visibleCount);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center overflow-y-auto p-4 md:p-8">
       <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full my-8 overflow-hidden border border-slate-200 animate-in fade-in slide-in-from-bottom-4 duration-300">
         
-        {/* Header */}
         <div className="bg-indigo-600 p-6 flex justify-between items-center text-white sticky top-0 z-10 shadow-md">
             <h2 className="font-bold text-xl truncate flex-1">{material.title}</h2>
             <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors"><X className="w-6 h-6" /></button>
         </div>
         
-        {/* Contenido */}
         <div className="p-8 bg-white min-h-[200px]">
-             {material.blocks?.length > 0 ? material.blocks.map((b:any,i:number)=>renderBlock(b,i)) : <div className="prose max-w-none" dangerouslySetInnerHTML={{__html: material.content}}/>}
+             {/* Renderizado seguro de bloques */}
+             {material.blocks?.length > 0 ? (
+                 material.blocks.map((b:any,i:number) => renderBlock(b,i))
+             ) : (
+                 <div className="prose max-w-none" dangerouslySetInnerHTML={{__html: material.content}}/>
+             )}
              
              <div className="mt-8 flex gap-4">
                  <button onClick={handleLike} disabled={isLiking} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all shadow-sm active:scale-95 ${isLiked ? 'bg-rose-100 text-rose-600 border border-rose-200' : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'}`}>
@@ -258,7 +282,6 @@ export const ArticleReader: React.FC<{
              </div>
         </div>
 
-        {/* Comentarios */}
         <div className="bg-slate-50 p-8 border-t border-slate-200">
           <h3 className="font-black text-slate-800 mb-6 flex gap-2 items-center text-xl">
               <MessageCircle className="w-6 h-6 text-indigo-600" /> 
@@ -287,7 +310,6 @@ export const ArticleReader: React.FC<{
               />
             ))}
             
-            {/* ✅ BOTÓN VER MÁS */}
             {rootComments.length > visibleCount && (
                 <div className="text-center pt-4 border-t border-slate-200 mt-6">
                     <p className="text-xs text-slate-400 mb-2">Viendo {visibleCount} de {rootComments.length} hilos</p>

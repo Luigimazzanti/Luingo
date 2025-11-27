@@ -18,7 +18,14 @@ export const ResourceComposer: React.FC<ResourceComposerProps> = ({ initialData,
     initialData?.blocks || [{type: 'text', content: ''}] // ✅ RECUPERAR BLOQUES DIRECTAMENTE
   );
 
-  const addBlock = (type: any) => setBlocks([...blocks, { type, content: '' }]);
+  // ✅ VALIDACIÓN: Límite de 10 bloques
+  const addBlock = (type: any) => {
+    if (blocks.length >= 10) {
+      toast.error("⚠️ Límite de 10 bloques alcanzado para mantener el material ligero.");
+      return;
+    }
+    setBlocks([...blocks, { type, content: '' }]);
+  };
   
   const updateBlock = (idx: number, val: string) => {
     const n = [...blocks];

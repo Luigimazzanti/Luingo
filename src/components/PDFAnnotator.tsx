@@ -1,259 +1,259 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
+import { Pencil, Type, Eraser, Move, MousePointer2, Loader2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
-import { Save, Undo, Eraser, Pen, ZoomIn, ZoomOut, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { publicAnonKey } from '../utils/supabase/info'; 
 
-// Configurar worker CDN de forma segura
-try {
-  // Usamos una versión fija para evitar errores de 'undefined' en pdfjs.version
-  const pdfVersion = pdfjs.version || '3.11.174';
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfVersion}/build/pdf.worker.min.js`;
-} catch (e) {
-  console.error("Error configuring PDF worker:", e);
-}
+// Configuración Worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-interface Stroke {
-  points: { x: number; y: number }[];
+interface Annotation {
+  id: string;
+  type: 'path' | 'text';
+  content?: string;
+  points?: { x: number, y: number }[];
   color: string;
-  width: number;
+  x?: number;
+  y?: number;
+  page: number;
 }
 
 interface PDFAnnotatorProps {
-  bgUrl: string; // URL del PDF real
-  mode: 'student' | 'teacher'; // 'student' = blue pen, 'teacher' = red pen
-  onSave: (strokes: Stroke[]) => void;
+  pdfUrl: string;
+  initialData?: Annotation[];
+  readOnly?: boolean;
+  onSave?: (data: Annotation[]) => void;
 }
 
-export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ bgUrl, mode, onSave }) => {
-  const [numPages, setNumPages] = useState<number | null>(null);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [scale, setScale] = useState(1.0);
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
-  const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
-  const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
+export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData = [], readOnly = false, onSave }) => {
+  const [numPages, setNumPages] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  // ✅ ESTADO PARA ZOOM (Empezamos al 100%)
+  const [scale, setScale] = useState(1.0);
+  
+  const [tool, setTool] = useState<'pencil' | 'text' | 'eraser' | 'move'>('move');
+  const [color, setColor] = useState('#EF4444'); 
+  const [annotations, setAnnotations] = useState<Annotation[]>(initialData);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState<{ x: number, y: number }[]>([]);
+  
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const colors = ['#000000', '#EF4444', '#3B82F6', '#10B981', '#F59E0B'];
 
-  // Color según rol
-  const penColor = mode === 'teacher' ? '#ef4444' : '#3b82f6'; // Rojo profe, Azul alumno
-  const penWidth = 3;
+  // Configuración segura para el Proxy
+  const fileOptions = React.useMemo(() => {
+    if (pdfUrl.includes('onedrive-proxy') || pdfUrl.includes('drive-proxy')) {
+      return {
+        url: pdfUrl,
+        httpHeaders: { 'Authorization': `Bearer ${publicAnonKey}` },
+        withCredentials: false
+      };
+    }
+    return pdfUrl;
+  }, [pdfUrl]);
 
-  // Manejadores PDF
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
-    setLoading(false);
   }
 
-  function onDocumentLoadError(err: Error) {
-      console.error("Error loading PDF:", err);
-      setError("No se pudo cargar el PDF. Verifica la URL o CORS.");
-      setLoading(false);
-  }
+  // ✅ FUNCIONES DE ZOOM
+  const handleZoomIn = () => setScale(prev => Math.min(prev + 0.2, 3.0)); // Máx 300%
+  const handleZoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.6)); // Mín 60%
+  const handleResetZoom = () => setScale(1.0);
 
-  // --- LÓGICA DE DIBUJO (CANVAS OVERLAY) ---
-  
-  // Redibujar todo cuando cambian los trazos o el zoom
+  // Lógica de coordenadas (Ajustada al ZOOM)
+  const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    
+    // Dividimos por 'scale' para guardar la coordenada "pura" (independiente del zoom)
+    return {
+      x: (clientX - rect.left) / scale,
+      y: (clientY - rect.top) / scale
+    };
+  };
+
+  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    if (readOnly || tool !== 'pencil') return;
+    setIsDrawing(true);
+    const coords = getCoordinates(e);
+    setCurrentPath([coords]);
+  };
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing || tool !== 'pencil') return;
+    const coords = getCoordinates(e);
+    setCurrentPath(prev => [...prev, coords]);
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    if (currentPath.length > 0) {
+      const newAnns = [...annotations, {
+        id: crypto.randomUUID(), type: 'path', points: currentPath, color, page: currentPage
+      }];
+      setAnnotations(newAnns);
+      onSave?.(newAnns);
+      setCurrentPath([]);
+    }
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent) => {
+    if (readOnly) return;
+    const coords = getCoordinates(e);
+
+    if (tool === 'text') {
+      const text = prompt("Escribe texto:");
+      if (text) {
+        const newAnns = [...annotations, {
+          id: crypto.randomUUID(), type: 'text' as const, content: text,
+          x: coords.x, y: coords.y, color, page: currentPage
+        }];
+        setAnnotations(newAnns);
+        onSave?.(newAnns);
+        setTool('move');
+      }
+    } else if (tool === 'eraser') {
+      const threshold = 20; // Tolerancia de borrado
+      const toDelete = annotations.find(ann => {
+        if (ann.page !== currentPage) return false;
+        if (ann.type === 'text') return Math.abs((ann.x||0) - coords.x) < threshold && Math.abs((ann.y||0) - coords.y) < threshold;
+        if (ann.type === 'path' && ann.points) return ann.points.some(p => Math.abs(p.x - coords.x) < threshold && Math.abs(p.y - coords.y) < threshold);
+        return false;
+      });
+      if (toDelete) {
+        const newAnns = annotations.filter(a => a.id !== toDelete.id);
+        setAnnotations(newAnns);
+        onSave?.(newAnns);
+      }
+    }
+  };
+
+  // Renderizado del Canvas (Sincronizado con Zoom)
   useEffect(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-      // Ajustar tamaño del canvas al del contenedor (que debería coincidir con el PDF)
-      // Nota: Esto es tricky porque el PDF puede tardar en renderizar.
-      // Lo ideal es que el canvas tenga el tamaño exacto de la página PDF renderizada.
-      // Usaremos un ResizeObserver o asumiremos tamaño standard A4 * scale.
-      
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // ✅ CLAVE: Escalamos el contexto para que coincida con el PDF
+    ctx.save();
+    ctx.scale(scale, scale);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-      strokes.forEach(stroke => {
-          if (stroke.points.length < 2) return;
-          ctx.beginPath();
-          ctx.strokeStyle = stroke.color;
-          ctx.lineWidth = stroke.width; // Podríamos escalar el width con el zoom
-          ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-          for (let i = 1; i < stroke.points.length; i++) {
-              ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-          }
-          ctx.stroke();
-      });
-
-      // Dibujar trazo actual
-      if (currentStroke && currentStroke.points.length > 1) {
-          ctx.beginPath();
-          ctx.strokeStyle = currentStroke.color;
-          ctx.lineWidth = currentStroke.width;
-          ctx.moveTo(currentStroke.points[0].x, currentStroke.points[0].y);
-          for (let i = 1; i < currentStroke.points.length; i++) {
-              ctx.lineTo(currentStroke.points[i].x, currentStroke.points[i].y);
-          }
-          ctx.stroke();
+    annotations.forEach(ann => {
+      if (ann.page !== currentPage) return;
+      if (ann.type === 'path' && ann.points) {
+        ctx.beginPath();
+        ctx.strokeStyle = ann.color;
+        ctx.lineWidth = 3; // Grosor constante
+        ctx.moveTo(ann.points[0].x, ann.points[0].y);
+        ann.points.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.stroke();
+      } else if (ann.type === 'text' && ann.content) {
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillStyle = ann.color;
+        ctx.fillText(ann.content, ann.x || 0, ann.y || 0);
       }
-  }, [strokes, currentStroke, scale]);
+    });
 
-  const getPoint = (e: React.MouseEvent | React.TouchEvent) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return { x: 0, y: 0 };
-      const rect = canvas.getBoundingClientRect();
-      
-      let clientX, clientY;
-      if ('touches' in e) {
-          clientX = e.touches[0].clientX;
-          clientY = e.touches[0].clientY;
-      } else {
-          clientX = (e as React.MouseEvent).clientX;
-          clientY = (e as React.MouseEvent).clientY;
-      }
-
-      return {
-          x: (clientX - rect.left),
-          y: (clientY - rect.top)
-      };
-  };
-
-  const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
-      if (tool === 'eraser') return; // Implementar goma real es complejo, haremos "Undo" simple
-      setIsDrawing(true);
-      const point = getPoint(e);
-      setCurrentStroke({
-          points: [point],
-          color: penColor,
-          width: penWidth
-      });
-  };
-
-  const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
-      if (!isDrawing || !currentStroke) return;
-      e.preventDefault(); // Evitar scroll en móvil
-      const point = getPoint(e);
-      setCurrentStroke(prev => prev ? {
-          ...prev,
-          points: [...prev.points, point]
-      } : null);
-  };
-
-  const handleEnd = () => {
-      if (!isDrawing || !currentStroke) return;
-      setIsDrawing(false);
-      setStrokes(prev => [...prev, currentStroke]);
-      setCurrentStroke(null);
-  };
-
-  const handleUndo = () => {
-      setStrokes(prev => prev.slice(0, -1));
-  };
-
-  const handleClear = () => {
-      if (window.confirm('¿Borrar todo?')) {
-          setStrokes([]);
-      }
-  };
+    if (currentPath.length > 0) {
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.moveTo(currentPath[0].x, currentPath[0].y);
+      currentPath.forEach(p => ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+    }
+    
+    ctx.restore();
+  }, [annotations, currentPath, currentPage, scale, color]);
 
   return (
-    <div className="flex flex-col h-full relative bg-slate-100">
-        {/* Toolbar Flotante */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-white/90 backdrop-blur shadow-xl border border-slate-200 rounded-2xl p-2 flex gap-2 items-center">
-             <Button 
-                variant={tool === 'pen' ? 'default' : 'ghost'} 
-                size="icon" 
-                onClick={() => setTool('pen')}
-                className={tool === 'pen' ? (mode === 'teacher' ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600') : ''}
-             >
-                 <Pen className="w-4 h-4" />
-             </Button>
-             <Button variant="ghost" size="icon" onClick={handleUndo} title="Deshacer">
-                 <Undo className="w-4 h-4 text-slate-600" />
-             </Button>
-             <Button variant="ghost" size="icon" onClick={handleClear} title="Limpiar Página">
-                 <Eraser className="w-4 h-4 text-slate-600" />
-             </Button>
-             <div className="w-px h-6 bg-slate-200 mx-1"></div>
-             <Button variant="ghost" size="icon" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}>
-                 <ZoomOut className="w-4 h-4 text-slate-600" />
-             </Button>
-             <span className="text-xs font-bold text-slate-500 w-12 text-center">
-                 {Math.round(scale * 100)}%
-             </span>
-             <Button variant="ghost" size="icon" onClick={() => setScale(s => Math.min(2, s + 0.1))}>
-                 <ZoomIn className="w-4 h-4 text-slate-600" />
-             </Button>
-             <div className="w-px h-6 bg-slate-200 mx-1"></div>
-             <Button 
-                onClick={() => onSave(strokes)} 
-                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-sm"
-             >
-                 <Save className="w-4 h-4 mr-2" />
-                 Guardar
-             </Button>
-        </div>
+    <div className="flex flex-col h-full bg-slate-200 rounded-xl overflow-hidden border border-slate-300">
+      
+      {/* BARRA SUPERIOR: Herramientas + Zoom + Paginación */}
+      <div className="bg-white p-2 border-b flex items-center justify-between gap-2 shadow-sm z-10 flex-wrap">
+        
+        {/* Izquierda: Herramientas de Dibujo */}
+        {!readOnly && (
+          <div className="flex items-center gap-2">
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <Button variant={tool==='move'?'default':'ghost'} size="icon" className="h-8 w-8" onClick={()=>setTool('move')} title="Mover"><MousePointer2 className="w-4 h-4"/></Button>
+                <Button variant={tool==='pencil'?'default':'ghost'} size="icon" className="h-8 w-8" onClick={()=>setTool('pencil')} title="Lápiz"><Pencil className="w-4 h-4"/></Button>
+                <Button variant={tool==='text'?'default':'ghost'} size="icon" className="h-8 w-8" onClick={()=>setTool('text')} title="Texto"><Type className="w-4 h-4"/></Button>
+                <Button variant={tool==='eraser'?'default':'ghost'} size="icon" className="h-8 w-8" onClick={()=>setTool('eraser')} title="Borrador"><Eraser className="w-4 h-4"/></Button>
+            </div>
+            <div className="h-6 w-px bg-slate-300"></div>
+            <div className="flex gap-1">
+                {colors.map(c => (
+                    <button key={c} onClick={()=>setColor(c)} className={cn("w-6 h-6 rounded-full border-2", color===c ? "border-slate-800 scale-110" : "border-white")} style={{backgroundColor: c}}/>
+                ))}
+            </div>
+          </div>
+        )}
 
-        {/* Area de Visualización */}
-        <div 
-            className="flex-1 overflow-auto p-8 flex justify-center items-start relative touch-none" 
-            ref={containerRef}
-        >
-            {error ? (
-                 <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
-                    <AlertCircle className="w-12 h-12 text-red-300" />
-                    <p>{error}</p>
-                    <p className="text-sm">Intenta con otro PDF o verifica la URL.</p>
-                 </div>
-            ) : (
-                <div className="relative shadow-2xl border border-slate-300 bg-white" style={{ minWidth: '300px', minHeight: '400px' }}>
-                    {loading && (
-                         <div className="absolute inset-0 flex items-center justify-center bg-slate-50 z-20">
-                             <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-                             <span className="ml-3 font-bold text-slate-500">Cargando Documento...</span>
-                         </div>
-                    )}
-                    
-                    {/* Capa 1: El PDF Real */}
-                    <Document
-                        file={bgUrl}
-                        onLoadSuccess={onDocumentLoadSuccess}
-                        onLoadError={onDocumentLoadError}
-                        loading={null}
-                        className="select-none"
-                    >
-                        <Page 
-                            pageNumber={pageNumber} 
-                            scale={scale}
-                            renderAnnotationLayer={false}
-                            renderTextLayer={false} // Desactivar para mejor performance en dibujo
-                            canvasRef={(ref) => {
-                                // Truco: Ajustar el canvas de dibujo al tamaño del canvas del PDF
-                                if (ref && canvasRef.current) {
-                                    canvasRef.current.width = ref.width;
-                                    canvasRef.current.height = ref.height;
-                                    canvasRef.current.style.width = `${ref.width}px`;
-                                    canvasRef.current.style.height = `${ref.height}px`;
-                                }
-                            }}
-                        />
-                    </Document>
+        {/* Derecha: Zoom y Paginación */}
+        <div className="flex items-center gap-3">
+            {/* CONTROLES ZOOM */}
+            <div className="flex items-center bg-slate-100 rounded-lg border border-slate-200 p-0.5">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleZoomOut} disabled={scale <= 0.6}><ZoomOut className="w-3.5 h-3.5"/></Button>
+                <span className="text-[10px] font-bold w-12 text-center">{Math.round(scale * 100)}%</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleZoomIn} disabled={scale >= 3.0}><ZoomIn className="w-3.5 h-3.5"/></Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-600" onClick={handleResetZoom} title="Reset"><RotateCcw className="w-3 h-3"/></Button>
+            </div>
 
-                    {/* Capa 2: Canvas de Dibujo Transparente */}
-                    <canvas
-                        ref={canvasRef}
-                        className="absolute inset-0 z-10 cursor-crosshair"
-                        onMouseDown={handleStart}
-                        onMouseMove={handleMove}
-                        onMouseUp={handleEnd}
-                        onMouseLeave={handleEnd}
-                        onTouchStart={handleStart}
-                        onTouchMove={handleMove}
-                        onTouchEnd={handleEnd}
-                    />
-                </div>
-            )}
+            {/* PAGINACIÓN */}
+            <div className="flex items-center gap-2 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 text-xs font-bold">
+                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentPage<=1} onClick={()=>setCurrentPage(p=>p-1)}>&lt;</Button>
+                <span>{currentPage} / {numPages||'--'}</span>
+                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={currentPage>=numPages} onClick={()=>setCurrentPage(p=>p+1)}>&gt;</Button>
+            </div>
         </div>
+      </div>
+
+      {/* ÁREA DEL DOCUMENTO SCROLLABLE */}
+      <div className="flex-1 overflow-auto relative bg-slate-500/10 flex justify-center p-8" ref={containerRef}>
+        <div className="relative shadow-2xl border border-slate-300 bg-white origin-top" style={{ width: 'fit-content', height: 'fit-content' }}>
+            <Document 
+                file={fileOptions} 
+                onLoadSuccess={onDocumentLoadSuccess} 
+                loading={<div className="p-20 flex flex-col items-center gap-4 text-slate-500"><Loader2 className="w-8 h-8 animate-spin"/> Cargando documento...</div>} 
+                error={<div className="p-20 text-center text-red-500 font-bold bg-red-50 rounded-xl border border-red-100">⚠️ No se pudo cargar el PDF.<br/><span className="text-xs font-normal text-red-400">Verifica que el enlace de OneDrive/Drive sea público.</span></div>}
+            >
+                <Page 
+                    pageNumber={currentPage} 
+                    scale={scale} 
+                    renderTextLayer={false} 
+                    renderAnnotationLayer={false} 
+                    onLoadSuccess={(page) => {
+                        // Sincronizar tamaño del canvas de dibujo con el PDF
+                        if (canvasRef.current) {
+                            canvasRef.current.width = page.width;
+                            canvasRef.current.height = page.height;
+                        }
+                    }}
+                />
+            </Document>
+            
+            {/* CAPA DE DIBUJO (Se ajusta sola porque width/height se setean en onLoadSuccess) */}
+            <canvas 
+                ref={canvasRef} 
+                className={cn("absolute inset-0 z-10 touch-none", tool==='move'?'pointer-events-none':'cursor-crosshair')}
+                onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
+                onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} onClick={handleCanvasClick}
+            />
+        </div>
+      </div>
     </div>
   );
 };

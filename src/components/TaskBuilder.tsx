@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Link as LinkIcon } from 'lucide-react';
+import { cn, getSmartLink } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
 
@@ -47,9 +47,10 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   const [selectedLevel, setSelectedLevel] = useState(initialData?.content_data?.assignment_scope?.targetId || 'A1');
   const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts || 3);
 
-  // ✅ NUEVO: Tipo de tarea (Quiz vs Writing)
-  const [taskType, setTaskType] = useState<'quiz' | 'writing'>(
-    initialData?.content_data?.type === 'writing' ? 'writing' : 'quiz'
+  // ✅ NUEVO: Tipo de tarea (Quiz vs Writing vs Document)
+  const [taskType, setTaskType] = useState<'quiz' | 'writing' | 'document'>(
+    initialData?.content_data?.type === 'writing' ? 'writing' : 
+    initialData?.content_data?.type === 'document' ? 'document' : 'quiz'
   );
 
   // ✅ NUEVO: Estados para Writing
@@ -61,6 +62,9 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     initialData?.content_data?.resource_type || 'none'
   );
   const [dueDate, setDueDate] = useState(initialData?.due_date || ''); // ✅ FECHA LÍMITE
+  
+  // ✅ NUEVO: Estado para Document (PDF)
+  const [pdfUrl, setPdfUrl] = useState(initialData?.content_data?.pdfUrl || '');
 
   const [questions, setQuestions] = useState<QuestionDraft[]>(
     initialData?.content_data?.questions || [
@@ -178,13 +182,18 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         toast.error("❌ El mínimo de palabras debe ser mayor a 0");
         return;
       }
+    } else if (taskType === 'document') {
+      if (!pdfUrl.trim()) {
+        toast.error("❌ Falta el enlace del PDF");
+        return;
+      }
     }
 
     const taskData = {
       ...initialData,
       title,
       description,
-      category: taskType === 'writing' ? 'writing' : category,
+      category: taskType === 'writing' ? 'writing' : taskType === 'document' ? 'document' : category,
       content_data: taskType === 'writing' ? {
         // ✅ CONTENIDO PARA WRITING
         type: 'writing',
@@ -193,6 +202,15 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         max_words: maxWords,
         resource_url: resourceUrl,
         resource_type: resourceType,
+        assignment_scope: {
+          type: assignType,
+          targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
+          targetName: assignType === 'individual' ? studentName : undefined
+        }
+      } : taskType === 'document' ? {
+        // ✅ CONTENIDO PARA DOCUMENT
+        type: 'document',
+        pdfUrl: pdfUrl,
         assignment_scope: {
           type: assignType,
           targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
@@ -451,33 +469,45 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
           {/* META INFO */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
             
-            {/* ✅ SELECTOR DE TIPO: QUIZ VS WRITING */}
+            {/* ✅ SELECTOR DE TIPO: QUIZ VS WRITING VS DOCUMENT */}
             <div>
               <label className="text-xs font-black text-slate-600 uppercase mb-3 block">Tipo de Tarea</label>
-              <div className="flex gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={() => setTaskType('quiz')}
                   className={cn(
-                    "flex-1 py-4 px-3 sm:px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
+                    "py-4 px-3 rounded-xl border-2 font-bold transition-all flex flex-col items-center justify-center gap-2",
                     taskType === 'quiz'
                       ? "bg-indigo-100 border-indigo-500 text-indigo-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
                   )}
                 >
                   <CheckSquare className="w-5 h-5" />
-                  <span className="hidden sm:inline">Cuestionario</span>
+                  <span className="text-sm">Cuestionario</span>
                 </button>
                 <button
                   onClick={() => setTaskType('writing')}
                   className={cn(
-                    "flex-1 py-4 px-3 sm:px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
+                    "py-4 px-3 rounded-xl border-2 font-bold transition-all flex flex-col items-center justify-center gap-2",
                     taskType === 'writing'
                       ? "bg-emerald-100 border-emerald-500 text-emerald-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300"
                   )}
                 >
                   <FileText className="w-5 h-5" />
-                  <span className="hidden sm:inline">Redacción</span>
+                  <span className="text-sm">Redacción</span>
+                </button>
+                <button
+                  onClick={() => setTaskType('document')}
+                  className={cn(
+                    "py-4 px-3 rounded-xl border-2 font-bold transition-all flex flex-col items-center justify-center gap-2",
+                    taskType === 'document'
+                      ? "bg-amber-100 border-amber-500 text-amber-700 shadow-lg"
+                      : "bg-white border-slate-200 text-slate-600 hover:border-amber-300"
+                  )}
+                >
+                  <FileIcon className="w-5 h-5" />
+                  <span className="text-sm">Documento PDF</span>
                 </button>
               </div>
             </div>
@@ -621,6 +651,36 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                   onChange={e => setDueDate(e.target.value)}
                   className="bg-white border-2 border-emerald-300 h-10"
                 />
+              </div>
+            </div>
+          )}
+
+          {/* ✅ CONFIGURACIÓN ESPECÍFICA PARA DOCUMENT */}
+          {taskType === 'document' && (
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-8 rounded-2xl shadow-sm border-2 border-amber-200">
+              <div className="flex gap-4">
+                <div className="p-3 bg-amber-100 rounded-xl h-fit text-amber-600">
+                  <LinkIcon className="w-6 h-6"/>
+                </div>
+                <div className="flex-1 space-y-4">
+                  <div>
+                    <h3 className="font-bold text-amber-900 text-lg">Enlace del Documento PDF</h3>
+                    <p className="text-amber-700 text-sm">El alumno podrá ver este PDF y dibujar/escribir sobre él.</p>
+                  </div>
+                  <Input 
+                    value={pdfUrl} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      // Convertimos al vuelo usando el proxy inteligente (Drive + OneDrive)
+                      setPdfUrl(getSmartLink(val));
+                    }} 
+                    placeholder="https://onedrive.live.com/embed?... o https://drive.google.com/..." 
+                    className="font-mono text-sm bg-white border-2 border-amber-300"
+                  />
+                  <div className="p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100">
+                    <strong>💡 Tip:</strong> Funciona con Google Drive y OneDrive. En OneDrive, haz clic derecho en el archivo PDF → <strong>Insertar (Embed)</strong> y copia ese enlace.
+                  </div>
+                </div>
               </div>
             </div>
           )}

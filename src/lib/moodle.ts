@@ -165,13 +165,27 @@ export const deleteMoodlePost = async (postId: string | number, discussionId?: s
 export const getCommunityPosts = async () => {
   const data = await callMoodle("mod_forum_get_forum_discussions", { forumid: COMMUNITY_FORUM_ID });
   if (!data?.discussions) return [];
+  
   return data.discussions.map((disc: any) => {
     const match = disc.message.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
     const meta = match ? cleanMoodleJSON(match[1]) : {};
+    
+    // ✅ FIX: Asegurar que likes sea siempre un array de strings
+    const likesArray = Array.isArray(meta?.likes) ? meta.likes : [];
+
     return {
-      id: `comm-${disc.discussion}`, discussionId: disc.discussion, postId: disc.id, author: disc.userfullname, avatar: disc.userpictureurl,
-      title: disc.subject, blocks: meta?.blocks || [], content: disc.message.split('<span')[0].replace(/<[^>]*>?/gm, ''), targetLevel: meta?.level || 'ALL',
-      likes: meta?.likes || [], date: safeDate(disc.created), commentsCount: disc.numreplies || 0
+      id: `comm-${disc.discussion}`, 
+      discussionId: disc.discussion, 
+      postId: disc.id, 
+      author: disc.userfullname, 
+      avatar: disc.userpictureurl,
+      title: disc.subject, 
+      blocks: meta?.blocks || [], 
+      content: disc.message.split('<span')[0].replace(/<[^>]*>?/gm, ''), 
+      targetLevel: meta?.level || 'ALL',
+      likes: likesArray, // ✅ Usamos la variable segura
+      date: safeDate(disc.created), 
+      commentsCount: disc.numreplies || 0
     };
   });
 };
@@ -190,9 +204,20 @@ export const toggleCommunityLike = async (post: any, userId: string) => {
   const currentLikes = Array.isArray(post.likes) ? post.likes : [];
   const newLikes = currentLikes.includes(String(userId)) ? currentLikes.filter((id: string) => id !== String(userId)) : [...currentLikes, String(userId)];
   const meta = { level: post.targetLevel, type: 'mixed', blocks: post.blocks, likes: newLikes };
-  const message = `Like update...<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  // ✅ FIX: Reconstruir la vista previa HTML para no romper el post en Moodle Web
+  let htmlPreview = '<div class="luingo-post">';
+  if (Array.isArray(post.blocks)) {
+      post.blocks.forEach((b: any) => {
+        if (b.type === 'text') htmlPreview += `<p>${b.content.substring(0, 100)}...</p>`;
+        else htmlPreview += `<p>[${b.type}]</p>`;
+      });
+  }
+  htmlPreview += '</div>';
+
+  const message = `${htmlPreview}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
   let targetId = String(post.postId).replace(/\D/g, '');
-  return (await callMoodle("mod_forum_update_discussion_post", { postid: targetId, subject: post.title, message }))?.status;
+  const result = await callMoodle("mod_forum_update_discussion_post", { postid: targetId, subject: post.title, message });
+  return result?.status === true || result?.status === 'true' || (result && !result.exception);
 };
 
 // ✅ COMENTARIOS CON FIRMA Y ROL
