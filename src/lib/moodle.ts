@@ -54,19 +54,12 @@ const callMoodle = async (
     const text = await response.text();
     try {
       const data = JSON.parse(text);
-      // Moodle devuelve exception cuando hay error lógico, pero a veces es un aviso.
-      // Retornamos null solo si es crítico, si no devolvemos data para procesar.
       if (data.exception) {
         console.warn(
-          `⚠️ Moodle Warning/Error (${functionName}):`,
+          `⚠️ Moodle Warning (${functionName}):`,
           data.message,
         );
-        // Si es una excepción de control de acceso, devolvemos null para manejarlo en la UI
-        if (
-          data.errorcode === "accessdenied" ||
-          data.exception.includes("Access")
-        )
-          return null;
+        return null;
       }
       return data;
     } catch (parseError) {
@@ -156,16 +149,13 @@ export const updateMoodleTask = async (
   const cleanId = String(discussionId).replace(/\D/g, "");
   const message = `${description}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(jsonSettings)}[/LUINGO_DATA]</span>`;
 
-  // Update discussion suele requerir postid del primer mensaje
-  // Intentamos obtenerlo primero si discussionId parece ser de discusión
+  // Intentar obtener postId si es necesario
   let postId = cleanId;
   const posts = await callMoodle(
     "mod_forum_get_discussion_posts",
     { discussionid: cleanId },
   );
-  if (posts?.posts?.length) {
-    postId = posts.posts[0].id;
-  }
+  if (posts?.posts?.length) postId = posts.posts[0].id;
 
   return await callMoodle("mod_forum_update_discussion_post", {
     postid: postId,
@@ -174,19 +164,16 @@ export const updateMoodleTask = async (
   });
 };
 
-// HELPER: Borrado inteligente (compatible si falta mod_forum_delete_discussion)
+// Helper borrado inteligente
 const smartDelete = async (discussionId: string | number) => {
   const cleanId = String(discussionId).replace(/\D/g, "");
-
-  // 1. Intentar borrar discusión (método ideal)
   const resDisc = await callMoodle(
     "mod_forum_delete_discussion",
     { discussionid: cleanId },
   );
   if (resDisc && !resDisc.exception) return true;
 
-  // 2. Fallback: Buscar el post padre y borrarlo (método compatible)
-  console.log("⚠️ Fallback borrado: buscando post padre...");
+  // Fallback
   const postsData = await callMoodle(
     "mod_forum_get_discussion_posts",
     { discussionid: cleanId },
@@ -243,7 +230,7 @@ export const getMoodleTasks = async () => {
   });
 };
 
-// ========== SUBMISSIONS & GRADING ==========
+// ========== SUBMISSIONS ==========
 export const getMoodleSubmissions = async () => {
   const data = await callMoodle(
     "mod_forum_get_forum_discussions",
@@ -383,17 +370,12 @@ export const deleteMoodlePost = async (
   postId: string | number,
   discussionId?: string | number,
 ) => {
-  // Intentar borrar post específico primero
   const cleanId = String(postId).replace(/\D/g, "");
   const res = await callMoodle("mod_forum_delete_post", {
     postid: cleanId,
   });
   if (res?.status) return true;
-
-  // Si falla y tenemos discussionId, intentar borrar toda la discusión
-  if (discussionId) {
-    return await smartDelete(discussionId);
-  }
+  if (discussionId) return await smartDelete(discussionId);
   return false;
 };
 
@@ -458,16 +440,9 @@ export const updateCommunityPost = async (
     likes: existingLikes,
   };
   const message = `Update...<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
-
-  // Asegurar que tenemos el post ID correcto (si viene un ID de discusión, buscar el primer post)
-  let targetPostId = String(postId).replace(/\D/g, "");
-  // No podemos saber fácilmente si es discussion o post ID solo por el número,
-  // asumimos que el frontend pasa el postId correcto (el de la tabla mdl_forum_posts).
-  // Si falla, el usuario debería usar un ID de post válido.
-
   return (
     await callMoodle("mod_forum_update_discussion_post", {
-      postid: targetPostId,
+      postid: String(postId).replace(/\D/g, ""),
       subject: title,
       message,
     })
@@ -495,7 +470,6 @@ export const toggleCommunityLike = async (
 
   // Limpiar ID
   let targetId = String(post.postId).replace(/\D/g, "");
-
   return (
     await callMoodle("mod_forum_update_discussion_post", {
       postid: targetId,
@@ -510,36 +484,18 @@ export const addCommunityComment = async (
   message: string,
 ) => {
   const cleanDiscId = String(discussionId).replace(/\D/g, "");
-  console.log(
-    `💬 Intentando comentar en discusión ID: ${cleanDiscId}`,
-  );
-
-  // 1. Obtener datos para encontrar el post padre
   const postsData = await callMoodle(
     "mod_forum_get_discussion_posts",
     { discussionid: cleanDiscId },
   );
+  if (!postsData?.posts?.length) return false;
 
-  if (!postsData?.posts?.length) {
-    console.error(
-      "❌ No se encontraron posts. Verifica permisos de LECTURA o el ID.",
-    );
-    return false;
-  }
-
-  // 2. Identificar post padre (el más antiguo)
   const parentPost = postsData.posts.sort(
     (a: any, b: any) => a.id - b.id,
   )[0];
-
-  // ✅ FIX: Usar asunto dinámico ("Re: Asunto Original") para pasar validación de Moodle
   const subject = parentPost.subject.startsWith("Re:")
     ? parentPost.subject
     : `Re: ${parentPost.subject}`;
-
-  console.log(
-    `📨 Reply a post ${parentPost.id} | Asunto: "${subject}"`,
-  );
 
   const response = await callMoodle(
     "mod_forum_add_discussion_post",
@@ -549,16 +505,7 @@ export const addCommunityComment = async (
       message: `<p>${message}</p>`,
     },
   );
-
-  if (response && response.postid) {
-    return response.postid;
-  } else {
-    console.error(
-      "❌ Error al comentar. Verifica que el usuario del Token (8b18...) esté matriculado y tenga permiso mod/forum:replypost.",
-      response,
-    );
-    return false;
-  }
+  return response && response.postid;
 };
 
 export const getPostComments = async (
@@ -578,6 +525,7 @@ export const getPostComments = async (
     .map((p: any) => ({
       id: p.id,
       author: p.userfullname,
+      userId: p.userid, // ✅ AHORA DEVUELVE USER ID
       avatar: p.userpictureurl,
       content: p.message.replace(/<[^>]*>?/gm, "").trim(),
       date: safeDate(p.created),
