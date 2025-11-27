@@ -2,19 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { X, Send, MessageCircle, Heart, User } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { addCommunityComment, getPostComments, toggleCommunityLike } from '../../lib/moodle';
+import { addCommunityComment, getPostComments, toggleLike } from '../../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 
-export const ArticleReader: React.FC<{ 
-  material: any, 
-  currentUserId: string,
-  onClose: () => void,
-  onLikeUpdate?: () => void
-}> = ({ material, currentUserId, onClose, onLikeUpdate }) => {
+export const ArticleReader: React.FC<{ material: any, onClose: () => void }> = ({ material, onClose }) => {
   const [comment, setComment] = useState('');
   const [commentsList, setCommentsList] = useState<any[]>([]);
-  const [likesCount, setLikesCount] = useState(Array.isArray(material.likes) ? material.likes.length : 0);
-  const [isLiked, setIsLiked] = useState(Array.isArray(material.likes) && material.likes.includes(String(currentUserId)));
+  const [likes, setLikes] = useState(material.likes || 0);
   const [isLiking, setIsLiking] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -46,26 +40,18 @@ export const ArticleReader: React.FC<{
     }
   };
 
-  // ✅ Toggle Like con Optimistic UI (Sistema Nuevo)
+  // ✅ Toggle Like con Optimistic UI
   const handleLike = async () => {
     if (isLiking) return; // Prevenir múltiples clicks
     
     setIsLiking(true);
+    setLikes(l => l + 1); // Optimistic UI
     
-    // Optimistic UI
-    const wasLiked = isLiked;
-    setIsLiked(!wasLiked);
-    setLikesCount(prev => wasLiked ? prev - 1 : prev + 1);
+    const success = await toggleLike(material);
     
-    const success = await toggleCommunityLike(material, currentUserId);
-    
-    if (success) {
-      // Notificar al componente padre para refrescar
-      onLikeUpdate?.();
-    } else {
+    if (!success) {
       // Rollback si falla
-      setIsLiked(wasLiked);
-      setLikesCount(prev => wasLiked ? prev + 1 : prev - 1);
+      setLikes(l => l - 1);
       toast.error("❌ Error al guardar like");
     }
     
@@ -216,8 +202,8 @@ export const ArticleReader: React.FC<{
                 disabled={isLiking}
                 className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full transition-all group"
               >
-                <Heart className={`w-4 h-4 text-white transition-all ${isLiked ? 'fill-white scale-110' : 'group-hover:fill-white'}`} />
-                <span className="text-white text-sm font-bold">{likesCount}</span>
+                <Heart className={`w-4 h-4 text-white transition-all ${isLiking ? 'fill-rose-500 scale-110' : 'group-hover:fill-white'}`} />
+                <span className="text-white text-sm font-bold">{likes}</span>
               </button>
             </div>
           </div>

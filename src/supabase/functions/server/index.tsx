@@ -76,17 +76,29 @@ app.post("/make-server-ebbb5c67/moodle-proxy", async (c) => {
     }
 
     const url = new URL(MOODLE_URL);
+    // Mantenemos el token en la URL por compatibilidad máxima
     url.searchParams.append("wstoken", MOODLE_TOKEN);
-    url.searchParams.append("wsfunction", functionName);
     url.searchParams.append("moodlewsrestformat", "json");
 
+    // CAMBIO CLAVE: Preparamos los datos para viajar en el cuerpo (POST) en lugar de la URL
+    const formData = new URLSearchParams();
+    formData.append("wsfunction", functionName); // La función va en el cuerpo
+    
     if (params) {
       Object.keys(params).forEach((key) => {
-        url.searchParams.append(key, String(params[key]));
+        formData.append(key, String(params[key]));
       });
     }
 
-    const response = await fetch(url.toString());
+    // Enviamos como POST
+    const response = await fetch(url.toString(), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formData
+    });
+
     const data = await response.json();
     
     return c.json(data);

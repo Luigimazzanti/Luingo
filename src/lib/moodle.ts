@@ -455,9 +455,9 @@ export const gradeSubmission = async (
   });
 };
 
-// ========== 📱 COMUNIDAD (SOCIAL FEED - SISTEMA HÍBRIDO) ==========
+// ========== 📱 COMUNIDAD (SOCIAL FEED) ==========
 
-// ✅ LEER POSTS DE COMUNIDAD (JSON para Likes/Metadata + Replies Nativos)
+// ✅ LEER POSTS DE COMUNIDAD (Ahora recupera BLOQUES del JSON)
 export const getCommunityPosts = async () => {
   console.log("📱 Cargando posts de comunidad...");
   
@@ -468,21 +468,20 @@ export const getCommunityPosts = async () => {
   if (!data || !data.discussions) return [];
   
   return data.discussions.map((disc: any) => {
-    // Extraer metadata JSON con sanitizer
-    const match = disc.message.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
-    let meta: any = { level: 'ALL', type: 'mixed', blocks: [], likes: [] };
+    // Extraer metadata JSON
+    const match = disc.message.match(/\[LUINGO_DATA\](.*?)\[\/LUINGO_DATA\]/);
+    const meta = match ? JSON.parse(match[1]) : {};
     
-    if (match) {
-      try {
-        meta = cleanMoodleJSON(match[1]) || meta;
-      } catch (e) {
-        console.warn("⚠️ Error parseando metadata de post:", e);
-      }
+    // ✅ NUEVA ARQUITECTURA: Recuperar bloques del JSON
+    const blocks = meta.blocks || [];
+    
+    // Fallback: si es post antiguo sin bloques, extraer contenido HTML
+    let contentFallback = '';
+    if (blocks.length === 0) {
+      const decoded = disc.message.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+      contentFallback = decoded.split('<span')[0].replace(/<[^>]*>?/gm, '');
     }
-    
-    // Extraer contenido HTML limpio para preview
-    const contentHtml = disc.message.split('<span')[0].replace(/<[^>]*>?/gm, '').trim();
-    
+
     return {
       id: `comm-${disc.discussion}`,
       discussionId: disc.discussion,
@@ -490,20 +489,18 @@ export const getCommunityPosts = async () => {
       author: disc.userfullname || 'Usuario',
       avatar: disc.userpictureurl || '',
       title: disc.subject,
-      content: contentHtml,
-      // Datos ricos del JSON
-      blocks: Array.isArray(meta.blocks) ? meta.blocks : [],
-      type: meta.type || 'mixed',
-      url: meta.url || '',
+      blocks: blocks, // ✅ BLOQUES PUROS (array de {type, content})
+      content: contentFallback, // Fallback para posts viejos
       targetLevel: meta.level || 'ALL',
-      likes: Array.isArray(meta.likes) ? meta.likes : [], // ✅ ARRAY DE USER IDs
+      likes: meta.likes || 0,
       date: new Date(disc.created * 1000).toISOString(),
-      commentsCount: disc.numreplies || 0 // ✅ CONTADOR NATIVO DE MOODLE
+      commentsCount: disc.numreplies || 0,
+      meta: meta // ✅ GUARDAR META COMPLETO PARA toggleLike
     };
   });
 };
 
-// ✅ CREAR POST (Guarda BLOQUES en JSON, Likes como Array)
+// ✅ CREAR POST (Ahora guarda BLOQUES en el JSON)
 export const createCommunityPost = async (
   title: string, 
   blocks: any[], 
@@ -511,23 +508,22 @@ export const createCommunityPost = async (
 ) => {
   console.log("📤 Publicando en comunidad:", title, "con", blocks.length, "bloques");
   
-  // Metadata para Likes y Renderizado
+  // ✅ GUARDAR TODO EN EL JSON (Moodle no toca el JSON)
   const meta = { 
     level, 
     type: 'mixed', 
-    blocks: blocks,
-    likes: [] // ✅ Array de user IDs
+    blocks: blocks, // ✅ Array de bloques
+    likes: 0 
   };
   
-  // Generar HTML básico para Moodle Web (fallback)
-  let htmlPreview = '<div class="luingo-post">';
-  blocks.forEach(b => {
-    if (b.type === 'text') htmlPreview += `<p>${b.content}</p>`;
-    else htmlPreview += `<p>[Recurso: ${b.type}]</p>`;
-  });
-  htmlPreview += '</div>';
+  // Mensaje visible en Moodle (resumen simple para compatibilidad)
+  const summary = blocks
+    .map(b => b.type === 'text' ? b.content.substring(0, 50) : `[${b.type}]`)
+    .join(' ');
   
-  const message = `${htmlPreview}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  const message = `${summary}...<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  
+  console.log("📦 Metadata enviada:", meta);
   
   const res = await callMoodle("mod_forum_add_discussion", { 
     forumid: COMMUNITY_FORUM_ID, 
@@ -544,32 +540,29 @@ export const createCommunityPost = async (
   return false;
 };
 
-// ✅ ACTUALIZAR POST (Editar bloques - Mantener Likes)
+// ✅ ACTUALIZAR POST (Editar bloques)
 export const updateCommunityPost = async (
   postId: string | number, 
   title: string, 
   blocks: any[], 
-  level: string,
-  existingLikes: string[] = []
+  level: string
 ) => {
   const cleanId = String(postId).replace(/\D/g, '');
   console.log("📝 Actualizando post:", cleanId, "con", blocks.length, "bloques");
   
+  // ✅ GUARDAR BLOQUES EN JSON
   const meta = { 
     level, 
     type: 'mixed', 
     blocks: blocks, 
-    likes: existingLikes // ✅ MANTENER LIKES EXISTENTES
+    likes: 0 
   };
   
-  let htmlPreview = '<div class="luingo-post">';
-  blocks.forEach(b => {
-    if (b.type === 'text') htmlPreview += `<p>${b.content}</p>`;
-    else htmlPreview += `<p>[Recurso: ${b.type}]</p>`;
-  });
-  htmlPreview += '</div>';
+  const summary = blocks
+    .map(b => b.type === 'text' ? b.content.substring(0, 50) : `[${b.type}]`)
+    .join(' ');
   
-  const message = `${htmlPreview}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  const message = `${summary}...<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
   
   const res = await callMoodle("mod_forum_update_discussion_post", { 
     postid: cleanId, 
@@ -586,13 +579,13 @@ export const updateCommunityPost = async (
   return false;
 };
 
-// ✅ AÑADIR COMENTARIO (REPLY NATIVO - SIN JSON)
+// ✅ COMENTAR EN POST (FIX ROBUSTO - RESUELVE ACCESS CONTROL EXCEPTION)
 export const addCommunityComment = async (discussionId: string | number, message: string) => {
   const cleanDiscId = String(discussionId).replace(/\D/g, '');
   
   console.log("💬 Iniciando comentario en discusión:", cleanDiscId);
 
-  // 1. Buscar el ID del post padre (el origen del hilo)
+  // A) Obtener posts para buscar el PADRE
   const postsData = await callMoodle("mod_forum_get_discussion_posts", { 
     discussionid: cleanDiscId 
   });
@@ -604,17 +597,25 @@ export const addCommunityComment = async (discussionId: string | number, message
 
   console.log(`📋 ${postsData.posts.length} posts encontrados en la discusión`);
 
-  // 2. El padre es el que tiene id más bajo (creado primero)
+  // B) Buscar el Post Raíz (El que tiene el ID más pequeño es el primero)
+  // Moodle a veces devuelve el orden inverso, así que ordenamos por ID numérico ascendente.
   const parentPost = postsData.posts.sort((a: any, b: any) => a.id - b.id)[0];
 
-  console.log(`💬 Respondiendo a Post ${parentPost.id} en Discusión ${cleanDiscId}`);
+  // --- CORRECCIÓN CLAVE: ASUNTO DINÁMICO ---
+  // Moodle exige que el asunto empiece por "Re: " seguido del asunto original
+  const subject = parentPost.subject.startsWith("Re:") 
+    ? parentPost.subject 
+    : `Re: ${parentPost.subject}`;
+  // ----------------------------------------
 
-  // 3. Enviar Reply Nativo (SIN groupid, SIN [LUINGO_DATA])
-  // IMPORTANTE: Es un comentario de texto plano, no tiene metadata JSON
+  console.log(`💬 Respondiendo a Post ${parentPost.id} con asunto: "${subject}"`);
+
+  // C) Enviar Reply con el subject correcto
   const response = await callMoodle("mod_forum_add_discussion_post", {
     postid: parentPost.id,
-    subject: "Re: Comentario",
+    subject: subject, // <--- Aquí usamos la variable corregida
     message: `<p>${message}</p>`
+    // Omitimos groupid porque en foros generales suele causar error si se envía
   });
 
   if (response && response.postid) {
@@ -626,49 +627,36 @@ export const addCommunityComment = async (discussionId: string | number, message
   return false;
 };
 
-// ✅ TOGGLE LIKE (Sistema JSON con Array de User IDs)
-export const toggleCommunityLike = async (post: any, userId: string) => {
-  console.log("❤️ Toggle like en post:", post.postId, "por usuario:", userId);
+// ✅ TOGGLE LIKE (Incrementar contador de likes)
+export const toggleLike = async (post: any) => {
+  console.log("❤️ Incrementando like en post:", post.postId);
   
-  const currentLikes = Array.isArray(post.likes) ? post.likes : [];
-  let newLikes: string[] = [];
+  // 1. Incrementar contador
+  const newLikes = (post.likes || 0) + 1;
   
-  // Toggle: Si ya dio like, quitar. Si no, añadir.
-  if (currentLikes.includes(String(userId))) {
-    newLikes = currentLikes.filter((id: string) => id !== String(userId));
-    console.log("💔 Quitando like");
-  } else {
-    newLikes = [...currentLikes, String(userId)];
-    console.log("❤️ Añadiendo like");
-  }
-  
-  // Metadata actualizada (mantener blocks, level, etc.)
-  const meta = {
-    level: post.targetLevel,
-    type: post.type || 'mixed',
-    blocks: post.blocks || [],
+  // 2. Actualizar metadata
+  const updatedMeta = {
+    ...post.meta,
     likes: newLikes
   };
   
-  // Reconstruir HTML preview
-  let htmlPreview = '<div class="luingo-post">';
-  (post.blocks || []).forEach((b: any) => {
-    if (b.type === 'text') htmlPreview += `<p>${b.content}</p>`;
-    else htmlPreview += `<p>[Recurso: ${b.type}]</p>`;
-  });
-  htmlPreview += '</div>';
+  // 3. Reconstruir mensaje con bloques
+  const summary = (post.blocks || [])
+    .map((b: any) => b.type === 'text' ? b.content.substring(0, 50) : `[${b.type}]`)
+    .join(' ');
   
-  const message = `${htmlPreview}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  const message = `${summary}...<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(updatedMeta)}[/LUINGO_DATA]</span>`;
   
-  const cleanPostId = String(post.postId).replace(/\D/g, '');
-  const res = await callMoodle("mod_forum_update_discussion_post", { 
-    postid: cleanPostId, 
-    subject: post.title, 
-    message 
+  // 4. Guardar en Moodle
+  const cleanId = String(post.postId).replace(/\D/g, '');
+  const res = await callMoodle("mod_forum_update_discussion_post", {
+    postid: cleanId,
+    subject: post.title,
+    message
   });
   
   if (res && res.status !== false) {
-    console.log(`✅ Like guardado. Total: ${newLikes.length}`);
+    console.log("✅ Like guardado:", newLikes);
     return true;
   }
   
@@ -676,70 +664,55 @@ export const toggleCommunityLike = async (post: any, userId: string) => {
   return false;
 };
 
-// ✅ LEER COMENTARIOS (REPLIES NATIVOS)
+// ✅ LEER COMENTARIOS (CON FECHA SEGURA - RESUELVE CRASH DE FECHA)
 export const getPostComments = async (discussionId: string | number) => {
-  const cleanDiscId = String(discussionId).replace(/\D/g, '');
+  const cleanId = String(discussionId).replace(/\D/g, '');
   
-  console.log("💬 Cargando comentarios de discusión:", cleanDiscId);
+  console.log("💬 Cargando comentarios de discusión:", cleanId);
   
   const data = await callMoodle("mod_forum_get_discussion_posts", {
-    discussionid: cleanDiscId
+    discussionid: cleanId
   });
   
-  if (!data?.posts) {
+  if (!data || !data.posts) {
     console.warn("⚠️ No se pudieron cargar comentarios");
     return [];
   }
 
-  // Ordenar por ID para identificar al padre (el de menor ID)
-  const sorted = data.posts.sort((a: any, b: any) => a.id - b.id);
-  const parentId = sorted[0]?.id;
+  // Identificar el post padre para excluirlo (el de menor ID)
+  const sortedPosts = [...data.posts].sort((a: any, b: any) => Number(a.id) - Number(b.id));
+  const rootId = sortedPosts[0]?.id;
   
-  console.log(`📌 Post raíz identificado: ${parentId}`);
+  console.log(`📌 Post raíz identificado: ${rootId}`);
   
-  // Los comentarios son todos MENOS el padre
-  return sorted
-    .filter((p: any) => p.id !== parentId)
-    .map((p: any) => {
-      // ✅ MANEJO SEGURO DE FECHAS
-      let dateStr = new Date().toISOString();
-      try {
-        if (p.created && !isNaN(p.created) && p.created > 0) {
-          const timestamp = Number(p.created) * 1000;
-          const date = new Date(timestamp);
-          if (!isNaN(date.getTime())) {
-            dateStr = date.toISOString();
-          }
+  // Filtrar solo las respuestas (ID distinto al padre)
+  const comments = data.posts.filter((p: any) => p.id !== rootId);
+  
+  return comments.map((c: any) => {
+    // ✅ MANEJO SEGURO DE FECHAS (previene crash)
+    let dateStr = new Date().toISOString();
+    try {
+      if (c.created && !isNaN(c.created) && c.created > 0) {
+        const timestamp = Number(c.created) * 1000;
+        const date = new Date(timestamp);
+        
+        // Validar que la fecha sea válida
+        if (!isNaN(date.getTime())) {
+          dateStr = date.toISOString();
+        } else {
+          console.warn(`⚠️ Fecha inválida en comentario ${c.id}: ${c.created}`);
         }
-      } catch (e) {
-        console.warn(`⚠️ Error parseando fecha en comentario ${p.id}:`, e);
       }
+    } catch (e) {
+      console.warn(`⚠️ Error parseando fecha en comentario ${c.id}:`, e);
+    }
 
-      return {
-        id: p.id,
-        author: p.userfullname || 'Usuario',
-        avatar: p.userpictureurl || '',
-        content: p.message.replace(/<[^>]*>?/gm, '').trim(), // ✅ Texto limpio (sin HTML)
-        date: dateStr,
-        isMine: false // TODO: Comparar con userId actual si está disponible
-      };
-    });
-};
-
-// ✅ BORRAR POST DE COMUNIDAD
-export const deleteCommunityPost = async (discussionId: string | number) => {
-  const cleanId = String(discussionId).replace(/\D/g, '');
-  console.log("🗑️ Borrando discusión de comunidad:", cleanId);
-  
-  const res = await callMoodle("mod_forum_delete_discussion", { 
-    discussionid: cleanId 
-  });
-  
-  if (res && (res.status === true || res.warnings?.length === 0)) {
-    console.log("✅ Discusión borrada");
-    return true;
-  }
-  
-  console.error("❌ Error al borrar discusión:", res);
-  return false;
+    return {
+      id: c.id,
+      author: c.userfullname || 'Usuario',
+      avatar: c.userpictureurl || '',
+      content: c.message.replace(/<[^>]*>?/gm, '').replace(/\[LUINGO_DATA\].*?\[\/LUINGO_DATA\]/g, '').trim(), // Texto limpio
+      date: dateStr
+    };
+  }).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Más recientes primero
 };
