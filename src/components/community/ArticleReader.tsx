@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-// ✅ CORRECCIÓN: Importamos la función con el nombre correcto
+// ✅ CORRECCIÓN AQUÍ: Usamos el nombre correcto 'toggleCommunityLike'
 import {
   addCommunityComment,
   getPostComments,
@@ -18,14 +18,12 @@ import { toast } from "sonner@2.0.3";
 
 export const ArticleReader: React.FC<{
   material: any;
-  currentUserId: string; // ✅ Requerido para los likes
+  currentUserId: string;
   onClose: () => void;
   onLikeUpdate?: () => void;
 }> = ({ material, currentUserId, onClose, onLikeUpdate }) => {
   const [comment, setComment] = useState("");
   const [commentsList, setCommentsList] = useState<any[]>([]);
-
-  // Lógica de Likes
   const [likesCount, setLikesCount] = useState(
     Array.isArray(material.likes) ? material.likes.length : 0,
   );
@@ -36,6 +34,7 @@ export const ArticleReader: React.FC<{
   const [isLiking, setIsLiking] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Cargar comentarios al abrir
   useEffect(() => {
     const loadComments = async () => {
       setLoading(true);
@@ -48,33 +47,42 @@ export const ArticleReader: React.FC<{
     loadComments();
   }, [material.discussionId]);
 
+  // Enviar comentario
   const handleSend = async () => {
     if (!comment.trim()) return;
+
+    // ✅ Aquí ya usa la función correcta que definimos en moodle.ts
     const success = await addCommunityComment(
       material.discussionId,
       comment,
     );
+
     if (success) {
       toast.success("💬 Comentario enviado");
       setComment("");
-      setCommentsList(
-        await getPostComments(material.discussionId),
+      // Recargar comentarios
+      const updatedComments = await getPostComments(
+        material.discussionId,
       );
+      setCommentsList(updatedComments);
     } else {
-      toast.error("❌ Error al comentar. Verifica conexión.");
+      toast.error(
+        "❌ No se pudo enviar. Verifica tu conexión o sesión.",
+      );
     }
   };
 
-  // ✅ HANDLER DE LIKE ACTUALIZADO
+  // Toggle Like
   const handleLike = async () => {
     if (isLiking) return;
     setIsLiking(true);
 
+    // Optimistic UI
     const wasLiked = isLiked;
-    // Optimistic update
     setIsLiked(!wasLiked);
     setLikesCount((prev) => (wasLiked ? prev - 1 : prev + 1));
 
+    // ✅ Llamada a la función corregida
     const success = await toggleCommunityLike(
       material,
       currentUserId,
@@ -83,16 +91,19 @@ export const ArticleReader: React.FC<{
     if (success) {
       onLikeUpdate?.();
     } else {
-      // Rollback
+      // Rollback si falla
       setIsLiked(wasLiked);
       setLikesCount((prev) => (wasLiked ? prev + 1 : prev - 1));
-      toast.error("Error al guardar like");
+      toast.error("❌ Error al guardar like");
     }
+
     setIsLiking(false);
   };
 
+  // Renderizado de bloques
   const renderBlock = (b: any, idx: number) => {
     if (!b.content) return null;
+
     switch (b.type) {
       case "text":
         return (
@@ -103,6 +114,7 @@ export const ArticleReader: React.FC<{
             {b.content}
           </p>
         );
+
       case "image":
         return (
           <img
@@ -112,32 +124,40 @@ export const ArticleReader: React.FC<{
             alt="Post"
           />
         );
+
       case "video":
-        const vId = b.content.match(
-          /(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([^&?]*)/,
-        )?.[1];
-        return vId ? (
-          <div
-            key={idx}
-            className="aspect-video rounded-2xl overflow-hidden shadow-lg bg-black"
-          >
-            <iframe
-              src={`https://www.youtube.com/embed/${vId}`}
-              className="w-full h-full"
-              allowFullScreen
-              frameBorder="0"
-            />
-          </div>
-        ) : (
-          <a
-            key={idx}
-            href={b.content}
-            target="_blank"
-            className="block p-4 bg-slate-100 rounded-xl text-center text-blue-600"
-          >
-            Ver Video
-          </a>
-        );
+        const vId =
+          b.content.match(
+            /(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([^&?]*)/,
+          )?.[1] || "";
+        if (vId) {
+          return (
+            <div
+              key={idx}
+              className="aspect-video rounded-2xl overflow-hidden shadow-lg bg-black"
+            >
+              <iframe
+                src={`https://www.youtube.com/embed/${vId}`}
+                className="w-full h-full"
+                allowFullScreen
+                frameBorder="0"
+              />
+            </div>
+          );
+        } else {
+          return (
+            <a
+              key={idx}
+              href={b.content}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block p-6 bg-slate-100 rounded-2xl text-center text-blue-600 font-bold"
+            >
+              🎬 Ver Video en YouTube
+            </a>
+          );
+        }
+
       case "genially":
         return (
           <div
@@ -163,6 +183,7 @@ export const ArticleReader: React.FC<{
             />
           </div>
         );
+
       case "audio":
         return (
           <div
@@ -176,6 +197,7 @@ export const ArticleReader: React.FC<{
             />
           </div>
         );
+
       default:
         return null;
     }
@@ -192,12 +214,13 @@ export const ArticleReader: React.FC<{
           >
             <X className="w-5 h-5" />
           </button>
+
           <div className="max-w-3xl">
             <div className="flex items-center gap-3 mb-4">
               <img
                 src={
                   material.avatar ||
-                  "https://ui-avatars.com/api/?name=User&background=6366f1&color=fff"
+                  "https://ui-avatars.com/api/?name=U&background=6366f1&color=fff"
                 }
                 className="w-12 h-12 rounded-full ring-4 ring-white/30 shadow-lg"
                 alt={material.author}
@@ -211,10 +234,21 @@ export const ArticleReader: React.FC<{
                 </p>
               </div>
             </div>
+
             <h1 className="text-3xl md:text-4xl font-black text-white leading-tight">
               {material.title}
             </h1>
-            <div className="mt-4 flex items-center gap-3">
+
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              {material.targetLevel &&
+                material.targetLevel !== "ALL" && (
+                  <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+                    <span className="text-white text-xs font-bold">
+                      🎯 Nivel {material.targetLevel}
+                    </span>
+                  </div>
+                )}
+
               <button
                 onClick={handleLike}
                 disabled={isLiking}
@@ -240,68 +274,91 @@ export const ArticleReader: React.FC<{
               )
             ) : (
               <div
+                className="prose prose-slate max-w-none text-lg leading-relaxed"
                 dangerouslySetInnerHTML={{
-                  __html: material.content,
+                  __html: material.content || "Sin contenido",
                 }}
               />
             )}
           </div>
         </div>
 
-        {/* Comments */}
+        {/* Sección de Comentarios */}
         <div className="bg-slate-50 p-8 md:p-12 border-t border-slate-200">
           <h3 className="font-black text-slate-800 mb-6 flex gap-2 items-center">
-            <MessageCircle className="w-5 h-5 text-indigo-600" />{" "}
+            <MessageCircle className="w-5 h-5 text-indigo-600" />
             Comentarios ({commentsList.length})
           </h3>
+
+          {/* Input */}
           <div className="flex gap-4 mb-8">
-            <Input
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Comenta algo..."
-              className="w-full h-12 rounded-2xl pr-12 bg-white border-slate-200"
-              onKeyDown={(e) =>
-                e.key === "Enter" && handleSend()
-              }
-            />
-            <button
-              onClick={handleSend}
-              disabled={!comment.trim()}
-              className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="space-y-4">
-            {commentsList.map((c) => (
-              <div
-                key={c.id}
-                className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex gap-3"
+            <div className="flex-1 relative">
+              <Input
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Comenta algo..."
+                className="w-full h-12 rounded-2xl pr-12 bg-white border-slate-200"
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  !e.shiftKey &&
+                  handleSend()
+                }
+              />
+              <button
+                onClick={handleSend}
+                disabled={!comment.trim()}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50"
               >
-                <img
-                  src={
-                    c.avatar ||
-                    "https://ui-avatars.com/api/?name=U&background=94a3b8&color=fff"
-                  }
-                  className="w-8 h-8 rounded-full flex-shrink-0"
-                  alt={c.author}
-                />
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-bold text-slate-800 text-sm">
-                      {c.author}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      {new Date(c.date).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <p className="text-slate-600 text-sm">
-                    {c.content}
-                  </p>
-                </div>
-              </div>
-            ))}
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
           </div>
+
+          {/* Lista */}
+          {loading ? (
+            <div className="text-center py-8 text-slate-400">
+              Cargando comentarios...
+            </div>
+          ) : commentsList.length > 0 ? (
+            <div className="space-y-4">
+              {commentsList.map((c) => (
+                <div
+                  key={c.id}
+                  className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100"
+                >
+                  <div className="flex items-start gap-3">
+                    <img
+                      src={
+                        c.avatar ||
+                        "https://ui-avatars.com/api/?name=U&background=94a3b8&color=fff"
+                      }
+                      className="w-8 h-8 rounded-full flex-shrink-0"
+                      alt={c.author}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-slate-800 text-sm">
+                          {c.author}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(
+                            c.date,
+                          ).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
+                        {c.content}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-slate-400">
+              No hay comentarios aún. ¡Sé el primero!
+            </div>
+          )}
         </div>
       </div>
     </div>
