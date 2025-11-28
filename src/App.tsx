@@ -4,7 +4,6 @@ import { ClassSelection } from './components/ClassSelection';
 import { StudentPassport } from './components/StudentPassport';
 import { TaskCorrector } from './components/TaskCorrector';
 import { WritingEditor } from './components/WritingEditor'; // ✅ NUEVO IMPORT
-import { DocumentEditor } from './components/DocumentEditor'; // ✅ NUEVO IMPORT DOCUMENT
 import { CommentWall } from './components/CommentWall';
 import { MediaViewer } from './components/MediaViewer';
 import { NotificationBell } from './components/NotificationBell';
@@ -63,7 +62,7 @@ export default function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer' | 'writing' | 'document'>('home'); // ✅ Añadida vista 'writing' y 'document'
+  const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer' | 'writing'>('home'); // ✅ Añadida vista 'writing'
   
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [activeExercise, setActiveExercise] = useState<Exercise | null>(null);
@@ -73,10 +72,6 @@ export default function App() {
   // ✅ NUEVOS ESTADOS PARA WRITING
   const [activeWritingTask, setActiveWritingTask] = useState<Task | null>(null);
   const [activeWritingSubmission, setActiveWritingSubmission] = useState<Submission | null>(null);
-  
-  // ✅ NUEVOS ESTADOS PARA DOCUMENT
-  const [activeDocumentTask, setActiveDocumentTask] = useState<Task | null>(null);
-  const [activeDocumentSubmission, setActiveDocumentSubmission] = useState<Submission | null>(null);
   
   const [showTaskBuilder, setShowTaskBuilder] = useState(false); 
   const [taskBuilderMode, setTaskBuilderMode] = useState<'create' | 'edit'>('create');
@@ -604,7 +599,7 @@ export default function App() {
             submissions={realSubmissions}
             onLogout={handleLogout}
             onSelectTask={(task) => {
-              // ✅ DETECTAR TIPO DE TAREA: Writing vs Document vs Quiz
+              // ✅ DETECTAR TIPO DE TAREA: Writing vs Quiz
               if (task.content_data?.type === 'writing') {
                 // ✅ TAREA TIPO WRITING
                 console.log('📝 Abriendo tarea de redacción:', task.title);
@@ -625,21 +620,6 @@ export default function App() {
                 
                 setActiveWritingSubmission(existing || null);
                 setView('writing');
-              } else if (task.content_data?.type === 'document') {
-                // ✅ TAREA TIPO DOCUMENT (PDF ANOTABLE)
-                console.log('📄 Abriendo tarea de documento:', task.title);
-                setActiveDocumentTask(task);
-                
-                // ✅ Buscar anotaciones existentes (guardadas en answers)
-                const existing = realSubmissions.find(s => 
-                  s.task_id === task.id && 
-                  (String(s.student_id) === String(currentUser.id) || s.student_name === currentUser.name)
-                );
-                
-                console.log('📑 Anotaciones encontradas:', existing);
-                
-                setActiveDocumentSubmission(existing || null);
-                setView('document');
               } else {
                 // ✅ TAREA TIPO QUIZ (EXISTENTE)
                 const exercise: Exercise = {
@@ -707,63 +687,6 @@ export default function App() {
               await loadSubmissions();
               setActiveWritingTask(null);
               setActiveWritingSubmission(null);
-              setView('dashboard');
-            }}
-          />
-        )}
-
-        {/* ========== ✅ DOCUMENT EDITOR (NUEVO) ========== */}
-        {view === 'document' && activeDocumentTask && currentUser && (
-          <DocumentEditor
-            task={activeDocumentTask}
-            initialData={activeDocumentSubmission?.answers || []} // ✅ RECUPERAR ANOTACIONES DEL BORRADOR
-            onBack={() => {
-              setActiveDocumentTask(null);
-              setActiveDocumentSubmission(null);
-              setView('dashboard');
-            }}
-            onSaveDraft={async (annotations) => {
-              // ✅ GUARDAR BORRADOR (status: 'draft')
-              console.log('💾 Guardando borrador de documento...');
-              
-              await submitTaskResult(
-                activeDocumentTask.id,
-                activeDocumentTask.title,
-                currentUser.id,
-                currentUser.name,
-                0, // Score 0 para borradores
-                10,
-                annotations, // ✅ annotations guardadas en answers
-                '', // ✅ textContent vacío
-                'draft', // ✅ status
-                [] // ✅ corrections vacío
-              );
-              
-              // ✅ Recargar submissions para actualizar el borrador
-              await loadSubmissions();
-              console.log('✅ Borrador de documento guardado correctamente');
-            }}
-            onSubmit={async (annotations) => {
-              // ✅ ENVÍO FINAL (status: 'submitted')
-              console.log('📤 Enviando documento final...');
-              
-              await submitTaskResult(
-                activeDocumentTask.id,
-                activeDocumentTask.title,
-                currentUser.id,
-                currentUser.name,
-                0, // Score 0, esperando corrección del profesor
-                10,
-                annotations, // ✅ annotations en answers
-                '', // ✅ textContent vacío
-                'submitted', // ✅ status
-                [] // ✅ corrections vacío
-              );
-              
-              // ✅ Recargar submissions y volver al dashboard
-              await loadSubmissions();
-              setActiveDocumentTask(null);
-              setActiveDocumentSubmission(null);
               setView('dashboard');
             }}
           />

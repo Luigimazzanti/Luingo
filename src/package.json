@@ -17,9 +17,7 @@
     "tailwind-merge": "^2.2.1",
     "react-pdf": "^9.1.0",
     "@supabase/supabase-js": "^2.39.7",
-    "sonner": "^1.4.3",
-    "uploadthing": "^6.5.2",
-    "@uploadthing/react": "^6.3.4"
+    "sonner": "^1.4.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.56",

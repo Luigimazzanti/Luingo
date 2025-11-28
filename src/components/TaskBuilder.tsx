@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Link as LinkIcon, Upload, ExternalLink } from 'lucide-react';
-import { cn, getDriveDirectLink } from '../lib/utils';
-import { UploadButton } from '../lib/uploadthing';
-import { projectId } from '../utils/supabase/info';
+import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Upload, ExternalLink } from 'lucide-react';
+import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
+import { createClient } from '@supabase/supabase-js';
+import { projectId, publicAnonKey } from '../utils/supabase/info';
+
+// Cliente Supabase local (para el storage)
+const supabase = createClient(`https://${projectId}.supabase.co`, publicAnonKey);
 
 // ========== TIPOS ==========
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -49,10 +52,9 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   const [selectedLevel, setSelectedLevel] = useState(initialData?.content_data?.assignment_scope?.targetId || 'A1');
   const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts || 3);
 
-  // ✅ NUEVO: Tipo de tarea (Quiz vs Writing vs Document)
-  const [taskType, setTaskType] = useState<'quiz' | 'writing' | 'document'>(
-    initialData?.content_data?.type === 'writing' ? 'writing' : 
-    initialData?.content_data?.type === 'document' ? 'document' : 'quiz'
+  // ✅ NUEVO: Tipo de tarea (Quiz vs Writing)
+  const [taskType, setTaskType] = useState<'quiz' | 'writing'>(
+    initialData?.content_data?.type === 'writing' ? 'writing' : 'quiz'
   );
 
   // ✅ NUEVO: Estados para Writing
@@ -64,9 +66,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     initialData?.content_data?.resource_type || 'none'
   );
   const [dueDate, setDueDate] = useState(initialData?.due_date || ''); // ✅ FECHA LÍMITE
-  
-  // ✅ NUEVO: Estado para Document (PDF)
-  const [pdfUrl, setPdfUrl] = useState(initialData?.content_data?.pdfUrl || '');
 
   const [questions, setQuestions] = useState<QuestionDraft[]>(
     initialData?.content_data?.questions || [
@@ -93,6 +92,9 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
 
   // ✅ RECUPERAR CLAVE DEL NAVEGADOR (NO HARDCODEADA)
   const [apiKey, setApiKey] = useState(localStorage.getItem('groq_key') || '');
+  
+  // ✅ Estado para subida de PDFs
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     if (autoOpenAI && !initialData) {
@@ -111,6 +113,49 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     setApiKey(cleanKey);
     setShowKeyModal(false);
     toast.success("🔒 Clave guardada de forma segura en tu navegador");
+  };
+
+  // ========== HANDLER DE SUBIDA DE PDFs ==========
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (file.type !== 'application/pdf') {
+      toast.error("Solo se permiten archivos PDF");
+      return;
+    }
+    
+    // Límite de 50MB
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("El archivo no puede superar 50MB");
+      return;
+    }
+    
+    setIsUploading(true);
+    try {
+      const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+      
+      // Subir a Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('assignments') // Bucket público creado manualmente
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      // Obtener URL pública
+      const { data: { publicUrl } } = supabase.storage
+        .from('assignments')
+        .getPublicUrl(fileName);
+
+      setResourceUrl(publicUrl);
+      setResourceType('pdf'); // Auto-seleccionar PDF
+      toast.success("✅ PDF subido correctamente");
+    } catch (error: any) {
+      console.error('Error subiendo PDF:', error);
+      toast.error("Error al subir archivo: " + (error.message || 'Error desconocido'));
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // ========== HANDLERS DE PREGUNTAS ==========
@@ -184,18 +229,13 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         toast.error("❌ El mínimo de palabras debe ser mayor a 0");
         return;
       }
-    } else if (taskType === 'document') {
-      if (!pdfUrl.trim()) {
-        toast.error("❌ Falta el enlace del PDF");
-        return;
-      }
     }
 
     const taskData = {
       ...initialData,
       title,
       description,
-      category: taskType === 'writing' ? 'writing' : taskType === 'document' ? 'document' : category,
+      category: taskType === 'writing' ? 'writing' : category,
       content_data: taskType === 'writing' ? {
         // ✅ CONTENIDO PARA WRITING
         type: 'writing',
@@ -204,15 +244,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         max_words: maxWords,
         resource_url: resourceUrl,
         resource_type: resourceType,
-        assignment_scope: {
-          type: assignType,
-          targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
-          targetName: assignType === 'individual' ? studentName : undefined
-        }
-      } : taskType === 'document' ? {
-        // ✅ CONTENIDO PARA DOCUMENT
-        type: 'document',
-        pdfUrl: pdfUrl,
         assignment_scope: {
           type: assignType,
           targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
@@ -471,45 +502,33 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
           {/* META INFO */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
             
-            {/* ✅ SELECTOR DE TIPO: QUIZ VS WRITING VS DOCUMENT */}
+            {/* ✅ SELECTOR DE TIPO: QUIZ VS WRITING */}
             <div>
               <label className="text-xs font-black text-slate-600 uppercase mb-3 block">Tipo de Tarea</label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="flex gap-3">
                 <button
                   onClick={() => setTaskType('quiz')}
                   className={cn(
-                    "py-4 px-3 rounded-xl border-2 font-bold transition-all flex flex-col items-center justify-center gap-2",
+                    "flex-1 py-4 px-3 sm:px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
                     taskType === 'quiz'
                       ? "bg-indigo-100 border-indigo-500 text-indigo-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
                   )}
                 >
                   <CheckSquare className="w-5 h-5" />
-                  <span className="text-sm">Cuestionario</span>
+                  <span className="hidden sm:inline">Cuestionario</span>
                 </button>
                 <button
                   onClick={() => setTaskType('writing')}
                   className={cn(
-                    "py-4 px-3 rounded-xl border-2 font-bold transition-all flex flex-col items-center justify-center gap-2",
+                    "flex-1 py-4 px-3 sm:px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
                     taskType === 'writing'
                       ? "bg-emerald-100 border-emerald-500 text-emerald-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300"
                   )}
                 >
                   <FileText className="w-5 h-5" />
-                  <span className="text-sm">Redacción</span>
-                </button>
-                <button
-                  onClick={() => setTaskType('document')}
-                  className={cn(
-                    "py-4 px-3 rounded-xl border-2 font-bold transition-all flex flex-col items-center justify-center gap-2",
-                    taskType === 'document'
-                      ? "bg-amber-100 border-amber-500 text-amber-700 shadow-lg"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-amber-300"
-                  )}
-                >
-                  <FileIcon className="w-5 h-5" />
-                  <span className="text-sm">Documento PDF</span>
+                  <span className="hidden sm:inline">Redacción</span>
                 </button>
               </div>
             </div>
@@ -624,20 +643,96 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                   </select>
 
                   {resourceType !== 'none' && (
-                    <div className="flex items-center gap-2">
-                      {resourceType === 'image' && <ImageIcon className="w-5 h-5 text-emerald-600" />}
-                      {resourceType === 'video' && <Video className="w-5 h-5 text-emerald-600" />}
-                      {resourceType === 'pdf' && <FileIcon className="w-5 h-5 text-emerald-600" />}
-                      <Input
-                        value={resourceUrl}
-                        onChange={e => setResourceUrl(e.target.value)}
-                        className="flex-1 bg-white border-2 border-emerald-300 h-10"
-                        placeholder={
-                          resourceType === 'image' ? 'URL de la imagen' :
-                          resourceType === 'video' ? 'URL de YouTube' :
-                          'URL del PDF'
-                        }
-                      />
+                    <div className="space-y-3">
+                      {/* INPUT DE URL (Para imagen/video, o URL externa de PDF) */}
+                      {resourceType !== 'pdf' && (
+                        <div className="flex items-center gap-2">
+                          {resourceType === 'image' && <ImageIcon className="w-5 h-5 text-emerald-600" />}
+                          {resourceType === 'video' && <Video className="w-5 h-5 text-emerald-600" />}
+                          <Input
+                            value={resourceUrl}
+                            onChange={e => setResourceUrl(e.target.value)}
+                            className="flex-1 bg-white border-2 border-emerald-300 h-10"
+                            placeholder={
+                              resourceType === 'image' ? 'URL de la imagen' :
+                              'URL de YouTube'
+                            }
+                          />
+                        </div>
+                      )}
+
+                      {/* SUBIDA DE PDF (Supabase Storage) */}
+                      {resourceType === 'pdf' && (
+                        <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 space-y-3">
+                          {!resourceUrl ? (
+                            <div className="text-center space-y-3">
+                              <div className="p-3 bg-white rounded-full w-fit mx-auto">
+                                <FileIcon className="w-6 h-6 text-emerald-600"/>
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-emerald-900 text-sm">Sube tu documento PDF</h4>
+                                <p className="text-xs text-emerald-700">Máximo 50MB. Se guardará en Supabase Storage.</p>
+                              </div>
+                              
+                              <div className="flex gap-2 justify-center">
+                                <input 
+                                  type="file" 
+                                  accept="application/pdf" 
+                                  id="pdf-upload" 
+                                  className="hidden" 
+                                  onChange={handleFileUpload}
+                                  disabled={isUploading}
+                                />
+                                <label htmlFor="pdf-upload">
+                                  <Button asChild disabled={isUploading} className="cursor-pointer bg-emerald-600 hover:bg-emerald-700" size="sm">
+                                    <span>
+                                      {isUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Upload className="w-4 h-4 mr-2"/>}
+                                      {isUploading ? "Subiendo..." : "Seleccionar Archivo"}
+                                    </span>
+                                  </Button>
+                                </label>
+                              </div>
+
+                              <div className="text-xs text-emerald-600 pt-2 border-t border-emerald-200">
+                                O pega una URL externa:
+                              </div>
+                              <Input
+                                value={resourceUrl}
+                                onChange={e => setResourceUrl(e.target.value)}
+                                className="bg-white border-emerald-300 h-9 text-sm"
+                                placeholder="https://ejemplo.com/documento.pdf"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between p-3 bg-white border border-emerald-300 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
+                                  <FileIcon className="w-5 h-5"/>
+                                </div>
+                                <div className="text-left">
+                                  <p className="font-bold text-emerald-900 text-sm">Documento cargado</p>
+                                  <a 
+                                    href={resourceUrl} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="text-xs text-emerald-600 hover:underline flex items-center gap-1"
+                                  >
+                                    Ver PDF <ExternalLink className="w-3 h-3"/>
+                                  </a>
+                                </div>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                onClick={() => setResourceUrl('')} 
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                size="sm"
+                              >
+                                <Trash2 className="w-4 h-4"/>
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -653,113 +748,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                   onChange={e => setDueDate(e.target.value)}
                   className="bg-white border-2 border-emerald-300 h-10"
                 />
-              </div>
-            </div>
-          )}
-
-          {/* ✅ CONFIGURACIÓN ESPECÍFICA PARA DOCUMENT */}
-          {taskType === 'document' && (
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-8 rounded-2xl shadow-sm border-2 border-amber-200">
-              <div className="space-y-6">
-                <div className="flex gap-4">
-                  <div className="p-3 bg-amber-100 rounded-xl h-fit text-amber-600">
-                    <Upload className="w-6 h-6"/>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-amber-900 text-lg">Documento PDF</h3>
-                    <p className="text-amber-700 text-sm">Los alumnos podrán ver este PDF y dibujar/escribir sobre él.</p>
-                  </div>
-                </div>
-
-                {!pdfUrl ? (
-                  <div className="space-y-4">
-                    {/* ✅ BOTÓN DE UPLOADTHING */}
-                    <div className="flex flex-col items-center justify-center py-8 bg-white/50 rounded-xl border-2 border-dashed border-amber-300">
-                      <div className="p-4 bg-amber-100 rounded-full mb-4">
-                        <FileIcon className="w-8 h-8 text-amber-600"/>
-                      </div>
-                      <h4 className="font-bold text-amber-900 mb-2">Sube tu documento PDF</h4>
-                      <p className="text-sm text-amber-700 mb-4">Máximo 4MB</p>
-                      
-                      <UploadButton
-                        endpoint="pdfUploader"
-                        url={`https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/api/uploadthing`}
-                        onClientUploadComplete={(res) => {
-                          if (res && res[0]) {
-                            setPdfUrl(res[0].url);
-                            toast.success("✅ PDF subido correctamente");
-                          }
-                        }}
-                        onUploadError={(error: Error) => {
-                          toast.error(`❌ Error: ${error.message}`);
-                        }}
-                        appearance={{
-                          button: "bg-amber-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-amber-700 transition-all shadow-md hover:shadow-lg ut-ready:bg-amber-600 ut-uploading:bg-amber-400 ut-uploading:cursor-not-allowed",
-                          container: "flex flex-col items-center gap-2",
-                          allowedContent: "text-amber-600 text-xs mt-2"
-                        }}
-                      />
-                    </div>
-
-                    {/* ALTERNATIVA: Pegar enlace de Drive */}
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-amber-300"></div>
-                      </div>
-                      <div className="relative flex justify-center text-xs">
-                        <span className="bg-gradient-to-br from-amber-50 to-orange-50 px-3 py-1 text-amber-700 rounded-full font-bold">
-                          O pega un enlace de Google Drive
-                        </span>
-                      </div>
-                    </div>
-
-                    <Input 
-                      value={pdfUrl} 
-                      onChange={e => {
-                        const val = e.target.value;
-                        // Si parece un link de drive, lo convertimos automáticamente
-                        if (val.includes('drive.google.com')) {
-                          setPdfUrl(getDriveDirectLink(val));
-                          toast.success("🔗 Enlace de Drive convertido");
-                        } else {
-                          setPdfUrl(val);
-                        }
-                      }} 
-                      placeholder="https://drive.google.com/file/d/..." 
-                      className="font-mono text-sm bg-white border-2 border-amber-300"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between p-4 bg-green-50 border-2 border-green-200 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-100 rounded-lg text-green-700">
-                        <FileIcon className="w-5 h-5"/>
-                      </div>
-                      <div>
-                        <p className="font-bold text-green-800 text-sm">✅ Documento cargado</p>
-                        <a 
-                          href={pdfUrl} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className="text-xs text-green-600 hover:underline flex items-center gap-1"
-                        >
-                          Ver archivo <ExternalLink className="w-3 h-3"/>
-                        </a>
-                      </div>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => setPdfUrl('')} 
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4"/>
-                    </Button>
-                  </div>
-                )}
-
-                <div className="p-3 bg-blue-50 text-blue-800 text-xs rounded-lg border border-blue-100">
-                  <strong>💡 Tip:</strong> Puedes subir directamente el PDF o pegar un enlace de Google Drive (se convertirá automáticamente).
-                </div>
               </div>
             </div>
           )}
