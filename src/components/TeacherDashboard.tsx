@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Task, Classroom, Submission, User } from '../types';
 import { StudentCard } from './StudentCard';
-import { Users, QrCode, Sparkles, Plus, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock } from 'lucide-react';
+import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -19,8 +19,7 @@ interface TeacherDashboardProps {
   currentUser: User; // ✅ NUEVO: Usuario actual (profesor)
   submissions?: Submission[];
   onSelectStudent: (studentId: string) => void;
-  onGenerateTask: () => void; // Botón IA
-  onCreateManual: () => void; // ✅ NUEVO: Botón Manual
+  onGenerateTask: () => void;
   onDeleteTask: (id: string) => void;
   onEditTask?: (task: Task) => void;
   onRefreshSubmissions?: () => void;
@@ -35,7 +34,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   submissions = [],
   onSelectStudent,
   onGenerateTask,
-  onCreateManual, // ✅ Recibimos la nueva función
   onDeleteTask,
   onEditTask,
   onRefreshSubmissions,
@@ -161,25 +159,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 <span className="sm:hidden">Invitación</span>
               </Button>
               
-              {/* ✅ Botón Crear con IA */}
               <Button
                 onClick={onGenerateTask}
-                variant="outline"
-                className="gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-xl font-bold flex-1 sm:flex-none"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span className="hidden sm:inline">Crear con IA</span>
-                <span className="sm:hidden">IA</span>
-              </Button>
-
-              {/* ✅ Botón Crear Manual */}
-              <Button
-                onClick={onCreateManual}
                 className="gap-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold shadow-md flex-1 sm:flex-none"
               >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Crear Manual</span>
-                <span className="sm:hidden">Manual</span>
+                <Sparkles className="w-4 h-4" />
+                <span className="hidden sm:inline">Generar con IA</span>
+                <span className="sm:hidden">IA</span>
               </Button>
             </div>
           </div>
@@ -301,16 +287,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   <List className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                   <p className="text-slate-400 font-bold">No hay tareas creadas</p>
                   <p className="text-slate-400 text-sm mb-6">Crea una tarea con IA o manualmente</p>
-                  <div className="flex gap-3 justify-center">
-                    <Button onClick={onGenerateTask} variant="outline" className="gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50">
-                      <Sparkles className="w-4 h-4" />
-                      Crear con IA
-                    </Button>
-                    <Button onClick={onCreateManual} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
-                      <Plus className="w-4 h-4" />
-                      Crear Manual
-                    </Button>
-                  </div>
+                  <Button onClick={onGenerateTask} className="gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Generar con IA
+                  </Button>
                 </div>
               )}
             </div>

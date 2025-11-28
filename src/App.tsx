@@ -545,18 +545,10 @@ export default function App() {
               currentUser={currentUser} // ✅ NUEVO: Pasar el usuario logueado para firmar comentarios
               submissions={realSubmissions}
               onSelectStudent={handleSelectStudent}
-              
-              // ✅ SEPARACIÓN DE BOTONES:
               onGenerateTask={() => {
-                setStartBuilderWithAI(true); // Abre modo IA
+                setStartBuilderWithAI(true);
                 setShowTaskBuilder(true);
               }}
-              onCreateManual={() => {
-                setStartBuilderWithAI(false); // 🛑 Abre modo MANUAL directo
-                setShowTaskBuilder(true);
-              }}
-              // --------------------
-
               onDeleteTask={handleDeleteTask}
               onEditTask={handleEditTask}
               onRefreshSubmissions={async () => {

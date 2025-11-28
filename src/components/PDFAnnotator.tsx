@@ -1,334 +1,259 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { Pencil, Type, Eraser, MousePointer2, Loader2, ZoomIn, ZoomOut, Save } from 'lucide-react';
 import { Button } from './ui/button';
+import { Save, Undo, Eraser, Pen, ZoomIn, ZoomOut, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-// Worker Config
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Configurar worker CDN de forma segura
+try {
+  // Usamos una versión fija para evitar errores de 'undefined' en pdfjs.version
+  const pdfVersion = pdfjs.version || '3.11.174';
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfVersion}/build/pdf.worker.min.js`;
+} catch (e) {
+  console.error("Error configuring PDF worker:", e);
+}
 
-export interface Annotation {
-  id: string;
-  type: 'path' | 'text';
-  content?: string;
-  points?: { x: number, y: number }[];
+interface Stroke {
+  points: { x: number; y: number }[];
   color: string;
-  x?: number;
-  y?: number;
-  page: number;
+  width: number;
 }
 
 interface PDFAnnotatorProps {
-  pdfUrl: string;
-  initialData?: Annotation[];      // Capa Alumno (fondo)
-  teacherData?: Annotation[];      // Capa Profesor (correcciones)
-  readOnly?: boolean;              // Si true, nadie edita nada
-  isTeacherMode?: boolean;         // ✅ NUEVO: Si true, edita teacherData en rojo
-  onSave?: (data: Annotation[]) => void;
+  bgUrl: string; // URL del PDF real
+  mode: 'student' | 'teacher'; // 'student' = blue pen, 'teacher' = red pen
+  onSave: (strokes: Stroke[]) => void;
 }
 
-export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData = [], teacherData = [], readOnly = false, isTeacherMode = false, onSave }) => {
-  const [numPages, setNumPages] = useState<number>(0);
-  const [currentPage, setCurrentPage] = useState<number>(1);
+export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ bgUrl, mode, onSave }) => {
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0);
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
+  const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   
-  // Herramientas: 'select' (mover), 'pencil', 'text', 'eraser'
-  const [tool, setTool] = useState<'select' | 'pencil' | 'text' | 'eraser'>('select');
-  
-  // ✅ Si es profesor, forzamos rojo. Si es alumno, color seleccionable
-  const [color, setColor] = useState(isTeacherMode ? '#EF4444' : '#000000'); 
-  
-  // ✅ Datos activos: si soy profe edito teacherData, si soy alumno edito initialData
-  const [activeAnnotations, setActiveAnnotations] = useState<Annotation[]>(isTeacherMode ? teacherData : initialData);
-  
-  // Estados de interacción
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentPath, setCurrentPath] = useState<{ x: number, y: number }[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number, y: number } | null>(null);
-
-  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  // ✅ Colores para estudiantes (profesor siempre usa rojo)
-  const studentColors = ['#000000', '#2563EB', '#10B981', '#F59E0B'];
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // ✅ Actualizar datos activos si cambian las props
-  useEffect(() => { 
-    setActiveAnnotations(isTeacherMode ? teacherData : initialData); 
-  }, [teacherData, initialData, isTeacherMode]);
+  // Color según rol
+  const penColor = mode === 'teacher' ? '#ef4444' : '#3b82f6'; // Rojo profe, Azul alumno
+  const penWidth = 3;
 
+  // Manejadores PDF
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
+    setLoading(false);
   }
 
-  // --- COORDENADAS (Ajustadas al Zoom) ---
-  const getCoords = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!canvasRef.current) return { x: 0, y: 0 };
-    const rect = canvasRef.current.getBoundingClientRect();
-    const cx = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const cy = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-    return {
-      x: (cx - rect.left) / scale,
-      y: (cy - rect.top) / scale
-    };
-  };
+  function onDocumentLoadError(err: Error) {
+      console.error("Error loading PDF:", err);
+      setError("No se pudo cargar el PDF. Verifica la URL o CORS.");
+      setLoading(false);
+  }
 
-  // --- HIT DETECTION (Para seleccionar) ---
-  const findAnnotationAt = (x: number, y: number) => {
-    // Buscamos en las anotaciones activas (las que estoy editando)
-    for (let i = activeAnnotations.length - 1; i >= 0; i--) {
-      const ann = activeAnnotations[i];
-      if (ann.page !== currentPage) continue;
-      
-      if (ann.type === 'text') {
-        // Caja aproximada de texto
-        if (Math.abs((ann.x || 0) - x) < 50 && Math.abs((ann.y || 0) - y) < 20) return ann;
-      } else if (ann.type === 'path' && ann.points) {
-        // Distancia a cualquier punto del trazo
-        const hit = ann.points.some(p => Math.hypot(p.x - x, p.y - y) < 15);
-        if (hit) return ann;
-      }
-    }
-    return null;
-  };
-
-  // --- HANDLERS ---
-  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
-    if (readOnly) return;
-    const { x, y } = getCoords(e);
-
-    if (tool === 'select') {
-        const target = findAnnotationAt(x, y);
-        if (target) {
-            setSelectedId(target.id);
-            setIsDragging(true);
-            setDragStart({ x, y });
-        } else {
-            setSelectedId(null);
-        }
-    } else if (tool === 'pencil') {
-        setIsDrawing(true);
-        setCurrentPath([{ x, y }]);
-    } else if (tool === 'text') {
-        const text = prompt("Texto:");
-        if (text) {
-            const newAnn: Annotation = {
-                id: crypto.randomUUID(), type: 'text', content: text,
-                x, y, color, page: currentPage
-            };
-            const next = [...activeAnnotations, newAnn];
-            setActiveAnnotations(next);
-            onSave?.(next);
-            setTool('select'); // Auto-cambiar a select tras escribir
-        }
-    } else if (tool === 'eraser') {
-        const target = findAnnotationAt(x, y);
-        if (target) {
-            const next = activeAnnotations.filter(a => a.id !== target.id);
-            setActiveAnnotations(next);
-            onSave?.(next);
-        }
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (readOnly) return;
-    const { x, y } = getCoords(e);
-
-    if (tool === 'select' && isDragging && selectedId && dragStart) {
-        const dx = x - dragStart.x;
-        const dy = y - dragStart.y;
-        
-        setActiveAnnotations(prev => prev.map(ann => {
-            if (ann.id !== selectedId) return ann;
-            // Mover anotación
-            if (ann.type === 'text') {
-                return { ...ann, x: (ann.x || 0) + dx, y: (ann.y || 0) + dy };
-            } else if (ann.type === 'path' && ann.points) {
-                return { ...ann, points: ann.points.map(p => ({ x: p.x + dx, y: p.y + dy })) };
-            }
-            return ann;
-        }));
-        setDragStart({ x, y }); // Reset base
-    } else if (tool === 'pencil' && isDrawing) {
-        setCurrentPath(prev => [...prev, { x, y }]);
-    }
-  };
-
-  const handleMouseUp = () => {
-    if (isDragging) {
-        setIsDragging(false);
-        setDragStart(null);
-        onSave?.(activeAnnotations); // Guardar tras mover
-    }
-    if (isDrawing) {
-        setIsDrawing(false);
-        if (currentPath.length > 2) { // Mínimo 3 puntos para trazo válido
-            const newAnn: Annotation = {
-                id: crypto.randomUUID(), type: 'path', points: currentPath, color, page: currentPage
-            };
-            const next = [...activeAnnotations, newAnn];
-            setActiveAnnotations(next);
-            onSave?.(next);
-        }
-        setCurrentPath([]);
-    }
-  };
-
-  // --- RENDER CANVAS ---
+  // --- LÓGICA DE DIBUJO (CANVAS OVERLAY) ---
+  
+  // Redibujar todo cuando cambian los trazos o el zoom
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.scale(scale, scale);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+      // Ajustar tamaño del canvas al del contenedor (que debería coincidir con el PDF)
+      // Nota: Esto es tricky porque el PDF puede tardar en renderizar.
+      // Lo ideal es que el canvas tenga el tamaño exacto de la página PDF renderizada.
+      // Usaremos un ResizeObserver o asumiremos tamaño standard A4 * scale.
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-    // Helper para dibujar una anotación
-    const drawAnn = (ann: Annotation, isBackground: boolean = false) => {
-        if (ann.page !== currentPage) return;
-        
-        // Estilo especial si está seleccionada (solo para activeAnnotations)
-        const isSelected = !isBackground && ann.id === selectedId;
-        const drawColor = isSelected ? '#2563EB' : ann.color;
-        const opacity = isBackground ? 0.5 : 1.0; // Fondo más transparente
+      strokes.forEach(stroke => {
+          if (stroke.points.length < 2) return;
+          ctx.beginPath();
+          ctx.strokeStyle = stroke.color;
+          ctx.lineWidth = stroke.width; // Podríamos escalar el width con el zoom
+          ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+          for (let i = 1; i < stroke.points.length; i++) {
+              ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+          }
+          ctx.stroke();
+      });
 
-        if (ann.type === 'path' && ann.points) {
-            ctx.beginPath();
-            ctx.globalAlpha = opacity;
-            ctx.strokeStyle = drawColor;
-            ctx.lineWidth = 3;
-            ctx.moveTo(ann.points[0].x, ann.points[0].y);
-            ann.points.forEach(p => ctx.lineTo(p.x, p.y));
-            ctx.stroke();
-            ctx.globalAlpha = 1.0;
-            
-            // Borde de selección
-            if (isSelected) {
-                ctx.shadowColor = 'rgba(37, 99, 235, 0.5)';
-                ctx.shadowBlur = 8;
-                ctx.stroke();
-                ctx.shadowBlur = 0;
-            }
-        } else if (ann.type === 'text' && ann.content) {
-            ctx.globalAlpha = opacity;
-            ctx.font = 'bold 16px sans-serif';
-            ctx.fillStyle = drawColor;
-            ctx.fillText(ann.content, ann.x || 0, ann.y || 0);
-            ctx.globalAlpha = 1.0;
-            
-            if (isSelected) {
-                const width = ctx.measureText(ann.content).width;
-                ctx.strokeStyle = '#2563EB';
-                ctx.lineWidth = 2;
-                ctx.strokeRect((ann.x || 0) - 2, (ann.y || 0) - 16, width + 4, 20);
-            }
-        }
-    };
+      // Dibujar trazo actual
+      if (currentStroke && currentStroke.points.length > 1) {
+          ctx.beginPath();
+          ctx.strokeStyle = currentStroke.color;
+          ctx.lineWidth = currentStroke.width;
+          ctx.moveTo(currentStroke.points[0].x, currentStroke.points[0].y);
+          for (let i = 1; i < currentStroke.points.length; i++) {
+              ctx.lineTo(currentStroke.points[i].x, currentStroke.points[i].y);
+          }
+          ctx.stroke();
+      }
+  }, [strokes, currentStroke, scale]);
 
-    // ✅ LÓGICA DE CAPAS:
-    // 1. Si soy profesor → Ver anotaciones del alumno de fondo
-    if (isTeacherMode) {
-        initialData.forEach(ann => drawAnn(ann, true)); // Capa de fondo (alumno)
-    }
+  const getPoint = (e: React.MouseEvent | React.TouchEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return { x: 0, y: 0 };
+      const rect = canvas.getBoundingClientRect();
+      
+      let clientX, clientY;
+      if ('touches' in e) {
+          clientX = e.touches[0].clientX;
+          clientY = e.touches[0].clientY;
+      } else {
+          clientX = (e as React.MouseEvent).clientX;
+          clientY = (e as React.MouseEvent).clientY;
+      }
 
-    // 2. Dibujar mis anotaciones activas (editables)
-    activeAnnotations.forEach(ann => drawAnn(ann, false));
+      return {
+          x: (clientX - rect.left),
+          y: (clientY - rect.top)
+      };
+  };
 
-    // 3. Dibujar trazo actual
-    if (currentPath.length > 0) {
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-        ctx.moveTo(currentPath[0].x, currentPath[0].y);
-        currentPath.forEach(p => ctx.lineTo(p.x, p.y));
-        ctx.stroke();
-    }
+  const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
+      if (tool === 'eraser') return; // Implementar goma real es complejo, haremos "Undo" simple
+      setIsDrawing(true);
+      const point = getPoint(e);
+      setCurrentStroke({
+          points: [point],
+          color: penColor,
+          width: penWidth
+      });
+  };
 
-    ctx.restore();
-  }, [annotations, teacherData, currentPath, currentPage, scale, color, selectedId]);
+  const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
+      if (!isDrawing || !currentStroke) return;
+      e.preventDefault(); // Evitar scroll en móvil
+      const point = getPoint(e);
+      setCurrentStroke(prev => prev ? {
+          ...prev,
+          points: [...prev.points, point]
+      } : null);
+  };
+
+  const handleEnd = () => {
+      if (!isDrawing || !currentStroke) return;
+      setIsDrawing(false);
+      setStrokes(prev => [...prev, currentStroke]);
+      setCurrentStroke(null);
+  };
+
+  const handleUndo = () => {
+      setStrokes(prev => prev.slice(0, -1));
+  };
+
+  const handleClear = () => {
+      if (window.confirm('¿Borrar todo?')) {
+          setStrokes([]);
+      }
+  };
 
   return (
-    <div className="flex flex-col h-full bg-slate-100 rounded-xl overflow-hidden border border-slate-300 relative">
-      {/* TOOLBAR */}
-      <div className="bg-white p-2 border-b flex items-center justify-between gap-2 shadow-sm z-20 flex-wrap">
-        <div className="flex items-center gap-2">
-            {/* Herramientas */}
-            {!readOnly && (
-                <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                    <Button variant={tool==='select'?'default':'ghost'} size="icon" onClick={()=>setTool('select')} title="Seleccionar/Mover"><MousePointer2 className="w-4 h-4"/></Button>
-                    <Button variant={tool==='pencil'?'default':'ghost'} size="icon" onClick={()=>setTool('pencil')} title="Lápiz"><Pencil className="w-4 h-4"/></Button>
-                    <Button variant={tool==='text'?'default':'ghost'} size="icon" onClick={()=>setTool('text')} title="Texto"><Type className="w-4 h-4"/></Button>
-                    <Button variant={tool==='eraser'?'default':'ghost'} size="icon" onClick={()=>setTool('eraser')} title="Borrador"><Eraser className="w-4 h-4"/></Button>
+    <div className="flex flex-col h-full relative bg-slate-100">
+        {/* Toolbar Flotante */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-white/90 backdrop-blur shadow-xl border border-slate-200 rounded-2xl p-2 flex gap-2 items-center">
+             <Button 
+                variant={tool === 'pen' ? 'default' : 'ghost'} 
+                size="icon" 
+                onClick={() => setTool('pen')}
+                className={tool === 'pen' ? (mode === 'teacher' ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600') : ''}
+             >
+                 <Pen className="w-4 h-4" />
+             </Button>
+             <Button variant="ghost" size="icon" onClick={handleUndo} title="Deshacer">
+                 <Undo className="w-4 h-4 text-slate-600" />
+             </Button>
+             <Button variant="ghost" size="icon" onClick={handleClear} title="Limpiar Página">
+                 <Eraser className="w-4 h-4 text-slate-600" />
+             </Button>
+             <div className="w-px h-6 bg-slate-200 mx-1"></div>
+             <Button variant="ghost" size="icon" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}>
+                 <ZoomOut className="w-4 h-4 text-slate-600" />
+             </Button>
+             <span className="text-xs font-bold text-slate-500 w-12 text-center">
+                 {Math.round(scale * 100)}%
+             </span>
+             <Button variant="ghost" size="icon" onClick={() => setScale(s => Math.min(2, s + 0.1))}>
+                 <ZoomIn className="w-4 h-4 text-slate-600" />
+             </Button>
+             <div className="w-px h-6 bg-slate-200 mx-1"></div>
+             <Button 
+                onClick={() => onSave(strokes)} 
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-sm"
+             >
+                 <Save className="w-4 h-4 mr-2" />
+                 Guardar
+             </Button>
+        </div>
+
+        {/* Area de Visualización */}
+        <div 
+            className="flex-1 overflow-auto p-8 flex justify-center items-start relative touch-none" 
+            ref={containerRef}
+        >
+            {error ? (
+                 <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
+                    <AlertCircle className="w-12 h-12 text-red-300" />
+                    <p>{error}</p>
+                    <p className="text-sm">Intenta con otro PDF o verifica la URL.</p>
+                 </div>
+            ) : (
+                <div className="relative shadow-2xl border border-slate-300 bg-white" style={{ minWidth: '300px', minHeight: '400px' }}>
+                    {loading && (
+                         <div className="absolute inset-0 flex items-center justify-center bg-slate-50 z-20">
+                             <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                             <span className="ml-3 font-bold text-slate-500">Cargando Documento...</span>
+                         </div>
+                    )}
+                    
+                    {/* Capa 1: El PDF Real */}
+                    <Document
+                        file={bgUrl}
+                        onLoadSuccess={onDocumentLoadSuccess}
+                        onLoadError={onDocumentLoadError}
+                        loading={null}
+                        className="select-none"
+                    >
+                        <Page 
+                            pageNumber={pageNumber} 
+                            scale={scale}
+                            renderAnnotationLayer={false}
+                            renderTextLayer={false} // Desactivar para mejor performance en dibujo
+                            canvasRef={(ref) => {
+                                // Truco: Ajustar el canvas de dibujo al tamaño del canvas del PDF
+                                if (ref && canvasRef.current) {
+                                    canvasRef.current.width = ref.width;
+                                    canvasRef.current.height = ref.height;
+                                    canvasRef.current.style.width = `${ref.width}px`;
+                                    canvasRef.current.style.height = `${ref.height}px`;
+                                }
+                            }}
+                        />
+                    </Document>
+
+                    {/* Capa 2: Canvas de Dibujo Transparente */}
+                    <canvas
+                        ref={canvasRef}
+                        className="absolute inset-0 z-10 cursor-crosshair"
+                        onMouseDown={handleStart}
+                        onMouseMove={handleMove}
+                        onMouseUp={handleEnd}
+                        onMouseLeave={handleEnd}
+                        onTouchStart={handleStart}
+                        onTouchMove={handleMove}
+                        onTouchEnd={handleEnd}
+                    />
                 </div>
             )}
-            {!readOnly && !isTeacherMode && (
-                <>
-                    <div className="h-6 w-px bg-slate-300 mx-2"></div>
-                    {/* Colores para estudiantes */}
-                    <div className="flex gap-1">
-                        {studentColors.map(c => <button key={c} onClick={()=>setColor(c)} className={cn("w-5 h-5 rounded-full border-2 transition-transform", color===c?"scale-125 border-slate-800":"border-slate-300")} style={{backgroundColor: c}}/>)}
-                    </div>
-                </>
-            )}
-            {/* ✅ Badge de modo profesor */}
-            {isTeacherMode && !readOnly && (
-                <>
-                    <div className="h-6 w-px bg-slate-300 mx-2"></div>
-                    <div className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full flex items-center gap-1.5">
-                        <Pencil className="w-3 h-3"/> Modo Corrección
-                    </div>
-                </>
-            )}
         </div>
-
-        {/* Zoom */}
-        <div className="flex items-center gap-2">
-             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setScale(s => Math.max(0.5, s - 0.1))}><ZoomOut className="w-4 h-4"/></Button>
-             <span className="text-xs font-bold min-w-[40px] text-center">{Math.round(scale*100)}%</span>
-             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setScale(s => Math.min(3, s + 0.1))}><ZoomIn className="w-4 h-4"/></Button>
-             <div className="h-4 w-px bg-slate-300 mx-1"></div>
-             <div className="flex items-center text-xs bg-slate-100 px-2 py-1 rounded font-medium">
-                <button disabled={currentPage<=1} onClick={()=>setCurrentPage(p=>p-1)} className="px-1 hover:text-indigo-600 disabled:opacity-30">◀</button>
-                <span className="mx-2">{currentPage} / {numPages||'--'}</span>
-                <button disabled={currentPage>=numPages} onClick={()=>setCurrentPage(p=>p+1)} className="px-1 hover:text-indigo-600 disabled:opacity-30">▶</button>
-             </div>
-        </div>
-      </div>
-
-      {/* WORKSPACE */}
-      <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-8 relative touch-none" ref={containerRef}>
-          {pdfUrl ? (
-            <div className="relative shadow-xl border border-slate-300 bg-white" style={{ width: 'fit-content', height: 'fit-content' }}>
-                <Document file={pdfUrl} onLoadSuccess={onDocumentLoadSuccess} loading={<div className="p-20 flex flex-col items-center text-slate-400"><Loader2 className="animate-spin mb-2"/>Cargando PDF...</div>}>
-                    <Page pageNumber={currentPage} scale={scale} renderTextLayer={false} renderAnnotationLayer={false}
-                        onLoadSuccess={(page) => {
-                            if(canvasRef.current) {
-                                canvasRef.current.width = page.width;
-                                canvasRef.current.height = page.height;
-                            }
-                        }}
-                    />
-                </Document>
-                <canvas 
-                    ref={canvasRef}
-                    className={cn("absolute inset-0 z-10", tool==='hand' ? 'cursor-grab' : 'cursor-crosshair')}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    onTouchStart={handleMouseDown}
-                    onTouchMove={handleMouseMove}
-                    onTouchEnd={handleMouseUp}
-                />
-            </div>
-          ) : <div className="m-auto text-slate-400 font-bold">No hay documento cargado</div>}
-      </div>
     </div>
   );
 };

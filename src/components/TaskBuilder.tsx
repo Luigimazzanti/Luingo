@@ -2,15 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Upload, ExternalLink } from 'lucide-react';
+import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
-import { createClient } from '@supabase/supabase-js';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
-
-// Cliente Supabase local (para el storage)
-const supabase = createClient(`https://${projectId}.supabase.co`, publicAnonKey);
 
 // ========== TIPOS ==========
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -92,9 +87,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
 
   // ✅ RECUPERAR CLAVE DEL NAVEGADOR (NO HARDCODEADA)
   const [apiKey, setApiKey] = useState(localStorage.getItem('groq_key') || '');
-  
-  // ✅ Estado para subida de PDFs
-  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     if (autoOpenAI && !initialData) {
@@ -113,49 +105,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     setApiKey(cleanKey);
     setShowKeyModal(false);
     toast.success("🔒 Clave guardada de forma segura en tu navegador");
-  };
-
-  // ========== HANDLER DE SUBIDA DE PDFs ==========
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    if (file.type !== 'application/pdf') {
-      toast.error("Solo se permiten archivos PDF");
-      return;
-    }
-    
-    // Límite de 50MB
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error("El archivo no puede superar 50MB");
-      return;
-    }
-    
-    setIsUploading(true);
-    try {
-      const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`;
-      
-      // Subir a Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('assignments') // Bucket público creado manualmente
-        .upload(fileName, file);
-
-      if (error) throw error;
-
-      // Obtener URL pública
-      const { data: { publicUrl } } = supabase.storage
-        .from('assignments')
-        .getPublicUrl(fileName);
-
-      setResourceUrl(publicUrl);
-      setResourceType('pdf'); // Auto-seleccionar PDF
-      toast.success("✅ PDF subido correctamente");
-    } catch (error: any) {
-      console.error('Error subiendo PDF:', error);
-      toast.error("Error al subir archivo: " + (error.message || 'Error desconocido'));
-    } finally {
-      setIsUploading(false);
-    }
   };
 
   // ========== HANDLERS DE PREGUNTAS ==========
@@ -643,96 +592,20 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                   </select>
 
                   {resourceType !== 'none' && (
-                    <div className="space-y-3">
-                      {/* INPUT DE URL (Para imagen/video, o URL externa de PDF) */}
-                      {resourceType !== 'pdf' && (
-                        <div className="flex items-center gap-2">
-                          {resourceType === 'image' && <ImageIcon className="w-5 h-5 text-emerald-600" />}
-                          {resourceType === 'video' && <Video className="w-5 h-5 text-emerald-600" />}
-                          <Input
-                            value={resourceUrl}
-                            onChange={e => setResourceUrl(e.target.value)}
-                            className="flex-1 bg-white border-2 border-emerald-300 h-10"
-                            placeholder={
-                              resourceType === 'image' ? 'URL de la imagen' :
-                              'URL de YouTube'
-                            }
-                          />
-                        </div>
-                      )}
-
-                      {/* SUBIDA DE PDF (Supabase Storage) */}
-                      {resourceType === 'pdf' && (
-                        <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 space-y-3">
-                          {!resourceUrl ? (
-                            <div className="text-center space-y-3">
-                              <div className="p-3 bg-white rounded-full w-fit mx-auto">
-                                <FileIcon className="w-6 h-6 text-emerald-600"/>
-                              </div>
-                              <div>
-                                <h4 className="font-bold text-emerald-900 text-sm">Sube tu documento PDF</h4>
-                                <p className="text-xs text-emerald-700">Máximo 50MB. Se guardará en Supabase Storage.</p>
-                              </div>
-                              
-                              <div className="flex gap-2 justify-center">
-                                <input 
-                                  type="file" 
-                                  accept="application/pdf" 
-                                  id="pdf-upload" 
-                                  className="hidden" 
-                                  onChange={handleFileUpload}
-                                  disabled={isUploading}
-                                />
-                                <label htmlFor="pdf-upload">
-                                  <Button asChild disabled={isUploading} className="cursor-pointer bg-emerald-600 hover:bg-emerald-700" size="sm">
-                                    <span>
-                                      {isUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Upload className="w-4 h-4 mr-2"/>}
-                                      {isUploading ? "Subiendo..." : "Seleccionar Archivo"}
-                                    </span>
-                                  </Button>
-                                </label>
-                              </div>
-
-                              <div className="text-xs text-emerald-600 pt-2 border-t border-emerald-200">
-                                O pega una URL externa:
-                              </div>
-                              <Input
-                                value={resourceUrl}
-                                onChange={e => setResourceUrl(e.target.value)}
-                                className="bg-white border-emerald-300 h-9 text-sm"
-                                placeholder="https://ejemplo.com/documento.pdf"
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-between p-3 bg-white border border-emerald-300 rounded-lg">
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
-                                  <FileIcon className="w-5 h-5"/>
-                                </div>
-                                <div className="text-left">
-                                  <p className="font-bold text-emerald-900 text-sm">Documento cargado</p>
-                                  <a 
-                                    href={resourceUrl} 
-                                    target="_blank" 
-                                    rel="noreferrer" 
-                                    className="text-xs text-emerald-600 hover:underline flex items-center gap-1"
-                                  >
-                                    Ver PDF <ExternalLink className="w-3 h-3"/>
-                                  </a>
-                                </div>
-                              </div>
-                              <Button 
-                                variant="ghost" 
-                                onClick={() => setResourceUrl('')} 
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                                size="sm"
-                              >
-                                <Trash2 className="w-4 h-4"/>
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                    <div className="flex items-center gap-2">
+                      {resourceType === 'image' && <ImageIcon className="w-5 h-5 text-emerald-600" />}
+                      {resourceType === 'video' && <Video className="w-5 h-5 text-emerald-600" />}
+                      {resourceType === 'pdf' && <FileIcon className="w-5 h-5 text-emerald-600" />}
+                      <Input
+                        value={resourceUrl}
+                        onChange={e => setResourceUrl(e.target.value)}
+                        className="flex-1 bg-white border-2 border-emerald-300 h-10"
+                        placeholder={
+                          resourceType === 'image' ? 'URL de la imagen' :
+                          resourceType === 'video' ? 'URL de YouTube' :
+                          'URL del PDF'
+                        }
+                      />
                     </div>
                   )}
                 </div>
