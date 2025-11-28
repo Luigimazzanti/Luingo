@@ -62,7 +62,7 @@ export default function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer' | 'writing'>('home'); // ✅ Añadida vista 'writing'
+  const [view, setView] = useState<'home' | 'dashboard' | 'task-detail' | 'exercise' | 'correction' | 'pdf-viewer' | 'writing' | 'pdf-annotator'>('home'); // ✅ Añadida vista 'pdf-annotator'
   
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [activeExercise, setActiveExercise] = useState<Exercise | null>(null);
@@ -599,7 +599,7 @@ export default function App() {
             submissions={realSubmissions}
             onLogout={handleLogout}
             onSelectTask={(task) => {
-              // ✅ DETECTAR TIPO DE TAREA: Writing vs Quiz
+              // ✅ DETECTAR TIPO DE TAREA: Writing vs Document vs Quiz
               if (task.content_data?.type === 'writing') {
                 // ✅ TAREA TIPO WRITING
                 console.log('📝 Abriendo tarea de redacción:', task.title);
@@ -620,6 +620,11 @@ export default function App() {
                 
                 setActiveWritingSubmission(existing || null);
                 setView('writing');
+              } else if (task.content_data?.type === 'document') {
+                // ✅ TAREA TIPO DOCUMENT PDF
+                console.log('📄 Abriendo tarea de documento PDF:', task.title);
+                setSelectedTask(task);
+                setView('pdf-annotator');
               } else {
                 // ✅ TAREA TIPO QUIZ (EXISTENTE)
                 const exercise: Exercise = {
@@ -739,6 +744,68 @@ export default function App() {
               setView('dashboard');
             }}
           />
+        )}
+
+        {/* ========== PDF ANNOTATOR (DOCUMENTO PDF) ========== */}
+        {view === 'pdf-annotator' && selectedTask && selectedTask.content_data?.type === 'document' && (
+          <div className="h-screen flex flex-col">
+            {/* Header */}
+            <div className="bg-white border-b border-slate-200 p-4">
+              <div className="max-w-7xl mx-auto flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => {
+                      setSelectedTask(null);
+                      setView('dashboard');
+                    }}
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Volver
+                  </Button>
+                  <div>
+                    <h1 className="font-black text-xl text-slate-800">{selectedTask.title}</h1>
+                    <p className="text-sm text-slate-500">{selectedTask.content_data.instructions}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* PDF Annotator */}
+            <div className="flex-1">
+              <PDFAnnotator
+                mode="student"
+                pdfUrl={selectedTask.content_data.pdf_url || ''}
+                initialAnnotations={
+                  realSubmissions.find(s => 
+                    s.task_id === selectedTask.id && 
+                    (String(s.student_id) === String(currentUser?.id) || s.student_name === currentUser?.name)
+                  )?.pdf_annotations || []
+                }
+                onSave={async (annotations) => {
+                  if (currentUser && selectedTask) {
+                    await submitTaskResult(
+                      selectedTask.id,
+                      selectedTask.title,
+                      currentUser.id,
+                      currentUser.name,
+                      0, // Score 0, esperando corrección
+                      10,
+                      annotations as any, // Guardamos anotaciones en el campo answers
+                      '', // No hay text_content
+                      'submitted',
+                      []
+                    );
+                    
+                    await loadSubmissions();
+                    toast.success('✅ Anotaciones guardadas correctamente');
+                    setSelectedTask(null);
+                    setView('dashboard');
+                  }
+                }}
+              />
+            </div>
+          </div>
         )}
       </main>
     </div>

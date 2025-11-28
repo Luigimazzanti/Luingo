@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Student, Task, Classroom, Submission, User } from '../types';
+import { Student, Task, Classroom, Submission, User, PDFAnnotation } from '../types';
 import { StudentCard } from './StudentCard';
-import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock } from 'lucide-react';
+import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -10,6 +10,7 @@ import { Textarea } from './ui/textarea';
 import { gradeSubmission } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 import { TextAnnotator, Annotation } from './TextAnnotator';
+import { PDFAnnotator } from './PDFAnnotator';
 import { CommunityFeed } from './community/CommunityFeed';
 
 interface TeacherDashboardProps {
@@ -111,6 +112,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         total: attempt.total,
         answers: attempt.answers,
         textContent: attempt.textContent,
+        teacher_annotations: attempt.teacher_annotations || [], // ✅ NUEVO: Anotaciones del profesor en PDF
         timestamp: attempt.submitted_at
       };
 
@@ -119,7 +121,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       
       await gradeSubmission(targetId, newGrade, feedbackInput, safePayload, finalCorrections);
 
-      toast.success(`✅ Calificación guardada (${finalCorrections.length} correcciones)`);
+      const correctionCount = finalCorrections.length + (attempt.teacher_annotations?.length || 0);
+      toast.success(`✅ Calificación guardada (${correctionCount} anotaciones/correcciones)`);
       
       if (onRefreshSubmissions) {
         onRefreshSubmissions();
@@ -417,6 +420,54 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {/* VISOR DOCUMENTO PDF */}
+                  {(() => {
+                    const relatedTask = tasks.find(t => t.id === group.task_id);
+                    const isDocumentTask = relatedTask?.content_data?.type === 'document';
+                    const pdfUrl = relatedTask?.content_data?.pdf_url;
+                    
+                    if (isDocumentTask && pdfUrl) {
+                      // Anotaciones del estudiante (guardadas en answers)
+                      const studentAnnotations = Array.isArray(att.answers) ? att.answers as PDFAnnotation[] : [];
+                      // Anotaciones del profesor (guardadas en teacher_annotations o corrections)
+                      const teacherAnnotations = (att.teacher_annotations || []) as PDFAnnotation[];
+                      const allAnnotations = [...studentAnnotations, ...teacherAnnotations];
+                      
+                      return (
+                        <div className="mb-6">
+                          <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-3">
+                            <FileText className="w-4 h-4" />
+                            Documento PDF con Anotaciones
+                          </h4>
+                          <div className="bg-white rounded-xl border-2 border-slate-200 overflow-hidden" style={{ height: '600px' }}>
+                            <PDFAnnotator
+                              mode="teacher"
+                              pdfUrl={pdfUrl}
+                              initialAnnotations={allAnnotations}
+                              onSave={(newAnnotations) => {
+                                // Separar anotaciones del profesor de las del estudiante
+                                const teacherAnns = newAnnotations.filter(a => a.author === 'teacher');
+                                att.teacher_annotations = teacherAnns;
+                                setAnnotations(teacherAnns as any);
+                                toast.success('✅ Anotaciones del profesor guardadas');
+                              }}
+                            />
+                          </div>
+                          <div className="mt-3 flex items-center justify-between text-xs px-2">
+                            <span className="text-blue-600 font-bold">
+                              📝 Anotaciones del estudiante: {studentAnnotations.length}
+                            </span>
+                            <span className="text-red-600 font-bold">
+                              ✏️ Correcciones del profesor: {teacherAnnotations.length}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    return null;
+                  })()}
 
                   {/* VISOR REDACCIÓN */}
                   {att.textContent && att.textContent.length > 0 ? (

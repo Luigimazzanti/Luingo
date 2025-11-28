@@ -1,8 +1,8 @@
 // --- CORE ARCHITECTURE: LIBRARY VS ASSIGNMENTS ---
 
 // ✅ TIPOS DE TAREA
-export type TaskType = 'quiz' | 'writing';
-export type TaskCategory = 'homework' | 'quiz' | 'project' | 'reading' | 'writing';
+export type TaskType = 'quiz' | 'writing' | 'document';
+export type TaskCategory = 'homework' | 'quiz' | 'project' | 'reading' | 'writing' | 'document';
 
 // ✅ TIPOS DE RECURSOS MULTIMEDIA
 export type ResourceType = 'image' | 'video' | 'pdf' | 'none';
@@ -10,9 +10,24 @@ export type ResourceType = 'image' | 'video' | 'pdf' | 'none';
 // ✅ TIPOS DE CORRECCIÓN
 export type CorrectionType = 'grammar' | 'vocabulary' | 'spelling' | 'style' | 'coherence';
 
+// ✅ INTERFAZ DE ANOTACIÓN PDF
+export interface PDFAnnotation {
+  id: string;
+  type: 'path' | 'text' | 'stamp';
+  x: number; // Porcentaje relativo (0-100)
+  y: number; // Porcentaje relativo (0-100)
+  color?: string;
+  content?: string; // Para texto o tipo de sello
+  pathData?: string; // Para trazos SVG
+  width?: number; // Para texto
+  height?: number; // Para texto
+  timestamp?: string;
+  author?: string; // 'student' o 'teacher'
+}
+
 // ✅ INTERFAZ DE CONTENIDO EXTENDIDA
 export interface ContentData {
-  type: 'form' | 'writing';
+  type: 'form' | 'writing' | 'document';
   
   // Campos para Quiz/Form
   questions?: Question[];
@@ -24,6 +39,10 @@ export interface ContentData {
   resource_url?: string;
   resource_type?: ResourceType;
   rubric?: string; // Rúbrica de evaluación
+  
+  // Campos para Document (PDF)
+  pdf_url?: string;
+  instructions?: string; // Instrucciones del profesor para el documento
 }
 
 // 1. TABLE: TASKS_LIBRARY (La Biblioteca)
@@ -61,6 +80,7 @@ export interface Assignment {
   answers?: any[]; // Array de respuestas detalladas
   text_content?: string; // ✅ NUEVO: El texto del alumno (para writing)
   word_count?: number; // ✅ NUEVO: Contador de palabras
+  pdf_annotations?: PDFAnnotation[]; // ✅ NUEVO: Anotaciones del alumno en PDF
   submitted_at?: string;
   updated_at?: string; // Última actualización
   
@@ -72,6 +92,7 @@ export interface Assignment {
   teacher_feedback?: string; // Feedback del profesor
   feedback_audio_url?: string;
   corrections?: WritingCorrection[]; // ✅ NUEVO: Correcciones del profesor
+  teacher_annotations?: PDFAnnotation[]; // ✅ NUEVO: Anotaciones del profesor en PDF
   graded_at?: string; // ✅ Fecha de calificación
   
   // Metadatos de Moodle

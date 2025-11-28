@@ -20,11 +20,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   bestGrade
 }) => {
   const isWriting = task.content_data?.type === 'writing';
+  const isDocument = task.content_data?.type === 'document';
   
   // ✅ LEER EL DATO REAL (Si no existe, 1 por defecto para seguridad)
   const maxAttempts = task.content_data?.max_attempts ?? 1;
 
-  // ✅ Lógica diferenciada para Writing vs Quiz
+  // ✅ Lógica diferenciada para Writing vs Document vs Quiz
   let isLocked = false;
   let hasActivity = attemptsUsed > 0;
   let isCompleted = status === 'graded';
@@ -43,6 +44,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     } else if (status === 'graded') {
       buttonLabel = 'Ver Corrección';
       isCompleted = true;
+    }
+  } else if (isDocument) {
+    // ✅ DOCUMENT PDF: Similar a Writing, sin intentos
+    if (status === 'submitted') {
+      buttonLabel = 'Esperando Revisión';
+      buttonVariant = 'outline';
+      isLocked = true;
+    } else if (status === 'graded') {
+      buttonLabel = 'Ver Corrección';
+      isCompleted = true;
+    } else {
+      buttonLabel = 'Anotar Documento';
     }
   } else {
     // ✅ QUIZ: Lógica de intentos
@@ -74,25 +87,35 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           {task.category || 'Tarea'}
         </span>
         
-        {/* ✅ CONTADOR CLARO DE INTENTOS */}
-        <div className={cn(
-          "flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full",
-          isCompleted 
-            ? "bg-emerald-100 text-emerald-700" 
-            : "bg-slate-100 text-slate-500"
-        )}>
-          {isCompleted ? (
-            <>
-              <CheckCircle2 className="w-3 h-3" /> 
-              Completado
-            </>
-          ) : (
-            <>
-              <Clock className="w-3 h-3" /> 
-              Intentos: {attemptsUsed} / {maxAttempts}
-            </>
-          )}
-        </div>
+        {/* ✅ CONTADOR CLARO DE INTENTOS (SOLO PARA QUIZ) */}
+        {!isWriting && !isDocument && (
+          <div className={cn(
+            "flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full",
+            isCompleted 
+              ? "bg-emerald-100 text-emerald-700" 
+              : "bg-slate-100 text-slate-500"
+          )}>
+            {isCompleted ? (
+              <>
+                <CheckCircle2 className="w-3 h-3" /> 
+                Completado
+              </>
+            ) : (
+              <>
+                <Clock className="w-3 h-3" /> 
+                Intentos: {attemptsUsed} / {maxAttempts}
+              </>
+            )}
+          </div>
+        )}
+        
+        {/* Badge para Writing y Document */}
+        {(isWriting || isDocument) && isCompleted && (
+          <div className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+            <CheckCircle2 className="w-3 h-3" /> 
+            Corregido
+          </div>
+        )}
       </div>
 
       {/* Título y Descripción */}
@@ -141,7 +164,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <Clock className="w-4 h-4 mr-2" /> 
             {buttonLabel}
           </>
-        ) : attemptsUsed > 0 && !isWriting ? (
+        ) : attemptsUsed > 0 && !isWriting && !isDocument ? (
           <>
             <RotateCcw className="w-4 h-4 mr-2" /> 
             {buttonLabel}

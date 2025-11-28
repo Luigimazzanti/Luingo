@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon } from 'lucide-react';
+import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Upload, File } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
+import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { createClient } from '@supabase/supabase-js';
 
 // ========== TIPOS ==========
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -47,9 +49,10 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   const [selectedLevel, setSelectedLevel] = useState(initialData?.content_data?.assignment_scope?.targetId || 'A1');
   const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts || 3);
 
-  // ✅ NUEVO: Tipo de tarea (Quiz vs Writing)
-  const [taskType, setTaskType] = useState<'quiz' | 'writing'>(
-    initialData?.content_data?.type === 'writing' ? 'writing' : 'quiz'
+  // ✅ NUEVO: Tipo de tarea (Quiz vs Writing vs Document)
+  const [taskType, setTaskType] = useState<'quiz' | 'writing' | 'document'>(
+    initialData?.content_data?.type === 'writing' ? 'writing' : 
+    initialData?.content_data?.type === 'document' ? 'document' : 'quiz'
   );
 
   // ✅ NUEVO: Estados para Writing
@@ -61,6 +64,12 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     initialData?.content_data?.resource_type || 'none'
   );
   const [dueDate, setDueDate] = useState(initialData?.due_date || ''); // ✅ FECHA LÍMITE
+
+  // ✅ NUEVO: Estados para Document PDF
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfUrl, setPdfUrl] = useState(initialData?.content_data?.pdf_url || '');
+  const [pdfInstructions, setPdfInstructions] = useState(initialData?.content_data?.instructions || '');
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
 
   const [questions, setQuestions] = useState<QuestionDraft[]>(
     initialData?.content_data?.questions || [
@@ -161,6 +170,53 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     }
   };
 
+  // ========== MANEJO DE PDF ==========
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error('❌ Solo se permiten archivos PDF');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) { // 10MB límite
+      toast.error('❌ El PDF no debe exceder 10MB');
+      return;
+    }
+
+    setIsUploadingPdf(true);
+    try {
+      const supabase = createClient(
+        `https://${projectId}.supabase.co`,
+        publicAnonKey
+      );
+
+      const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const { data, error } = await supabase.storage
+        .from('assignments')
+        .upload(`pdfs/${fileName}`, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('assignments')
+        .getPublicUrl(`pdfs/${fileName}`);
+
+      setPdfUrl(publicUrl);
+      setPdfFile(file);
+      toast.success('✅ PDF subido correctamente');
+    } catch (error) {
+      console.error('Error subiendo PDF:', error);
+      toast.error('❌ Error al subir el PDF');
+    } finally {
+      setIsUploadingPdf(false);
+    }
+  };
+
   // ========== GUARDAR TAREA ==========
   const handleSave = () => {
     if (!title.trim()) {
@@ -178,13 +234,18 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         toast.error("❌ El mínimo de palabras debe ser mayor a 0");
         return;
       }
+    } else if (taskType === 'document') {
+      if (!pdfUrl) {
+        toast.error("❌ Debes subir un archivo PDF");
+        return;
+      }
     }
 
     const taskData = {
       ...initialData,
       title,
       description,
-      category: taskType === 'writing' ? 'writing' : category,
+      category: taskType === 'writing' ? 'writing' : taskType === 'document' ? 'document' : category,
       content_data: taskType === 'writing' ? {
         // ✅ CONTENIDO PARA WRITING
         type: 'writing',
@@ -193,6 +254,16 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         max_words: maxWords,
         resource_url: resourceUrl,
         resource_type: resourceType,
+        assignment_scope: {
+          type: assignType,
+          targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
+          targetName: assignType === 'individual' ? studentName : undefined
+        }
+      } : taskType === 'document' ? {
+        // ✅ CONTENIDO PARA DOCUMENT PDF
+        type: 'document',
+        pdf_url: pdfUrl,
+        instructions: pdfInstructions,
         assignment_scope: {
           type: assignType,
           targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
@@ -451,33 +522,45 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
           {/* META INFO */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
             
-            {/* ✅ SELECTOR DE TIPO: QUIZ VS WRITING */}
+            {/* ✅ SELECTOR DE TIPO: QUIZ VS WRITING VS DOCUMENT */}
             <div>
               <label className="text-xs font-black text-slate-600 uppercase mb-3 block">Tipo de Tarea</label>
-              <div className="flex gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={() => setTaskType('quiz')}
                   className={cn(
-                    "flex-1 py-4 px-3 sm:px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
+                    "py-4 px-2 sm:px-4 rounded-xl border-2 font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-2",
                     taskType === 'quiz'
                       ? "bg-indigo-100 border-indigo-500 text-indigo-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
                   )}
                 >
                   <CheckSquare className="w-5 h-5" />
-                  <span className="hidden sm:inline">Cuestionario</span>
+                  <span className="text-xs sm:text-sm">Cuestionario</span>
                 </button>
                 <button
                   onClick={() => setTaskType('writing')}
                   className={cn(
-                    "flex-1 py-4 px-3 sm:px-6 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-3",
+                    "py-4 px-2 sm:px-4 rounded-xl border-2 font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-2",
                     taskType === 'writing'
                       ? "bg-emerald-100 border-emerald-500 text-emerald-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300"
                   )}
                 >
                   <FileText className="w-5 h-5" />
-                  <span className="hidden sm:inline">Redacción</span>
+                  <span className="text-xs sm:text-sm">Redacción</span>
+                </button>
+                <button
+                  onClick={() => setTaskType('document')}
+                  className={cn(
+                    "py-4 px-2 sm:px-4 rounded-xl border-2 font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-2",
+                    taskType === 'document'
+                      ? "bg-amber-100 border-amber-500 text-amber-700 shadow-lg"
+                      : "bg-white border-slate-200 text-slate-600 hover:border-amber-300"
+                  )}
+                >
+                  <File className="w-5 h-5" />
+                  <span className="text-xs sm:text-sm">Doc. PDF</span>
                 </button>
               </div>
             </div>
@@ -620,6 +703,107 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                   value={dueDate}
                   onChange={e => setDueDate(e.target.value)}
                   className="bg-white border-2 border-emerald-300 h-10"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ✅ CONFIGURACIÓN ESPECÍFICA PARA DOCUMENT PDF */}
+          {taskType === 'document' && (
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-2xl shadow-sm border-2 border-amber-200 space-y-4">
+              <h3 className="font-black text-amber-900 flex items-center gap-2 text-lg">
+                <File className="w-5 h-5" />
+                Documento PDF
+              </h3>
+
+              <div>
+                <label className="text-xs font-black text-amber-800 uppercase mb-2 block">
+                  Archivo PDF
+                </label>
+                <div className="space-y-3">
+                  {!pdfUrl ? (
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        onChange={handlePdfUpload}
+                        disabled={isUploadingPdf}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        id="pdf-upload"
+                      />
+                      <label
+                        htmlFor="pdf-upload"
+                        className={cn(
+                          "flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed rounded-xl cursor-pointer transition-all",
+                          isUploadingPdf 
+                            ? "bg-amber-100 border-amber-400 cursor-not-allowed" 
+                            : "bg-white border-amber-300 hover:border-amber-500 hover:bg-amber-50"
+                        )}
+                      >
+                        {isUploadingPdf ? (
+                          <>
+                            <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+                            <span className="text-sm font-bold text-amber-700">Subiendo PDF...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-8 h-8 text-amber-600" />
+                            <div className="text-center">
+                              <span className="block text-sm font-bold text-amber-900">
+                                Haz clic para subir un PDF
+                              </span>
+                              <span className="block text-xs text-amber-600 mt-1">
+                                Máximo 10MB
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 p-4 bg-white border-2 border-amber-300 rounded-xl">
+                      <File className="w-8 h-8 text-amber-600" />
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-amber-900">PDF Cargado</p>
+                        <p className="text-xs text-amber-600 truncate">{pdfFile?.name || 'Archivo.pdf'}</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPdfUrl('');
+                          setPdfFile(null);
+                        }}
+                        className="text-rose-600 border-rose-300 hover:bg-rose-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-amber-800 uppercase mb-2 block">
+                  Instrucciones para el alumno
+                </label>
+                <Textarea
+                  value={pdfInstructions}
+                  onChange={e => setPdfInstructions(e.target.value)}
+                  className="bg-white border-2 border-amber-300 h-24 resize-none"
+                  placeholder="Ej: Lee el documento y completa las anotaciones según las instrucciones..."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-amber-800 uppercase mb-2 block">
+                  Fecha Límite (Opcional)
+                </label>
+                <Input
+                  type="date"
+                  value={dueDate}
+                  onChange={e => setDueDate(e.target.value)}
+                  className="bg-white border-2 border-amber-300 h-10"
                 />
               </div>
             </div>
