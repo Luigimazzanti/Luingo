@@ -20,23 +20,26 @@ export interface Annotation {
 
 interface PDFAnnotatorProps {
   pdfUrl: string;
-  initialData?: Annotation[];
-  teacherData?: Annotation[]; // ✅ Nueva capa: Anotaciones del profesor
-  readOnly?: boolean; // Si es true, no se puede editar nada (solo ver)
+  initialData?: Annotation[];      // Capa Alumno (fondo)
+  teacherData?: Annotation[];      // Capa Profesor (correcciones)
+  readOnly?: boolean;              // Si true, nadie edita nada
+  isTeacherMode?: boolean;         // ✅ NUEVO: Si true, edita teacherData en rojo
   onSave?: (data: Annotation[]) => void;
 }
 
-export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData = [], teacherData = [], readOnly = false, onSave }) => {
+export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData = [], teacherData = [], readOnly = false, isTeacherMode = false, onSave }) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [scale, setScale] = useState(1.0);
   
-  // Herramientas: 'select' (mover), 'pencil', 'text', 'eraser', 'hand' (navegar)
-  const [tool, setTool] = useState<'select' | 'pencil' | 'text' | 'eraser' | 'hand'>('select');
-  const [color, setColor] = useState('#EF4444'); 
+  // Herramientas: 'select' (mover), 'pencil', 'text', 'eraser'
+  const [tool, setTool] = useState<'select' | 'pencil' | 'text' | 'eraser'>('select');
   
-  // Datos
-  const [annotations, setAnnotations] = useState<Annotation[]>(initialData);
+  // ✅ Si es profesor, forzamos rojo. Si es alumno, color seleccionable
+  const [color, setColor] = useState(isTeacherMode ? '#EF4444' : '#000000'); 
+  
+  // ✅ Datos activos: si soy profe edito teacherData, si soy alumno edito initialData
+  const [activeAnnotations, setActiveAnnotations] = useState<Annotation[]>(isTeacherMode ? teacherData : initialData);
   
   // Estados de interacción
   const [isDrawing, setIsDrawing] = useState(false);
@@ -48,7 +51,13 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
-  const colors = ['#000000', '#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
+  // ✅ Colores para estudiantes (profesor siempre usa rojo)
+  const studentColors = ['#000000', '#2563EB', '#10B981', '#F59E0B'];
+
+  // ✅ Actualizar datos activos si cambian las props
+  useEffect(() => { 
+    setActiveAnnotations(isTeacherMode ? teacherData : initialData); 
+  }, [teacherData, initialData, isTeacherMode]);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -68,9 +77,9 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
 
   // --- HIT DETECTION (Para seleccionar) ---
   const findAnnotationAt = (x: number, y: number) => {
-    // Buscamos en orden inverso (el de más arriba)
-    for (let i = annotations.length - 1; i >= 0; i--) {
-      const ann = annotations[i];
+    // Buscamos en las anotaciones activas (las que estoy editando)
+    for (let i = activeAnnotations.length - 1; i >= 0; i--) {
+      const ann = activeAnnotations[i];
       if (ann.page !== currentPage) continue;
       
       if (ann.type === 'text') {
@@ -78,7 +87,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
         if (Math.abs((ann.x || 0) - x) < 50 && Math.abs((ann.y || 0) - y) < 20) return ann;
       } else if (ann.type === 'path' && ann.points) {
         // Distancia a cualquier punto del trazo
-        const hit = ann.points.some(p => Math.hypot(p.x - x, p.y - y) < 10);
+        const hit = ann.points.some(p => Math.hypot(p.x - x, p.y - y) < 15);
         if (hit) return ann;
       }
     }
@@ -109,16 +118,16 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
                 id: crypto.randomUUID(), type: 'text', content: text,
                 x, y, color, page: currentPage
             };
-            const next = [...annotations, newAnn];
-            setAnnotations(next);
+            const next = [...activeAnnotations, newAnn];
+            setActiveAnnotations(next);
             onSave?.(next);
             setTool('select'); // Auto-cambiar a select tras escribir
         }
     } else if (tool === 'eraser') {
         const target = findAnnotationAt(x, y);
         if (target) {
-            const next = annotations.filter(a => a.id !== target.id);
-            setAnnotations(next);
+            const next = activeAnnotations.filter(a => a.id !== target.id);
+            setActiveAnnotations(next);
             onSave?.(next);
         }
     }
@@ -132,7 +141,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
         const dx = x - dragStart.x;
         const dy = y - dragStart.y;
         
-        setAnnotations(prev => prev.map(ann => {
+        setActiveAnnotations(prev => prev.map(ann => {
             if (ann.id !== selectedId) return ann;
             // Mover anotación
             if (ann.type === 'text') {
@@ -152,19 +161,19 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
     if (isDragging) {
         setIsDragging(false);
         setDragStart(null);
-        onSave?.(annotations); // Guardar tras mover
+        onSave?.(activeAnnotations); // Guardar tras mover
     }
     if (isDrawing) {
         setIsDrawing(false);
-        if (currentPath.length > 0) {
+        if (currentPath.length > 2) { // Mínimo 3 puntos para trazo válido
             const newAnn: Annotation = {
                 id: crypto.randomUUID(), type: 'path', points: currentPath, color, page: currentPage
             };
-            const next = [...annotations, newAnn];
-            setAnnotations(next);
+            const next = [...activeAnnotations, newAnn];
+            setActiveAnnotations(next);
             onSave?.(next);
-            setCurrentPath([]);
         }
+        setCurrentPath([]);
     }
   };
 
@@ -181,47 +190,55 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
     ctx.lineJoin = 'round';
 
     // Helper para dibujar una anotación
-    const drawAnn = (ann: Annotation, isTeacher: boolean) => {
+    const drawAnn = (ann: Annotation, isBackground: boolean = false) => {
         if (ann.page !== currentPage) return;
         
-        // Estilo especial si está seleccionada
-        const isSelected = ann.id === selectedId;
-        const drawColor = isSelected ? '#2563EB' : ann.color; // Azul si seleccionado
+        // Estilo especial si está seleccionada (solo para activeAnnotations)
+        const isSelected = !isBackground && ann.id === selectedId;
+        const drawColor = isSelected ? '#2563EB' : ann.color;
+        const opacity = isBackground ? 0.5 : 1.0; // Fondo más transparente
 
         if (ann.type === 'path' && ann.points) {
             ctx.beginPath();
+            ctx.globalAlpha = opacity;
             ctx.strokeStyle = drawColor;
-            ctx.lineWidth = isTeacher ? 4 : 3; // Profesor trazo más grueso
+            ctx.lineWidth = 3;
             ctx.moveTo(ann.points[0].x, ann.points[0].y);
             ann.points.forEach(p => ctx.lineTo(p.x, p.y));
             ctx.stroke();
+            ctx.globalAlpha = 1.0;
             
             // Borde de selección
             if (isSelected) {
-                ctx.shadowColor = 'rgba(0,0,0,0.3)';
-                ctx.shadowBlur = 5;
+                ctx.shadowColor = 'rgba(37, 99, 235, 0.5)';
+                ctx.shadowBlur = 8;
                 ctx.stroke();
                 ctx.shadowBlur = 0;
             }
         } else if (ann.type === 'text' && ann.content) {
-            ctx.font = isTeacher ? 'bold 18px sans-serif' : 'bold 16px sans-serif';
+            ctx.globalAlpha = opacity;
+            ctx.font = 'bold 16px sans-serif';
             ctx.fillStyle = drawColor;
             ctx.fillText(ann.content, ann.x || 0, ann.y || 0);
+            ctx.globalAlpha = 1.0;
             
             if (isSelected) {
                 const width = ctx.measureText(ann.content).width;
                 ctx.strokeStyle = '#2563EB';
-                ctx.lineWidth = 1;
+                ctx.lineWidth = 2;
                 ctx.strokeRect((ann.x || 0) - 2, (ann.y || 0) - 16, width + 4, 20);
             }
         }
     };
 
-    // 1. Dibujar anotaciones del alumno (Capa base)
-    annotations.forEach(ann => drawAnn(ann, false));
+    // ✅ LÓGICA DE CAPAS:
+    // 1. Si soy profesor → Ver anotaciones del alumno de fondo
+    if (isTeacherMode) {
+        initialData.forEach(ann => drawAnn(ann, true)); // Capa de fondo (alumno)
+    }
 
-    // 2. Dibujar anotaciones del profesor (Capa superior, solo lectura visual para alumno)
-    teacherData.forEach(ann => drawAnn(ann, true));
+    // 2. Dibujar mis anotaciones activas (editables)
+    activeAnnotations.forEach(ann => drawAnn(ann, false));
 
     // 3. Dibujar trazo actual
     if (currentPath.length > 0) {
@@ -250,12 +267,23 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({ pdfUrl, initialData 
                     <Button variant={tool==='eraser'?'default':'ghost'} size="icon" onClick={()=>setTool('eraser')} title="Borrador"><Eraser className="w-4 h-4"/></Button>
                 </div>
             )}
-            <div className="h-6 w-px bg-slate-300 mx-2"></div>
-            {/* Colores */}
-            {!readOnly && (
-                <div className="flex gap-1">
-                    {colors.map(c => <button key={c} onClick={()=>setColor(c)} className={cn("w-5 h-5 rounded-full border transition-transform", color===c?"scale-125 border-slate-800":"border-transparent")} style={{backgroundColor: c}}/>)}
-                </div>
+            {!readOnly && !isTeacherMode && (
+                <>
+                    <div className="h-6 w-px bg-slate-300 mx-2"></div>
+                    {/* Colores para estudiantes */}
+                    <div className="flex gap-1">
+                        {studentColors.map(c => <button key={c} onClick={()=>setColor(c)} className={cn("w-5 h-5 rounded-full border-2 transition-transform", color===c?"scale-125 border-slate-800":"border-slate-300")} style={{backgroundColor: c}}/>)}
+                    </div>
+                </>
+            )}
+            {/* ✅ Badge de modo profesor */}
+            {isTeacherMode && !readOnly && (
+                <>
+                    <div className="h-6 w-px bg-slate-300 mx-2"></div>
+                    <div className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                        <Pencil className="w-3 h-3"/> Modo Corrección
+                    </div>
+                </>
             )}
         </div>
 
