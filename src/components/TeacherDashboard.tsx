@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Task, Classroom, Submission, User } from '../types';
 import { StudentCard } from './StudentCard';
-import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock } from 'lucide-react';
+import { Users, QrCode, Sparkles, Plus, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -177,7 +177,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 onClick={onCreateManual}
                 className="gap-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold shadow-md flex-1 sm:flex-none"
               >
-                <Sparkles className="w-4 h-4" />
+                <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">Crear Manual</span>
                 <span className="sm:hidden">Manual</span>
               </Button>
@@ -307,7 +307,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       Crear con IA
                     </Button>
                     <Button onClick={onCreateManual} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
-                      <Sparkles className="w-4 h-4" />
+                      <Plus className="w-4 h-4" />
                       Crear Manual
                     </Button>
                   </div>
