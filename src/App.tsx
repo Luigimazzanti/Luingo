@@ -66,7 +66,7 @@ export default function App() {
   
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [activeExercise, setActiveExercise] = useState<Exercise | null>(null);
-  const [activePDFTask, setActivePDFTask] = useState<Task | null>(null); 
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null); // ✅ RENOMBRADO: activePDFTask → selectedTask (para unificar con handlers)
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   
   // ✅ NUEVOS ESTADOS PARA WRITING

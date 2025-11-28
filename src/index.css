@@ -776,6 +776,10 @@
     }
   }
 
+  .m-0 {
+    margin: calc(var(--spacing) * 0);
+  }
+
   .-mx-3 {
     margin-inline: calc(var(--spacing) * -3);
   }
@@ -1065,6 +1069,10 @@
     max-height: 90vh;
   }
 
+  .min-h-0 {
+    min-height: calc(var(--spacing) * 0);
+  }
+
   .min-h-16 {
     min-height: calc(var(--spacing) * 16);
   }
@@ -1193,6 +1201,10 @@
     width: 1px;
   }
 
+  .w-screen {
+    width: 100vw;
+  }
+
   .max-w-2xl {
     max-width: var(--container-2xl);
   }
@@ -1215,6 +1227,10 @@
 
   .max-w-\[95vw\] {
     max-width: 95vw;
+  }
+
+  .max-w-\[100vw\] {
+    max-width: 100vw;
   }
 
   .max-w-\[120px\] {
@@ -1304,12 +1320,32 @@
     animation: var(--animate-spin);
   }
 
+  .cursor-copy {
+    cursor: copy;
+  }
+
+  .cursor-crosshair {
+    cursor: crosshair;
+  }
+
+  .cursor-default {
+    cursor: default;
+  }
+
   .cursor-not-allowed {
     cursor: not-allowed;
   }
 
   .cursor-pointer {
     cursor: pointer;
+  }
+
+  .cursor-text {
+    cursor: text;
+  }
+
+  .touch-none {
+    touch-action: none;
   }
 
   .resize {
@@ -1512,6 +1548,10 @@
     border-radius: calc(var(--radius)  - 2px);
   }
 
+  .rounded-none {
+    border-radius: 0;
+  }
+
   .rounded-xl {
     border-radius: calc(var(--radius)  + 4px);
   }
@@ -1608,6 +1648,11 @@
   .border-dashed {
     --tw-border-style: dashed;
     border-style: dashed;
+  }
+
+  .border-none {
+    --tw-border-style: none;
+    border-style: none;
   }
 
   .border-amber-100 {
@@ -1998,6 +2043,16 @@
     background-color: var(--color-slate-100);
   }
 
+  .bg-slate-100\/50 {
+    background-color: color-mix(in srgb, oklch(.968 .007 247.896) 50%, transparent);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-slate-100\/50 {
+      background-color: color-mix(in oklab, var(--color-slate-100) 50%, transparent);
+    }
+  }
+
   .bg-slate-200 {
     background-color: var(--color-slate-200);
   }
@@ -2356,6 +2411,10 @@
 
   .px-0\.5 {
     padding-inline: calc(var(--spacing) * .5);
+  }
+
+  .px-1 {
+    padding-inline: calc(var(--spacing) * 1);
   }
 
   .px-2 {

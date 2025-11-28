@@ -20,8 +20,14 @@ import { PDFAnnotation } from '../types';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// Configurar worker de PDF.js
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+// ✅ Configuración robusta del worker para evitar errores de CORS y Módulos
+try {
+  // Usamos una versión fija si pdfjs.version no está definida, y forzamos HTTPS + .mjs
+  const pdfVersion = pdfjs.version || '4.4.168'; 
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfVersion}/build/pdf.worker.min.mjs`;
+} catch (e) {
+  console.error("Error configuring PDF worker:", e);
+}
 
 type Tool = 'select' | 'pen' | 'text' | 'eraser' | 'stamp-check' | 'stamp-x';
 
@@ -46,14 +52,17 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
   const [currentTool, setCurrentTool] = useState<Tool>('select');
   const [scale, setScale] = useState<number>(1.0);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [currentPath, setCurrentPath] = useState<string>('');
+  const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]); // ✅ Array de coordenadas
   const [history, setHistory] = useState<PDFAnnotation[][]>([initialAnnotations]);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [error, setError] = useState<string>('');
   
   const canvasRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null); // ✅ NUEVO: Ref al contenedor de interacción
   const svgRef = useRef<SVGSVGElement>(null);
+  const tool = currentTool; // ✅ Alias para simplificar
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -88,32 +97,77 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
     }
   };
 
-  // Convertir coordenadas del mouse a porcentajes relativos
-  const getRelativePosition = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!canvasRef.current) return { x: 0, y: 0 };
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    return { x, y };
+  // ✅ REESCRITA: Función de coordenadas a prueba de balas
+  const getRelativeCoords = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!containerRef.current) return { x: 0, y: 0 };
+    
+    // Obtenemos el rectángulo EXACTO del contenedor (el div sobre el PDF)
+    const rect = containerRef.current.getBoundingClientRect();
+    
+    // Obtenemos coordenadas del cliente (mouse o touch)
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+    // Calculamos la posición relativa restando el offset del contenedor
+    // Esto corrige el desfase por scroll o márgenes
+    const relativeX = clientX - rect.left;
+    const relativeY = clientY - rect.top;
+
+    // Convertimos a porcentaje con 2 decimales de precisión
+    return {
+      x: Number(((relativeX / rect.width) * 100).toFixed(2)),
+      y: Number(((relativeY / rect.height) * 100).toFixed(2))
+    };
   };
 
-  // Handlers de dibujo
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+  // ✅ REESCRITO: Handlers con bloqueo de permisos y prevención de scroll
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
     if (readOnly) return;
     
-    const pos = getRelativePosition(e);
+    // Prevenir scroll en móviles al dibujar
+    if (tool === 'pen') e.preventDefault();
+    
+    const coords = getRelativeCoords(e);
 
-    if (currentTool === 'pen') {
+    // 1. Lógica para herramienta SELECCIONAR (Mover)
+    if (tool === 'select') {
+      const target = e.target as HTMLElement;
+      // Buscamos el ID del elemento clickeado
+      const clickedId = target.closest('[data-annotation-id]')?.getAttribute('data-annotation-id');
+      
+      if (clickedId) {
+        // ✅ SI ES PROFESOR: Bloquear mover anotaciones que venían en 'initialAnnotations' (las del alumno)
+        const isInitial = initialAnnotations.some(a => a.id === clickedId);
+        if (mode === 'teacher' && isInitial) {
+          return; // No hacer nada, es del alumno
+        }
+        
+        setDraggingId(clickedId);
+        setSelectedAnnotation(clickedId);
+        return;
+      }
+      
+      // Si no hay anotación, deseleccionar
+      setSelectedAnnotation(null);
+      return;
+    }
+
+    // 2. Lógica para herramienta LÁPIZ
+    if (tool === 'pen') {
       setIsDrawing(true);
-      setCurrentPath(`M ${pos.x} ${pos.y}`);
-    } else if (currentTool === 'text') {
+      setCurrentPath([coords]);
+      return;
+    }
+    
+    // 3. Lógica para TEXTO
+    if (tool === 'text') {
       const content = prompt('Escribe tu anotación:');
       if (content) {
         const newAnnotation: PDFAnnotation = {
           id: `text-${Date.now()}`,
           type: 'text',
-          x: pos.x,
-          y: pos.y,
+          x: coords.x,
+          y: coords.y,
           content,
           color: mode === 'teacher' ? '#ef4444' : '#3b82f6',
           author: mode,
@@ -123,24 +177,32 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
         setAnnotations(newAnnotations);
         saveToHistory(newAnnotations);
       }
-    } else if (currentTool === 'stamp-check' || currentTool === 'stamp-x') {
+      return;
+    }
+    
+    // 4. Lógica para SELLOS
+    if (tool === 'stamp-check' || tool === 'stamp-x') {
       const newAnnotation: PDFAnnotation = {
         id: `stamp-${Date.now()}`,
         type: 'stamp',
-        x: pos.x,
-        y: pos.y,
-        content: currentTool === 'stamp-check' ? 'check' : 'x',
-        color: currentTool === 'stamp-check' ? '#22c55e' : '#ef4444',
+        x: coords.x,
+        y: coords.y,
+        content: tool === 'stamp-check' ? 'check' : 'x',
+        color: tool === 'stamp-check' ? '#22c55e' : '#ef4444',
         author: mode,
         timestamp: new Date().toISOString()
       };
       const newAnnotations = [...annotations, newAnnotation];
       setAnnotations(newAnnotations);
       saveToHistory(newAnnotations);
-    } else if (currentTool === 'eraser') {
+      return;
+    }
+    
+    // 5. Lógica para BORRADOR
+    if (tool === 'eraser') {
       // Buscar anotación cercana y eliminarla
       const clicked = annotations.find(ann => {
-        const distance = Math.sqrt(Math.pow(ann.x - pos.x, 2) + Math.pow(ann.y - pos.y, 2));
+        const distance = Math.sqrt(Math.pow(ann.x - coords.x, 2) + Math.pow(ann.y - coords.y, 2));
         return distance < 5; // 5% de tolerancia
       });
       if (clicked) {
@@ -148,31 +210,42 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
         setAnnotations(newAnnotations);
         saveToHistory(newAnnotations);
       }
-    } else if (currentTool === 'select') {
-      // Seleccionar anotación
-      const clicked = annotations.find(ann => {
-        const distance = Math.sqrt(Math.pow(ann.x - pos.x, 2) + Math.pow(ann.y - pos.y, 2));
-        return distance < 5;
-      });
-      setSelectedAnnotation(clicked?.id || null);
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDrawing || currentTool !== 'pen') return;
-    
-    const pos = getRelativePosition(e);
-    setCurrentPath(prev => `${prev} L ${pos.x} ${pos.y}`);
+  // ✅ MEJORADO: handleMouseMove con soporte para arrastrar Y dibujar
+  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+    const coords = getRelativeCoords(e);
+
+    // A. Moviendo una anotación
+    if (draggingId && tool === 'select') {
+      setAnnotations(prev => prev.map(ann => 
+        ann.id === draggingId ? { ...ann, x: coords.x, y: coords.y } : ann
+      ));
+      return;
+    }
+
+    // B. Dibujando con lápiz
+    if (isDrawing && tool === 'pen') {
+      setCurrentPath(prev => [...prev, coords]);
+    }
   };
 
+  // ✅ MEJORADO: handleMouseUp con limpieza de estado de arrastre
   const handleMouseUp = () => {
-    if (isDrawing && currentTool === 'pen' && currentPath) {
+    // Guardar trazo del lápiz si existe
+    if (isDrawing && tool === 'pen' && currentPath.length > 1) {
+      // Convertir array de coordenadas a pathData SVG
+      const pathData = currentPath.map((p, i) => 
+        i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`
+      ).join(' ');
+      
       const newAnnotation: PDFAnnotation = {
         id: `path-${Date.now()}`,
         type: 'path',
         x: 0,
         y: 0,
-        pathData: currentPath,
+        pathData,
         color: mode === 'teacher' ? '#ef4444' : '#3b82f6',
         author: mode,
         timestamp: new Date().toISOString()
@@ -180,9 +253,16 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
       const newAnnotations = [...annotations, newAnnotation];
       setAnnotations(newAnnotations);
       saveToHistory(newAnnotations);
-      setCurrentPath('');
+      setCurrentPath([]);
     }
+    
+    // Guardar en historial si se movió una anotación
+    if (draggingId) {
+      saveToHistory(annotations);
+    }
+    
     setIsDrawing(false);
+    setDraggingId(null); // ✅ Soltar elemento
   };
 
   // Eliminar anotación seleccionada
@@ -389,17 +469,24 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                 {/* Renderizar anotaciones guardadas */}
                 {annotations.map(ann => {
                   if (ann.type === 'path') {
+                    // ✅ Bloquear interacción con paths del alumno si el profesor está dibujando
+                    const isStudentAnnotation = ann.author === 'student';
+                    const blockInteraction = mode === 'teacher' && isStudentAnnotation && tool !== 'select';
+                    
                     return (
                       <path
                         key={ann.id}
+                        data-annotation-id={ann.id}
                         d={ann.pathData}
                         stroke={ann.color}
                         strokeWidth="2"
                         fill="none"
-                        opacity={selectedAnnotation === ann.id ? 0.5 : 0.8}
+                        opacity={blockInteraction ? 0.4 : (selectedAnnotation === ann.id ? 0.5 : 0.8)}
                         className={cn(
+                          blockInteraction ? "pointer-events-none" : "pointer-events-auto cursor-pointer",
                           selectedAnnotation === ann.id && 'drop-shadow-lg'
                         )}
+                        onClick={() => !readOnly && !blockInteraction && setSelectedAnnotation(ann.id)}
                       />
                     );
                   }
@@ -407,9 +494,11 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                 })}
 
                 {/* Trazo actual mientras se dibuja */}
-                {isDrawing && currentPath && (
+                {isDrawing && currentPath.length > 0 && (
                   <path
-                    d={currentPath}
+                    d={currentPath.map((p, i) => 
+                      i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`
+                    ).join(' ')}
                     stroke={mode === 'teacher' ? '#ef4444' : '#3b82f6'}
                     strokeWidth="2"
                     fill="none"
@@ -418,15 +507,44 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                 )}
               </svg>
 
+              {/* ✅ CRÍTICO: Capa de captura de eventos con containerRef y cursores dinámicos */}
+              {!readOnly && (
+                <div 
+                  ref={containerRef}
+                  className={cn(
+                    "absolute inset-0 z-50 touch-none",
+                    tool === 'pen' && "cursor-crosshair",
+                    tool === 'text' && "cursor-text",
+                    tool === 'eraser' && "cursor-not-allowed",
+                    tool === 'select' && "cursor-default",
+                    tool === 'stamp-check' && "cursor-copy",
+                    tool === 'stamp-x' && "cursor-copy"
+                  )}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onTouchStart={handleMouseDown}
+                  onTouchMove={handleMouseMove}
+                  onTouchEnd={handleMouseUp}
+                />
+              )}
+
               {/* Capa de textos y sellos */}
               <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 11 }}>
                 {annotations.map(ann => {
                   if (ann.type === 'text') {
+                    // ✅ Bloquear interacción con anotaciones del alumno si el profesor está dibujando
+                    const isStudentAnnotation = ann.author === 'student';
+                    const blockInteraction = mode === 'teacher' && isStudentAnnotation && tool !== 'select';
+                    
                     return (
                       <div
                         key={ann.id}
+                        data-annotation-id={ann.id}
                         className={cn(
-                          "absolute px-2 py-1 rounded text-sm font-medium shadow-md pointer-events-auto cursor-pointer",
+                          "absolute px-2 py-1 rounded text-sm font-medium shadow-md",
+                          blockInteraction ? "pointer-events-none" : "pointer-events-auto cursor-pointer",
                           selectedAnnotation === ann.id && 'ring-2 ring-offset-2 ring-indigo-500'
                         )}
                         style={{
@@ -434,33 +552,45 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                           top: `${ann.y}%`,
                           backgroundColor: ann.color === '#ef4444' ? '#fee2e2' : '#dbeafe',
                           color: ann.color,
-                          transform: 'translate(-50%, -50%)'
+                          transform: 'translate(-50%, -50%)',
+                          opacity: blockInteraction ? 0.6 : 1
                         }}
-                        onClick={() => setSelectedAnnotation(ann.id)}
+                        onClick={() => !blockInteraction && setSelectedAnnotation(ann.id)}
                       >
                         {ann.content}
                       </div>
                     );
                   } else if (ann.type === 'stamp') {
                     const Icon = ann.content === 'check' ? CheckCircle2 : XCircle;
+                    
+                    // ✅ Bloquear interacción con anotaciones del alumno si el profesor está dibujando
+                    const isStudentAnnotation = ann.author === 'student';
+                    const blockInteraction = mode === 'teacher' && isStudentAnnotation && tool !== 'select';
+                    
                     return (
                       <div
                         key={ann.id}
+                        data-annotation-id={ann.id}
                         className={cn(
-                          "absolute pointer-events-auto cursor-pointer",
+                          "absolute",
+                          blockInteraction ? "pointer-events-none" : "pointer-events-auto cursor-pointer",
                           selectedAnnotation === ann.id && 'ring-2 ring-offset-2 ring-indigo-500 rounded-full'
                         )}
                         style={{
                           left: `${ann.x}%`,
                           top: `${ann.y}%`,
-                          transform: 'translate(-50%, -50%)'
+                          transform: 'translate(-50%, -50%)',
+                          opacity: blockInteraction ? 0.6 : 1
                         }}
-                        onClick={() => setSelectedAnnotation(ann.id)}
+                        onClick={() => !blockInteraction && setSelectedAnnotation(ann.id)}
                       >
+                        {/* ✅ MEJORADO: Sellos con mejor contraste y visibilidad */}
                         <Icon 
-                          className="w-8 h-8 drop-shadow-lg" 
-                          style={{ color: ann.color }}
-                          fill={ann.color}
+                          className={cn(
+                            "w-12 h-12 drop-shadow-lg",
+                            ann.content === 'check' ? "text-green-600" : "text-red-600"
+                          )}
+                          fill="white"
                         />
                       </div>
                     );

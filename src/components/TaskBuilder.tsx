@@ -63,7 +63,18 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   const [resourceType, setResourceType] = useState<'image' | 'video' | 'pdf' | 'none'>(
     initialData?.content_data?.resource_type || 'none'
   );
-  const [dueDate, setDueDate] = useState(initialData?.due_date || ''); // ✅ FECHA LÍMITE
+  
+  // ✅ FECHA LÍMITE CON PARSEO ROBUSTO (Fix para input type="date")
+  const [dueDate, setDueDate] = useState(() => {
+    const rawDate = initialData?.due_date || initialData?.content_data?.due_date;
+    if (!rawDate) return '';
+    // Convertir a formato YYYY-MM-DD compatible con <input type="date">
+    try {
+      return new Date(rawDate).toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  });
 
   // ✅ NUEVO: Estados para Document PDF
   const [pdfFile, setPdfFile] = useState<File | null>(null);

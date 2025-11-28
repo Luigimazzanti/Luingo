@@ -370,39 +370,48 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
       </div>
 
-      {/* ========== MODAL DE CORRECCIÓN ========== */}
+      {/* ========== MODAL DE CORRECCIÓN (PANTALLA COMPLETA REAL) ========== */}
       <Dialog open={!!selectedGroup} onOpenChange={(o) => !o && setSelectedGroup(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-slate-800">
-              Calificar: {selectedGroup?.student_name}
-            </DialogTitle>
-            <p className="text-sm text-slate-500 mt-1">
-              {selectedGroup?.task_title}
-            </p>
+        <DialogContent className="max-w-[100vw] w-screen h-screen p-0 m-0 rounded-none border-none flex flex-col bg-slate-100/50 backdrop-blur-sm">
+          <DialogHeader className="px-6 py-4 bg-white border-b shrink-0 h-16 flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle className="text-2xl font-black text-slate-800">
+                Calificar: {selectedGroup?.student_name}
+              </DialogTitle>
+              <p className="text-sm text-slate-500 mt-1">
+                {selectedGroup?.task_title}
+              </p>
+            </div>
           </DialogHeader>
 
-          {selectedGroup && (
-            <Tabs defaultValue={`attempt-${selectedGroup.attempts.length - 1}`}>
-              <TabsList className="w-full justify-start overflow-x-auto">
-                {selectedGroup.attempts.map((_: any, i: number) => (
-                  <TabsTrigger key={i} value={`attempt-${i}`} className="gap-2">
-                    <span className="hidden sm:inline">Intento</span>
-                    {i + 1}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+          {/* ✅ CONTENEDOR FLEX-1 PARA LLENAR ESPACIO */}
+          <div className="flex-1 overflow-auto px-6 py-4">
+            {selectedGroup && (
+              <Tabs defaultValue={`attempt-${selectedGroup.attempts.length - 1}`}>
+                <TabsList className="w-full justify-start overflow-x-auto">
+                  {selectedGroup.attempts.map((_: any, i: number) => (
+                    <TabsTrigger key={i} value={`attempt-${i}`} className="gap-2">
+                      <span className="hidden sm:inline">Intento</span>
+                      {i + 1}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
 
-              {selectedGroup.attempts.map((att: any, i: number) => (
-                <TabsContent
-                  key={i}
-                  value={`attempt-${i}`}
-                  className="space-y-6 mt-4"
-                >
-                  {/* Información del Intento */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <div className="flex justify-between items-center">
-                      <div>
+                {selectedGroup.attempts.map((att: any, i: number) => {
+                  // ✅ Detectar si es documento PDF para aplicar layout especial
+                  const relatedTaskTemp = tasks.find(t => t.id === selectedGroup.task_id);
+                  const isDocumentTaskTemp = relatedTaskTemp?.content_data?.type === 'document';
+                  
+                  return (
+                    <TabsContent
+                      key={i}
+                      value={`attempt-${i}`}
+                      className={isDocumentTaskTemp ? "flex flex-col h-full mt-4" : "space-y-6 mt-4"}
+                    >
+                      {/* Información del Intento */}
+                      <div className={isDocumentTaskTemp ? "bg-slate-50 p-4 rounded-xl border border-slate-200 shrink-0" : "bg-slate-50 p-4 rounded-xl border border-slate-200"}>
+                        <div className="flex justify-between items-center">
+                          <div>
                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">
                           Fecha de Entrega
                         </p>
@@ -417,13 +426,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         <p className="text-3xl font-black text-emerald-600">
                           {att.grade.toFixed(1)}
                         </p>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                      </div>
 
-                  {/* VISOR DOCUMENTO PDF */}
+                      {/* VISOR DOCUMENTO PDF */}
                   {(() => {
-                    const relatedTask = tasks.find(t => t.id === group.task_id);
+                    // ✅ CORRECCIÓN: Usar 'selectedGroup' en lugar de 'group'
+                    const relatedTask = tasks.find(t => t.id === selectedGroup.task_id);
                     const isDocumentTask = relatedTask?.content_data?.type === 'document';
                     const pdfUrl = relatedTask?.content_data?.pdf_url;
                     
@@ -435,12 +445,23 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       const allAnnotations = [...studentAnnotations, ...teacherAnnotations];
                       
                       return (
-                        <div className="mb-6">
-                          <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-3">
-                            <FileText className="w-4 h-4" />
-                            Documento PDF con Anotaciones
-                          </h4>
-                          <div className="bg-white rounded-xl border-2 border-slate-200 overflow-hidden" style={{ height: '600px' }}>
+                        <div className="flex flex-col h-full">
+                          <div className="flex items-center justify-between mb-3 px-1">
+                            <h4 className="font-bold text-slate-700 flex items-center gap-2">
+                              <FileText className="w-4 h-4" />
+                              Documento PDF con Anotaciones
+                            </h4>
+                            <div className="flex items-center gap-4 text-xs">
+                              <span className="text-blue-600 font-bold">
+                                📝 Estudiante: {studentAnnotations.length}
+                              </span>
+                              <span className="text-red-600 font-bold">
+                                ✏️ Profesor: {teacherAnnotations.length}
+                              </span>
+                            </div>
+                          </div>
+                          {/* ✅ MEJORADO: Contenedor flex-1 para usar todo el espacio disponible */}
+                          <div className="flex-1 bg-white rounded-xl border-2 border-slate-200 overflow-hidden min-h-0">
                             <PDFAnnotator
                               mode="teacher"
                               pdfUrl={pdfUrl}
@@ -453,14 +474,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                                 toast.success('✅ Anotaciones del profesor guardadas');
                               }}
                             />
-                          </div>
-                          <div className="mt-3 flex items-center justify-between text-xs px-2">
-                            <span className="text-blue-600 font-bold">
-                              📝 Anotaciones del estudiante: {studentAnnotations.length}
-                            </span>
-                            <span className="text-red-600 font-bold">
-                              ✏️ Correcciones del profesor: {teacherAnnotations.length}
-                            </span>
                           </div>
                         </div>
                       );
@@ -632,10 +645,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       )}
                     </Button>
                   </div>
-                </TabsContent>
-              ))}
+                    </TabsContent>
+                  );
+                })}
             </Tabs>
           )}
+          </div>
         </DialogContent>
       </Dialog>
 
