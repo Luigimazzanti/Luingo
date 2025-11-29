@@ -23,6 +23,7 @@ export interface PDFAnnotation {
   height?: number; // Para texto
   strokeWidth?: number; // ✅ FIX: Grosor del trazo para lápiz
   fontSize?: number; // ✅ FIX: Tamaño de fuente para texto
+  scale?: number; // ✅ FIX: Escala para sellos (0.6=Pequeño, 1.0=Medio, 1.5=Grande)
   timestamp?: string;
   author?: string; // 'student' o 'teacher'
 }

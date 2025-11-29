@@ -21,6 +21,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './components/ui/dialog';
 import { Toaster, toast } from 'sonner@2.0.3';
 import luingoLogo from 'figma:asset/5c3aee031df4e645d2ea41499714325beb9cd4f4.png';
+import { createClient } from '@supabase/supabase-js';
+import { projectId, publicAnonKey } from './utils/supabase/info';
 
 // ========== LÓGICA DE RACHA (STREAK) ==========
 const checkStreak = (): number => {
@@ -355,10 +357,43 @@ export default function App() {
     if (!window.confirm("¿Estás seguro de eliminar esta tarea?")) return;
     
     try {
+      // ✅ NUEVO: Buscar la tarea para verificar si tiene PDF adjunto
+      const taskToDelete = tasks.find(t => t.id === taskId);
+      
+      // ✅ BORRADO FÍSICO DEL PDF EN SUPABASE
+      if (taskToDelete?.content_data?.type === 'document' && taskToDelete.content_data.pdf_url) {
+        try {
+          const fileUrl = taskToDelete.content_data.pdf_url;
+          // Extraer la ruta relativa después de '/assignments/'
+          const path = fileUrl.split('/assignments/')[1];
+          
+          if (path) {
+            const supabase = createClient(
+              `https://${projectId}.supabase.co`,
+              publicAnonKey
+            );
+            
+            const { error: storageError } = await supabase.storage
+              .from('assignments')
+              .remove([path]);
+            
+            if (storageError) {
+              console.warn("⚠️ Error al borrar PDF de Supabase:", storageError);
+            } else {
+              console.log("🗑️ PDF eliminado de Supabase:", path);
+            }
+          }
+        } catch (e) {
+          console.error("❌ Error al intentar borrar archivo de Supabase:", e);
+          // No bloqueamos la eliminación de la tarea si falla el borrado del archivo
+        }
+      }
+      
+      // Continuar con el borrado de la tarea en Moodle
       await deleteMoodleTask(taskId);
       const updatedTasks = await getMoodleTasks();
       setTasks(updatedTasks);
-      toast.success("Tarea eliminada");
+      toast.success("Tarea eliminada correctamente");
     } catch (error) {
       console.error("Error al eliminar tarea:", error);
       toast.error("Error al eliminar la tarea");
@@ -747,66 +782,133 @@ export default function App() {
         )}
 
         {/* ========== PDF ANNOTATOR (DOCUMENTO PDF) ========== */}
-        {view === 'pdf-annotator' && selectedTask && selectedTask.content_data?.type === 'document' && (
-          <div className="h-screen flex flex-col">
-            {/* Header */}
-            <div className="bg-white border-b border-slate-200 p-4">
-              <div className="max-w-7xl mx-auto flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => {
-                      setSelectedTask(null);
-                      setView('dashboard');
-                    }}
-                  >
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Volver
-                  </Button>
-                  <div>
-                    <h1 className="font-black text-xl text-slate-800">{selectedTask.title}</h1>
-                    <p className="text-sm text-slate-500">{selectedTask.content_data.instructions}</p>
+        {view === 'pdf-annotator' && selectedTask && selectedTask.content_data?.type === 'document' && (() => {
+          // ✅ RECUPERACIÓN ROBUSTA DE BORRADORES: Buscar el último intento (draft o submitted)
+          const userSubmissions = realSubmissions.filter(s => 
+            s.task_id === selectedTask.id && 
+            (String(s.student_id) === String(currentUser?.id) || s.student_name === currentUser?.name)
+          );
+          
+          // Priorizar draft, si no existe buscar el último submitted
+          const lastDraft = userSubmissions.find(s => s.status === 'draft');
+          const lastSubmitted = userSubmissions.find(s => s.status === 'submitted' || s.status === 'graded');
+          const lastAttempt = lastDraft || lastSubmitted;
+          
+          // ✅ RECUPERAR ANOTACIONES: Prioridad pdf_annotations, fallback a answers (por compatibilidad)
+          const recoveredAnnotations = lastAttempt?.pdf_annotations || lastAttempt?.answers || [];
+          
+          console.log('📂 Recuperando borrador PDF:', {
+            total_submissions: userSubmissions.length,
+            last_draft: !!lastDraft,
+            last_submitted: !!lastSubmitted,
+            annotations_count: recoveredAnnotations.length,
+            status: lastAttempt?.status
+          });
+          
+          return (
+            <div className="h-screen flex flex-col">
+              {/* Header */}
+              <div className="bg-white border-b border-slate-200 p-4">
+                <div className="max-w-7xl mx-auto flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => {
+                        setSelectedTask(null);
+                        setView('dashboard');
+                      }}
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Volver
+                    </Button>
+                    <div>
+                      <h1 className="font-black text-xl text-slate-800">{selectedTask.title}</h1>
+                      <p className="text-sm text-slate-500">{selectedTask.content_data.instructions}</p>
+                      {lastAttempt && (
+                        <p className="text-xs text-indigo-600 font-bold mt-1">
+                          ✨ Borrador recuperado ({recoveredAnnotations.length} anotaciones)
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* PDF Annotator */}
-            <div className="flex-1">
-              <PDFAnnotator
-                mode="student"
-                pdfUrl={selectedTask.content_data.pdf_url || ''}
-                initialAnnotations={
-                  realSubmissions.find(s => 
-                    s.task_id === selectedTask.id && 
-                    (String(s.student_id) === String(currentUser?.id) || s.student_name === currentUser?.name)
-                  )?.pdf_annotations || []
-                }
-                onSave={async (annotations) => {
-                  if (currentUser && selectedTask) {
-                    await submitTaskResult(
-                      selectedTask.id,
-                      selectedTask.title,
-                      currentUser.id,
-                      currentUser.name,
-                      0, // Score 0, esperando corrección
-                      10,
-                      annotations as any, // Guardamos anotaciones en el campo answers
-                      '', // No hay text_content
-                      'submitted',
-                      []
-                    );
-                    
-                    await loadSubmissions();
-                    toast.success('✅ Anotaciones guardadas correctamente');
-                    setSelectedTask(null);
-                    setView('dashboard');
-                  }
-                }}
-              />
+              {/* PDF Annotator */}
+              <div className="flex-1">
+                <PDFAnnotator
+                  mode="student"
+                  pdfUrl={selectedTask.content_data.pdf_url || ''}
+                  initialAnnotations={recoveredAnnotations}
+                  onSaveDraft={async (annotations) => {
+                    if (currentUser && selectedTask) {
+                      // ✅ VALIDACIÓN: No guardar si está vacío (evitar "intentos vacíos")
+                      if (annotations.length === 0) {
+                        toast.warning('⚠️ No hay anotaciones para guardar. Añade notas al documento primero.');
+                        return;
+                      }
+                      
+                      console.log('💾 Guardando borrador con', annotations.length, 'anotaciones');
+                      
+                      await submitTaskResult(
+                        selectedTask.id,
+                        selectedTask.title,
+                        currentUser.id,
+                        currentUser.name,
+                        0, // Score 0, esperando corrección
+                        10,
+                        annotations as any,
+                        '', // No hay text_content
+                        'draft', // <--- IMPORTANTE: Status 'draft' activa la lógica de actualización en el backend
+                        [], // No hay corrections
+                        annotations as any
+                      );
+                      
+                      // 🔥 RECARGAR DATOS PARA QUE LA APP SEPA QUE EXISTE EL BORRADOR
+                      await loadSubmissions();
+                      toast.success('✅ Avance guardado. Puedes continuar más tarde.')
+                    }
+                  }}
+                  onSave={async (annotations) => {
+                    if (currentUser && selectedTask) {
+                      // ✅ VALIDACIÓN: No enviar si está vacío
+                      if (annotations.length === 0) {
+                        toast.error('❌ No puedes entregar una tarea vacía. Añade anotaciones primero.');
+                        return;
+                      }
+                      
+                      // ✅ CONFIRMACIÓN: Prevenir entregas accidentales
+                      if (!window.confirm('¿Estás seguro de entregar la tarea final? Ya no podrás editarla.')) {
+                        return;
+                      }
+                      
+                      console.log('🚀 Entregando tarea con', annotations.length, 'anotaciones');
+                      
+                      await submitTaskResult(
+                        selectedTask.id,
+                        selectedTask.title,
+                        currentUser.id,
+                        currentUser.name,
+                        0, // Score 0, esperando corrección
+                        10,
+                        annotations as any,
+                        '', // No hay text_content
+                        'submitted', // <--- IMPORTANTE: Status 'submitted' cierra la tarea
+                        [], // No hay corrections
+                        annotations as any
+                      );
+                      
+                      await loadSubmissions(); // Refrescar datos
+                      setSelectedTask(null);
+                      setView('dashboard'); // Salir
+                      toast.success('🚀 Tarea entregada con éxito');
+                    }
+                  }}
+                />
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </main>
     </div>
   );

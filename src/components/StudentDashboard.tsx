@@ -17,6 +17,7 @@ import {
 import { cn } from '../lib/utils';
 import { CommunityFeed } from './community/CommunityFeed';
 import { TextAnnotator } from './TextAnnotator';
+import { PDFAnnotator } from './PDFAnnotator';
 
 interface StudentDashboardProps {
   student: Student;
@@ -56,6 +57,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   const pendingTasks = tasks.filter(t => {
     const status = getTaskStatus(t.id);
+    
+    // 🔥 LÓGICA ESPECÍFICA PARA PDFs: Siempre mostrar como pendiente si tiene borrador
+    if (t.content_data?.type === 'document') {
+      // Si es PDF, siempre mostrar como pendiente a menos que esté 'submitted' o 'graded'
+      // Esto permite reabrir borradores infinitamente.
+      if (status === 'draft' || status === 'assigned' || !status) return true;
+      return false;
+    }
     
     if (status === 'submitted' || status === 'graded') return false;
     
@@ -218,8 +227,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       {/* VISOR DE DETALLES (RESUMEN) */}
       <Dialog open={!!selectedSubmission} onOpenChange={(o) => !o && setSelectedSubmission(null)}>
-        <DialogContent className="w-[95%] max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl p-0 bg-slate-50 border-0">
-          <DialogHeader className="p-6 bg-white border-b border-slate-100 sticky top-0 z-10">
+        <DialogContent className="!max-w-[100vw] !w-screen !h-screen !p-0 !m-0 !rounded-none border-none flex flex-col bg-slate-50">
+          {/* El contenido interno debe poder hacer scroll */}
+          <div className="flex-1 overflow-y-auto">
+            <DialogHeader className="p-6 bg-white border-b border-slate-100 sticky top-0 z-50 shadow-sm">
             <div className="flex justify-between items-start gap-4">
               <div className="flex-1">
                 <DialogTitle className="text-xl font-black text-slate-800">{selectedSubmission?.task_title}</DialogTitle>
@@ -237,87 +248,149 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </DialogHeader>
           
           <div className="p-6 space-y-6">
-            {/* FEEDBACK DEL PROFESOR */}
-            {selectedSubmission?.teacher_feedback && selectedSubmission.teacher_feedback.length > 0 && (
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-2xl border-2 border-indigo-200 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center text-white shrink-0 text-lg">
-                    👨‍🏫
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-black text-indigo-900 mb-2 text-sm uppercase tracking-wide">
-                      Comentarios del Profesor
-                    </h4>
-                    <p className="text-slate-700 leading-relaxed font-medium">
-                      "{selectedSubmission.teacher_feedback}"
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* ✅ RENDERIZADO CONDICIONAL: PDF vs WRITING vs QUIZ (Feedback incluido en cada caso) */}
+            {(() => {
+              // Encontrar la tarea relacionada
+              const relatedTask = tasks.find(t => t.id === selectedSubmission?.task_id);
+              const isPdfTask = relatedTask?.content_data?.type === 'document';
 
-            {/* VISOR DE REDACCIÓN */}
-            {selectedSubmission?.textContent && selectedSubmission.textContent.length > 0 && (
-              <div className="bg-white p-0 rounded-2xl border-2 border-indigo-100 shadow-sm overflow-hidden">
-                <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-indigo-600"/>
-                  <h4 className="font-black text-indigo-900 text-xs uppercase tracking-wider">Tu Redacción Corregida</h4>
-                </div>
-                <div className="p-4">
-                  <TextAnnotator 
-                    text={selectedSubmission.textContent} 
-                    annotations={selectedSubmission.corrections || []} 
-                    onAddAnnotation={()=>{}} 
-                    onRemoveAnnotation={()=>{}} 
-                    readOnly={true} 
-                  />
-                </div>
-              </div>
-            )}
+              // CASO 1: Tarea de Documento PDF
+              if (isPdfTask && relatedTask?.content_data?.pdf_url) {
+                const studentAnnotations = selectedSubmission?.answers || [];
+                const teacherAnnotations = selectedSubmission?.teacher_annotations || [];
+                const allAnnotations = [...studentAnnotations, ...teacherAnnotations];
 
-            {/* LISTA DE RESPUESTAS */}
-            {selectedSubmission?.answers && selectedSubmission.answers.length > 0 && (
-              selectedSubmission.answers.map((ans: any, i: number) => (
-                <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                  <p className="font-bold text-slate-700 text-sm mb-3 flex gap-2">
-                    <span className="bg-slate-100 text-slate-500 w-6 h-6 rounded flex items-center justify-center text-xs shrink-0">{i+1}</span>
-                    {ans.questionText || "Pregunta"}
-                  </p>
-                  <div className="space-y-3">
-                    <div className={cn(
-                      "p-3 rounded-xl text-sm border-l-4",
-                      ans.isCorrect ? 'bg-emerald-50 border-emerald-400 text-emerald-900' : 'bg-rose-50 border-rose-400 text-rose-900'
-                    )}>
-                      <div className="flex items-center gap-2 mb-1 font-black text-[10px] opacity-60 uppercase">
-                        {ans.isCorrect ? <CheckCircle2 className="w-3 h-3"/> : <XCircle className="w-3 h-3"/>}
-                        Tu Respuesta:
-                      </div>
-                      <div className="font-medium">{String(ans.studentAnswer || '---')}</div>
-                    </div>
-                    {!ans.isCorrect && ans.correctAnswer && (
-                      <div className="p-3 rounded-xl text-sm bg-slate-50 border-l-4 border-slate-300 text-slate-600">
-                        <span className="font-black text-[10px] opacity-60 uppercase block mb-1">Solución Correcta:</span>
-                        <div className="font-medium">{String(ans.correctAnswer)}</div>
+                return (
+                  <>
+                    {/* ✅ NUEVO: Comentario del profesor ANTES del PDF */}
+                    {selectedSubmission?.teacher_feedback && (
+                      <div className="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex gap-3">
+                        <div className="text-2xl">👨‍🏫</div>
+                        <div>
+                          <h4 className="font-bold text-indigo-900 text-xs uppercase mb-1">Feedback del Profesor</h4>
+                          <p className="text-slate-700 text-sm font-medium leading-relaxed">
+                            {selectedSubmission.teacher_feedback}
+                          </p>
+                        </div>
                       </div>
                     )}
-                  </div>
-                </div>
-              ))
-            )}
 
-            {/* Mensaje si no hay respuestas ni texto */}
-            {(!selectedSubmission?.answers || selectedSubmission.answers.length === 0) && 
-             (!selectedSubmission?.textContent || selectedSubmission.textContent.length === 0) && (
-              <div className="text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
-                No hay detalles de respuestas guardados para este intento.
-              </div>
-            )}
-          </div>
-          
-          <div className="p-4 bg-white border-t border-slate-100 flex justify-end">
-            <Button onClick={() => setSelectedSubmission(null)} variant="outline" className="border-slate-200">
-              Cerrar
-            </Button>
+                    {/* ✅ FIX: Contenedor del PDF con z-0 para crear nuevo stacking context */}
+                    <div className="bg-white p-0 rounded-2xl border-2 border-indigo-100 shadow-sm overflow-hidden relative z-0">
+                      <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-indigo-600"/>
+                        <h4 className="font-black text-indigo-900 text-xs uppercase tracking-wider">Documento PDF Corregido</h4>
+                      </div>
+                      <div className="h-[500px] relative z-0">
+                        <PDFAnnotator
+                          mode="student"
+                          pdfUrl={relatedTask.content_data.pdf_url}
+                          initialAnnotations={allAnnotations}
+                          readOnly={true}
+                        />
+                      </div>
+                    </div>
+                  </>
+                );
+              }
+
+              // CASO 2: Tarea de Redacción (WRITING)
+              if (selectedSubmission?.textContent && selectedSubmission.textContent.length > 0) {
+                return (
+                  <>
+                    {/* ✅ NUEVO: Comentario del profesor ANTES de la redacción */}
+                    {selectedSubmission?.teacher_feedback && (
+                      <div className="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex gap-3">
+                        <div className="text-2xl">👨‍🏫</div>
+                        <div>
+                          <h4 className="font-bold text-indigo-900 text-xs uppercase mb-1">Feedback del Profesor</h4>
+                          <p className="text-slate-700 text-sm font-medium leading-relaxed">
+                            {selectedSubmission.teacher_feedback}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="bg-white p-0 rounded-2xl border-2 border-indigo-100 shadow-sm overflow-hidden">
+                      <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-indigo-600"/>
+                        <h4 className="font-black text-indigo-900 text-xs uppercase tracking-wider">Tu Redacción Corregida</h4>
+                      </div>
+                      <div className="p-4">
+                        <TextAnnotator 
+                          text={selectedSubmission.textContent} 
+                          annotations={selectedSubmission.corrections || []} 
+                          onAddAnnotation={()=>{}} 
+                          onRemoveAnnotation={()=>{}} 
+                          readOnly={true} 
+                        />
+                      </div>
+                    </div>
+                  </>
+                );
+              }
+
+              // CASO 3: Tarea de Cuestionario (QUIZ)
+              if (selectedSubmission?.answers && selectedSubmission.answers.length > 0) {
+                return (
+                  <>
+                    {/* ✅ NUEVO: Comentario del profesor ANTES del quiz */}
+                    {selectedSubmission?.teacher_feedback && (
+                      <div className="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex gap-3">
+                        <div className="text-2xl">👨‍🏫</div>
+                        <div>
+                          <h4 className="font-bold text-indigo-900 text-xs uppercase mb-1">Feedback del Profesor</h4>
+                          <p className="text-slate-700 text-sm font-medium leading-relaxed">
+                            {selectedSubmission.teacher_feedback}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedSubmission.answers.map((ans: any, i: number) => (
+                      <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                        <p className="font-bold text-slate-700 text-sm mb-3 flex gap-2">
+                          <span className="bg-slate-100 text-slate-500 w-6 h-6 rounded flex items-center justify-center text-xs shrink-0">{i+1}</span>
+                          {ans.questionText || "Pregunta"}
+                        </p>
+                        <div className="space-y-3">
+                          <div className={cn(
+                            "p-3 rounded-xl text-sm border-l-4",
+                            ans.isCorrect ? 'bg-emerald-50 border-emerald-400 text-emerald-900' : 'bg-rose-50 border-rose-400 text-rose-900'
+                          )}>
+                            <div className="flex items-center gap-2 mb-1 font-black text-[10px] opacity-60 uppercase">
+                              {ans.isCorrect ? <CheckCircle2 className="w-3 h-3"/> : <XCircle className="w-3 h-3"/>}
+                              Tu Respuesta:
+                            </div>
+                            <div className="font-medium">{String(ans.studentAnswer || '---')}</div>
+                          </div>
+                          {!ans.isCorrect && ans.correctAnswer && (
+                            <div className="p-3 rounded-xl text-sm bg-slate-50 border-l-4 border-slate-300 text-slate-600">
+                              <span className="font-black text-[10px] opacity-60 uppercase block mb-1">Solución Correcta:</span>
+                              <div className="font-medium">{String(ans.correctAnswer)}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                );
+              }
+
+              // CASO 4: Sin contenido
+              return (
+                <div className="text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
+                  No hay detalles de respuestas guardados para este intento.
+                </div>
+              );
+            })()}
+            </div>
+            
+            <div className="p-4 bg-white border-t border-slate-100 flex justify-end">
+              <Button onClick={() => setSelectedSubmission(null)} variant="outline" className="border-slate-200">
+                Cerrar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

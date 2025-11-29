@@ -130,7 +130,10 @@ export const getMoodleSubmissions = async () => {
           id: `post-${post.id}`, postId: post.id, discussionId: disc.discussion, task_id: json.taskId || 'unknown', task_title: json.taskTitle || disc.subject,
           student_id: json.studentId || '', student_name: json.studentName || disc.userfullname, grade: json.grade || 0, score: json.score || 0, total: json.total || 0,
           answers: json.answers || [], teacher_feedback: json.teacher_feedback || null, submitted_at: safeDate(post.created), status: json.status || 'submitted',
-          textContent: json.textContent || '', corrections: json.corrections || [], original_payload: json
+          textContent: json.textContent || '', corrections: json.corrections || [], 
+          pdf_annotations: json.pdf_annotations || [], // ✅ Anotaciones del alumno en PDF
+          teacher_annotations: json.teacher_annotations || [], // ✅ Anotaciones del profesor en PDF
+          original_payload: json
         };
       }).filter(Boolean);
     });
@@ -139,12 +142,51 @@ export const getMoodleSubmissions = async () => {
   }
   return allAttempts.sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
 };
-export const submitTaskResult = async (taskId: string, taskTitle: string, studentId: string, studentName: string, score: number, total: number, answers: any[], textContent?: string, status = 'submitted', corrections?: any[]) => {
-  const payload = { taskId, taskTitle, studentId, studentName, score, total, grade: (score/total)*10, answers, textContent, status, corrections, timestamp: new Date().toISOString() };
-  const messageHtml = `<div class="luingo-res">Result</div><span style="display:none;">[LUINGO_DATA]${JSON.stringify(payload)}[/LUINGO_DATA]</span>`;
+export const submitTaskResult = async (taskId: string, taskTitle: string, studentId: string, studentName: string, score: number, total: number, answers: any[], textContent?: string, status = 'submitted', corrections?: any[], pdfAnnotations?: any[]) => {
+  const payload = { 
+    taskId, taskTitle, studentId, studentName, score, total, 
+    grade: (score/total)*10, answers, textContent, status, corrections, 
+    pdf_annotations: pdfAnnotations, 
+    timestamp: new Date().toISOString() 
+  };
+  
+  const statusLabel = status === 'draft' ? '(Borrador)' : 'Result';
+  const messageHtml = `<div class="luingo-res">${statusLabel}</div><span style="display:none;">[LUINGO_DATA]${JSON.stringify(payload)}[/LUINGO_DATA]</span>`;
+  
+  // 1. Buscar la discusión
   const forumData = await callMoodle("mod_forum_get_forum_discussions", { forumid: SUBMISSIONS_FORUM_ID });
-  const existing = forumData?.discussions?.find((d: any) => d.subject === `Entrega: ${taskTitle} - ${studentName}`);
-  if (existing) return await callMoodle("mod_forum_add_discussion_post", { postid: existing.id, subject: "Re: Entrega", message: messageHtml });
+  const existingDisc = forumData?.discussions?.find((d: any) => d.subject === `Entrega: ${taskTitle} - ${studentName}`);
+
+  if (existingDisc) {
+    // 2. Buscar posts previos
+    const postsData = await callMoodle("mod_forum_get_discussion_posts", { discussionid: existingDisc.discussion });
+    
+    if (postsData?.posts && postsData.posts.length > 0) {
+       // Ordenar para tener el último
+       const sortedPosts = postsData.posts.sort((a: any, b: any) => Number(a.created) - Number(b.created));
+       const lastPost = sortedPosts[sortedPosts.length - 1];
+       
+       const match = lastPost.message.match(/\[LUINGO_DATA\]([\s\S]*?)\[\/LUINGO_DATA\]/);
+       const lastJson = match ? cleanMoodleJSON(match[1]) : null;
+
+       // 🔥 LÓGICA DE PROTECCIÓN:
+       // Si el último era BORRADOR, lo actualizamos (No creamos basura).
+       // Si el último ya fue ENTREGADO/CALIFICADO, solo entonces creamos uno nuevo (para quizzes multi-intento).
+       if (lastJson && lastJson.status === 'draft' && !lastJson.grade) {
+          console.log("📝 Actualizando borrador existente...");
+          return await callMoodle("mod_forum_update_discussion_post", { 
+             postid: lastPost.id, 
+             subject: `Entrega: ${taskTitle} - ${studentName}`, 
+             message: messageHtml 
+          });
+       }
+    }
+
+    // Crear nuevo post (Solo si no había borrador previo o el anterior ya se entregó)
+    return await callMoodle("mod_forum_add_discussion_post", { postid: existingDisc.id, subject: "Re: Entrega", message: messageHtml });
+  }
+
+  // Crear nueva discusión
   return await callMoodle("mod_forum_add_discussion", { forumid: SUBMISSIONS_FORUM_ID, subject: `Entrega: ${taskTitle} - ${studentName}`, message: messageHtml });
 };
 export const gradeSubmission = async (postId: string | number, grade: number, feedback: string, originalPayload: any, corrections?: any[]) => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student, Task, Classroom, Submission, User, PDFAnnotation } from '../types';
 import { StudentCard } from './StudentCard';
 import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText } from 'lucide-react';
@@ -50,6 +50,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   // ✅ ESTADO PARA ANOTACIONES DE TEXTO (WRITING)
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  
+  // ✅ ESTADO PARA ANOTACIONES PDF DEL PROFESOR (DOCUMENT TASKS)
+  const [currentPdfAnnotations, setCurrentPdfAnnotations] = useState<any[]>([]);
+
+  // ✅ Limpiar anotaciones PDF cuando cambie el grupo seleccionado
+  useEffect(() => {
+    if (selectedGroup) {
+      // Cargar las anotaciones existentes del profesor si existen
+      const existingTeacherAnnotations = selectedGroup.attempts[0]?.teacher_annotations || [];
+      setCurrentPdfAnnotations(existingTeacherAnnotations);
+    } else {
+      setCurrentPdfAnnotations([]);
+    }
+  }, [selectedGroup?.key]); // Usamos selectedGroup?.key para detectar cambios
 
   // ========== LÓGICA DE AGRUPACIÓN ROBUSTA CON FALLBACKS ==========
   const groupedSubmissions = submissions.reduce((acc: any, sub) => {
@@ -103,25 +117,51 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setIsGrading(true);
     
     try {
-      const safePayload = attempt.original_payload || {
+      // 1. Determinar las correcciones finales (Texto o PDF)
+      const finalCorrections = correctionsData || attempt.corrections || [];
+      // ✅ CRÍTICO: Usar currentPdfAnnotations (estado actual) en lugar de attempt.teacher_annotations (podría estar obsoleto)
+      const finalPdfAnnotations = currentPdfAnnotations.length > 0 ? currentPdfAnnotations : (attempt.teacher_annotations || []);
+
+      // ✅ PRESERVAR ANOTACIONES DEL ESTUDIANTE: Recuperar desde pdf_annotations o answers
+      const studentPdfAnnotations = (Array.isArray(attempt.pdf_annotations) && attempt.pdf_annotations.length > 0 
+        ? attempt.pdf_annotations 
+        : (Array.isArray(attempt.answers) ? attempt.answers : []));
+
+      console.log('📝 Guardando calificación:', {
+        grade: newGrade,
+        student_annotations: studentPdfAnnotations.length,
+        teacher_annotations: finalPdfAnnotations.length,
+        corrections: finalCorrections.length
+      });
+
+      // 2. Construir el payload fusionando datos viejos con LOS NUEVOS
+      const safePayload = {
+        ...(attempt.original_payload || {}), // Mantiene metadatos viejos
+        grade: newGrade,
+        teacher_feedback: feedbackInput,
+        // 🔥 SOBRESCRIBIMOS CRÍTICAMENTE CON LOS DATOS ACTUALES:
+        teacher_annotations: finalPdfAnnotations, 
+        corrections: finalCorrections,
+        status: 'graded',
+        graded_at: new Date().toISOString(),
+        // ✅ CRÍTICO: Asegurar que las anotaciones del estudiante se preserven
         taskId: attempt.task_id,
         taskTitle: attempt.task_title,
         studentId: attempt.student_id,
         studentName: attempt.student_name,
         score: attempt.score,
         total: attempt.total,
-        answers: attempt.answers,
+        answers: studentPdfAnnotations, // ✅ PRESERVAR anotaciones del estudiante
+        pdf_annotations: studentPdfAnnotations, // ✅ También guardar en pdf_annotations
         textContent: attempt.textContent,
-        teacher_annotations: attempt.teacher_annotations || [], // ✅ NUEVO: Anotaciones del profesor en PDF
         timestamp: attempt.submitted_at
       };
 
       const targetId = attempt.postId || attempt.id.replace('post-', '');
-      const finalCorrections = correctionsData || attempt.corrections || [];
       
       await gradeSubmission(targetId, newGrade, feedbackInput, safePayload, finalCorrections);
 
-      const correctionCount = finalCorrections.length + (attempt.teacher_annotations?.length || 0);
+      const correctionCount = finalCorrections.length + finalPdfAnnotations.length;
       toast.success(`✅ Calificación guardada (${correctionCount} anotaciones/correcciones)`);
       
       if (onRefreshSubmissions) {
@@ -432,11 +472,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   {/* VISOR DOCUMENTO PDF */}
                   {isDocumentTask && pdfUrl && (() => {
                     if (isDocumentTask && pdfUrl) {
-                      // Anotaciones del estudiante (guardadas en answers)
-                      const studentAnnotations = Array.isArray(att.answers) ? att.answers as PDFAnnotation[] : [];
-                      // Anotaciones del profesor (guardadas en teacher_annotations o corrections)
+                      // ✅ RECUPERACIÓN ROBUSTA: Prioridad pdf_annotations, fallback a answers
+                      const studentAnnotations = (Array.isArray(att.pdf_annotations) && att.pdf_annotations.length > 0 
+                        ? att.pdf_annotations 
+                        : (Array.isArray(att.answers) ? att.answers : [])) as PDFAnnotation[];
+                      
+                      // Anotaciones del profesor (guardadas en teacher_annotations)
                       const teacherAnnotations = (att.teacher_annotations || []) as PDFAnnotation[];
                       const allAnnotations = [...studentAnnotations, ...teacherAnnotations];
+                      
+                      console.log('👨‍🏫 Cargando PDF del profesor:', {
+                        student_annotations: studentAnnotations.length,
+                        teacher_annotations: teacherAnnotations.length,
+                        total: allAnnotations.length
+                      });
                       
                       return (
                         <div className="mb-6">
@@ -452,8 +501,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                               onSave={(newAnnotations) => {
                                 // Separar anotaciones del profesor de las del estudiante
                                 const teacherAnns = newAnnotations.filter(a => a.author === 'teacher');
+                                
+                                console.log('💾 Guardando correcciones del profesor:', {
+                                  total_annotations: newAnnotations.length,
+                                  teacher_only: teacherAnns.length,
+                                  student_preserved: studentAnnotations.length
+                                });
+                                
+                                // ✅ CRÍTICO: Actualizar estado local para que handleGrade lo capture
+                                setCurrentPdfAnnotations(teacherAnns);
+                                
+                                // También actualizar el objeto directamente (doble seguridad)
                                 att.teacher_annotations = teacherAnns;
-                                setAnnotations(teacherAnns as any);
+                                
+                                // Forzar actualización del estado para re-render
+                                if (selectedGroup) {
+                                  setSelectedGroup({ ...selectedGroup });
+                                }
+                                
                                 toast.success('✅ Anotaciones del profesor guardadas');
                               }}
                             />

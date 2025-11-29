@@ -12,7 +12,8 @@ import {
   Undo,
   Redo,
   Download,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Slider } from './ui/slider'; // ✅ FIX: Importar Slider para controles
@@ -37,6 +38,7 @@ interface PDFAnnotatorProps {
   pdfUrl: string;
   initialAnnotations?: PDFAnnotation[];
   onSave?: (annotations: PDFAnnotation[]) => void;
+  onSaveDraft?: (annotations: PDFAnnotation[]) => void;
   readOnly?: boolean;
 }
 
@@ -45,6 +47,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
   pdfUrl,
   initialAnnotations = [],
   onSave,
+  onSaveDraft,
   readOnly = false
 }) => {
   const [numPages, setNumPages] = useState<number>(0);
@@ -60,6 +63,10 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
   const [isDragging, setIsDragging] = useState(false); // ✅ FIX: Estado para mover anotaciones
   const [strokeWidth, setStrokeWidth] = useState<number>(0.5); // ✅ FIX: Grosor del lápiz
   const [fontSize, setFontSize] = useState<number>(16); // ✅ FIX: Tamaño del texto (renombrado de textSize a fontSize)
+  const [stampScale, setStampScale] = useState<number>(1); // Tamaño de sellos: 0.6=Pequeño, 1.0=Medio, 1.5=Grande
+  // ✅ ESTADOS SEPARADOS: Cada botón tiene su propio estado de carga
+  const [savingDraft, setSavingDraft] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -142,6 +149,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
         y: pos.y,
         content: currentTool === 'stamp-check' ? 'check' : 'x',
         color: currentTool === 'stamp-check' ? '#22c55e' : '#ef4444',
+        scale: stampScale,
         author: mode,
         timestamp: new Date().toISOString()
       };
@@ -248,10 +256,27 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
     }
   };
 
-  // Guardar anotaciones
-  const handleSave = () => {
+  // Guardar borrador (Draft)
+  const handleLocalSaveDraft = async () => {
+    if (onSaveDraft) {
+      setSavingDraft(true);
+      try { 
+        await onSaveDraft(annotations); 
+      } finally { 
+        setSavingDraft(false); 
+      }
+    }
+  };
+
+  // Entregar tarea final (Submit)
+  const handleLocalSubmit = async () => {
     if (onSave) {
-      onSave(annotations);
+      setSubmitting(true); // Bloquea la UI
+      try { 
+        await onSave(annotations); 
+      } finally { 
+        setSubmitting(false); 
+      }
     }
   };
 
@@ -363,6 +388,24 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
               </>
             )}
 
+            {(currentTool === 'stamp-check' || currentTool === 'stamp-x') && (
+              <>
+                <div className="w-px h-6 bg-slate-300" />
+                <div className="flex items-center gap-2 px-2">
+                  <span className="text-xs font-medium text-slate-600 whitespace-nowrap">Tamaño:</span>
+                  <select 
+                    value={stampScale} 
+                    onChange={(e) => setStampScale(Number(e.target.value))}
+                    className="h-8 px-2 text-xs border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value={0.6}>Pequeño</option>
+                    <option value={1.0}>Medio</option>
+                    <option value={1.5}>Grande</option>
+                  </select>
+                </div>
+              </>
+            )}
+
             {/* Zoom */}
             <div className="w-px h-6 bg-slate-300" />
             <Button
@@ -424,10 +467,66 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
             <div className="text-xs text-slate-500 font-medium">
               Alumno: {studentAnnotations.length} | Profesor: {teacherAnnotations.length}
             </div>
-            <Button onClick={handleSave} size="sm">
-              <Download className="w-4 h-4 mr-1" />
-              Guardar
-            </Button>
+            {mode === 'student' && onSaveDraft ? (
+              <>
+                {/* ✅ Botón Guardar Avance - Estado independiente */}
+                <Button 
+                  onClick={handleLocalSaveDraft} 
+                  size="sm" 
+                  variant="outline" 
+                  disabled={savingDraft || submitting} // Bloquear si algo está pasando
+                  className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  {savingDraft ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Guardar Avance
+                    </>
+                  )}
+                </Button>
+                {/* ✅ Botón Entregar - Estado independiente */}
+                <Button 
+                  onClick={handleLocalSubmit} 
+                  size="sm" 
+                  disabled={savingDraft || submitting}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Entregando...
+                    </>
+                  ) : (
+                    <>
+                      🚀 Entregar Tarea
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <Button 
+                onClick={handleLocalSubmit} 
+                size="sm" 
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Guardar
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -442,46 +541,43 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
               <p className="text-red-700 text-sm">{error}</p>
             </div>
           ) : (
-            <div
-              ref={canvasRef}
-              className="relative bg-white shadow-2xl rounded-lg overflow-hidden w-fit mx-auto"
-              style={{
-                cursor: currentTool === 'pen' ? 'crosshair' : 
-                        currentTool === 'text' ? 'text' :
-                        currentTool === 'eraser' ? 'not-allowed' :
-                        currentTool === 'select' ? 'move' : 'default'
-              }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-            >
-              {/* ✅ FIX CRÍTICO: w-fit + mx-auto centra y ajusta el contenedor al tamaño exacto del PDF, 
-                  evitando que las coordenadas relativas (%) se desalineen al hacer zoom */}
-              {/* ✅ FIX: Cursor dinámico según herramienta */}
-              {/* ✅ FIX: Eliminado transform: scale() para evitar doble escalado - solo Page maneja zoom */}
-              {/* PDF de fondo */}
-              <Document
-                file={pdfUrl}
-                onLoadSuccess={onDocumentLoadSuccess}
-                onLoadError={onDocumentLoadError}
-                loading={
-                  <div className="flex items-center justify-center h-96 bg-slate-100">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-                      <p className="text-slate-600 font-medium">Cargando PDF...</p>
-                    </div>
-                  </div>
-                }
+            <div className="relative w-fit mx-auto bg-white shadow-2xl rounded-lg overflow-hidden border border-slate-200">
+              <div
+                ref={canvasRef}
+                className="relative"
+                style={{
+                  cursor: currentTool === 'pen' ? 'crosshair' : 
+                          currentTool === 'text' ? 'text' :
+                          currentTool === 'eraser' ? 'not-allowed' :
+                          currentTool === 'select' ? 'move' : 'default'
+                }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
               >
-                <Page 
-                  pageNumber={pageNumber} 
-                  scale={scale}
-                  renderTextLayer={true}
-                  renderAnnotationLayer={false}
-                />
-                {/* ✅ FIX: scale prop sincroniza zoom con anotaciones */}
-              </Document>
+                {/* PDF de fondo */}
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={onDocumentLoadError}
+                  loading={
+                    <div className="flex items-center justify-center h-96 bg-slate-100">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                        <p className="text-slate-600 font-medium">Cargando PDF...</p>
+                      </div>
+                    </div>
+                  }
+                >
+                  <Page 
+                    pageNumber={pageNumber} 
+                    scale={scale}
+                    className="block"
+                    renderTextLayer={true}
+                    renderAnnotationLayer={false}
+                  />
+                </Document>
 
               {/* Capa de anotaciones SVG */}
               <svg
@@ -564,7 +660,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                         style={{
                           left: `${ann.x}%`,
                           top: `${ann.y}%`,
-                          transform: `translate(-50%, -50%) scale(${scale})`,
+                          transform: `translate(-50%, -50%) scale(${(ann.scale || 1) * scale})`,
                           zIndex: 20
                         }}
                         onClick={() => setSelectedAnnotation(ann.id)}
@@ -583,6 +679,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                   return null;
                 })}
               </div>
+            </div>
             </div>
           )}
 

@@ -10,6 +10,7 @@ import { cn } from '../lib/utils';
 import { deleteMoodlePost, gradeSubmission } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 import { TextAnnotator } from './TextAnnotator';
+import { PDFAnnotator } from './PDFAnnotator';
 
 interface StudentPassportProps {
   student: Student;
@@ -38,6 +39,8 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
   const [editingFeedback, setEditingFeedback] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [currentCorrections, setCurrentCorrections] = useState<any[]>([]); // ✅ NUEVO: Estado local para correcciones
+  const [isEditingPdf, setIsEditingPdf] = useState(false); // ✅ NUEVO: Estado para editar PDF
+  const [pdfAnnotations, setPdfAnnotations] = useState<any[]>([]); // ✅ NUEVO: Anotaciones PDF locales
 
   // ✅ PRECARGAR DATOS AL ABRIR MODAL
   useEffect(() => {
@@ -45,6 +48,11 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
       setEditingGrade(selectedSubmission.grade?.toString() || '0');
       setEditingFeedback(selectedSubmission.teacher_feedback || '');
       setCurrentCorrections(selectedSubmission.corrections || []); // ✅ CARGAR CORRECCIONES
+      setIsEditingPdf(false); // ✅ RESETEAR MODO EDICIÓN PDF
+      // ✅ CARGAR ANOTACIONES PDF (combinar estudiante + profesor)
+      const studentAnnotations = selectedSubmission.answers || [];
+      const teacherAnnotations = selectedSubmission.teacher_annotations || [];
+      setPdfAnnotations([...studentAnnotations, ...teacherAnnotations]);
     }
   }, [selectedSubmission]);
 
@@ -122,13 +130,18 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
       // Usar postId o limpiar el id
       const targetId = selectedSubmission.postId || selectedSubmission.id.replace('post-', '');
       
+      // ✅ Determinar qué correcciones usar (PDF o Writing)
+      const relatedTask = tasks.find(t => t.id === selectedSubmission.task_id);
+      const isPdfTask = relatedTask?.content_data?.type === 'document';
+      const correctionsToSave = isPdfTask ? pdfAnnotations : currentCorrections;
+      
       // ✅ PASAR EL PAYLOAD COMPLETO + CORRECCIONES ACTUALIZADAS
       await gradeSubmission(
         targetId, 
         grade, 
         editingFeedback, 
         safePayload, 
-        currentCorrections // ✅ USAR ESTADO LOCAL DE CORRECCIONES
+        correctionsToSave
       );
       
       toast.dismiss();
@@ -309,8 +322,10 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
 
       {/* ========== ✅ MODAL DE DETALLES (PROFESOR) - ALINEADO CON DASHBOARD ========== */}
       <Dialog open={!!selectedSubmission} onOpenChange={(o) => !o && setSelectedSubmission(null)}>
-        <DialogContent className="w-[95%] max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl p-0">
-          <DialogHeader className="p-6 bg-slate-50 border-b border-slate-100">
+        <DialogContent className="!max-w-[100vw] !w-screen !h-screen !p-0 !m-0 !rounded-none border-none flex flex-col bg-slate-50">
+          {/* El contenido interno debe poder hacer scroll */}
+          <div className="flex-1 overflow-y-auto">
+            <DialogHeader className="p-6 bg-white border-b border-slate-100 sticky top-0 z-50 shadow-sm">
             <DialogTitle className="text-xl font-black text-slate-800">
               {selectedSubmission?.task_title}
             </DialogTitle>
@@ -358,76 +373,127 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
               </div>
             )}
 
-            {/* ✅ BLOQUE DE REDACCIÓN CON TEXT ANNOTATOR (Si existe textContent) */}
-            {selectedSubmission?.textContent && selectedSubmission.textContent.length > 0 ? (
-              <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
-                  <BookOpen className="w-5 h-5 text-indigo-600" />
-                  <h4 className="font-black text-slate-800 text-sm uppercase tracking-wide">
-                    Texto de Redacción {selectedSubmission.corrections && selectedSubmission.corrections.length > 0 && '(con correcciones del profesor)'}
-                  </h4>
-                </div>
-                <TextAnnotator 
-                  text={selectedSubmission.textContent}
-                  annotations={selectedSubmission.corrections || []}
-                  onAddAnnotation={handleAddCorrection} // ✅ USAR HANDLER
-                  onRemoveAnnotation={handleRemoveCorrection} // ✅ USAR HANDLER
-                  onUpdateAnnotation={handleUpdateCorrection} // ✅ USAR HANDLER
-                  readOnly={!isTeacher} // ✅ HACER EDITABLE SOLO PARA PROFESOR
-                />
-                <div className="mt-4 pt-4 border-t border-slate-300 flex items-center justify-between text-xs">
-                  <span className="text-slate-600 font-bold">
-                    Palabras: {selectedSubmission.textContent.split(/\s+/).filter((w: string) => w.length > 0).length}
-                  </span>
-                  <span className="text-slate-600 font-bold">
-                    Caracteres: {selectedSubmission.textContent.length}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* ✅ RESPUESTAS (Solo si NO hay textContent) */}
-                {selectedSubmission?.answers && selectedSubmission.answers.length > 0 ? (
-                  selectedSubmission.answers.map((ans: any, i: number) => (
-                    <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                      <p className="font-bold text-slate-700 text-sm mb-3">
-                        {i + 1}. {ans.questionText}
-                      </p>
-                      
-                      <div className="space-y-2">
-                        {/* Respuesta del Estudiante */}
-                        <div className={cn(
-                          "p-3 rounded-lg text-sm border-l-4",
-                          ans.isCorrect 
-                            ? "bg-emerald-50 border-emerald-400 text-emerald-900" 
-                            : "bg-rose-50 border-rose-400 text-rose-900"
-                        )}>
-                          <span className="text-[10px] font-black opacity-60 uppercase block mb-1">
-                            Respuesta del Alumno:
-                          </span>
-                          {String(ans.studentAnswer || '---')}
-                        </div>
-                        
-                        {/* Solución Correcta (solo si es incorrecta) */}
-                        {!ans.isCorrect && (
-                          <div className="p-3 rounded-lg text-sm bg-slate-50 border-l-4 border-slate-300 text-slate-600">
-                            <span className="text-[10px] font-black opacity-60 uppercase block mb-1">
-                              Solución Correcta:
-                            </span>
-                            {String(ans.correctAnswer || 'Consultar profesor')}
-                          </div>
-                        )}
+            {/* ✅ RENDERIZADO CONDICIONAL: PDF vs WRITING vs QUIZ */}
+            {(() => {
+              // Encontrar la tarea relacionada
+              const relatedTask = tasks.find(t => t.id === selectedSubmission?.task_id);
+              const isPdfTask = relatedTask?.content_data?.type === 'document';
+
+              // CASO 1: Tarea de Documento PDF
+              if (isPdfTask && relatedTask?.content_data?.pdf_url) {
+                return (
+                  <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="w-5 h-5 text-indigo-600" />
+                        <h4 className="font-black text-slate-800 text-sm uppercase tracking-wide">
+                          Documento PDF con Anotaciones
+                        </h4>
                       </div>
+                      {/* ✅ BOTÓN DE EDICIÓN (Solo para profesor) */}
+                      {isTeacher && (
+                        <Button
+                          onClick={() => setIsEditingPdf(!isEditingPdf)}
+                          variant={isEditingPdf ? "default" : "outline"}
+                          size="sm"
+                          className={cn(
+                            "text-xs font-bold",
+                            isEditingPdf && "bg-indigo-600 hover:bg-indigo-700"
+                          )}
+                        >
+                          {isEditingPdf ? "💾 Modo Edición Activo" : "✏️ Editar Corrección"}
+                        </Button>
+                      )}
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-10">
-                    <BookOpen className="w-12 h-12 text-slate-200 mx-auto mb-3"/>
-                    <p className="text-slate-400">No hay detalles guardados para este intento.</p>
+                    <div className="h-[500px] rounded-xl overflow-hidden border border-slate-300">
+                      <PDFAnnotator
+                        mode="teacher"
+                        pdfUrl={relatedTask.content_data.pdf_url}
+                        initialAnnotations={pdfAnnotations}
+                        readOnly={!isEditingPdf}
+                        onSave={(newAnnotations) => setPdfAnnotations(newAnnotations)}
+                      />
+                    </div>
                   </div>
-                )}
-              </>
-            )}
+                );
+              }
+
+              // CASO 2: Tarea de Redacción (WRITING)
+              if (selectedSubmission?.textContent && selectedSubmission.textContent.length > 0) {
+                return (
+                  <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <BookOpen className="w-5 h-5 text-indigo-600" />
+                      <h4 className="font-black text-slate-800 text-sm uppercase tracking-wide">
+                        Texto de Redacción {selectedSubmission.corrections && selectedSubmission.corrections.length > 0 && '(con correcciones del profesor)'}
+                      </h4>
+                    </div>
+                    <TextAnnotator 
+                      text={selectedSubmission.textContent}
+                      annotations={selectedSubmission.corrections || []}
+                      onAddAnnotation={handleAddCorrection}
+                      onRemoveAnnotation={handleRemoveCorrection}
+                      onUpdateAnnotation={handleUpdateCorrection}
+                      readOnly={!isTeacher}
+                    />
+                    <div className="mt-4 pt-4 border-t border-slate-300 flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-bold">
+                        Palabras: {selectedSubmission.textContent.split(/\s+/).filter((w: string) => w.length > 0).length}
+                      </span>
+                      <span className="text-slate-600 font-bold">
+                        Caracteres: {selectedSubmission.textContent.length}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // CASO 3: Tarea de Cuestionario (QUIZ)
+              if (selectedSubmission?.answers && selectedSubmission.answers.length > 0) {
+                return (
+                  <>
+                    {selectedSubmission.answers.map((ans: any, i: number) => (
+                      <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="font-bold text-slate-700 text-sm mb-3">
+                          {i + 1}. {ans.questionText}
+                        </p>
+                        
+                        <div className="space-y-2">
+                          <div className={cn(
+                            "p-3 rounded-lg text-sm border-l-4",
+                            ans.isCorrect 
+                              ? "bg-emerald-50 border-emerald-400 text-emerald-900" 
+                              : "bg-rose-50 border-rose-400 text-rose-900"
+                          )}>
+                            <span className="text-[10px] font-black opacity-60 uppercase block mb-1">
+                              Respuesta del Alumno:
+                            </span>
+                            {String(ans.studentAnswer || '---')}
+                          </div>
+                          
+                          {!ans.isCorrect && (
+                            <div className="p-3 rounded-lg text-sm bg-slate-50 border-l-4 border-slate-300 text-slate-600">
+                              <span className="text-[10px] font-black opacity-60 uppercase block mb-1">
+                                Solución Correcta:
+                              </span>
+                              {String(ans.correctAnswer || 'Consultar profesor')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                );
+              }
+
+              // CASO 4: Sin contenido
+              return (
+                <div className="text-center py-10">
+                  <BookOpen className="w-12 h-12 text-slate-200 mx-auto mb-3"/>
+                  <p className="text-slate-400">No hay detalles guardados para este intento.</p>
+                </div>
+              );
+            })()}
           </div>
           
           {/* ✅ SECCIÓN DE EDICIÓN (MODO PROFESOR) */}
@@ -461,12 +527,13 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                 </Button>
               </div>
             </div>
-          )}
-          
-          <div className="p-4 border-t border-slate-100 flex justify-end">
-            <Button onClick={() => setSelectedSubmission(null)}>
-              Cerrar
-            </Button>
+            )}
+            
+            <div className="p-4 bg-white border-t border-slate-100 flex justify-end">
+              <Button onClick={() => setSelectedSubmission(null)}>
+                Cerrar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
