@@ -21,6 +21,8 @@ export interface PDFAnnotation {
   pathData?: string; // Para trazos SVG
   width?: number; // Para texto
   height?: number; // Para texto
+  strokeWidth?: number; // ✅ FIX: Grosor del trazo para lápiz
+  fontSize?: number; // ✅ FIX: Tamaño de fuente para texto
   timestamp?: string;
   author?: string; // 'student' o 'teacher'
 }

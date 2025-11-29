@@ -15,6 +15,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { Button } from './ui/button';
+import { Slider } from './ui/slider'; // ✅ FIX: Importar Slider para controles
 import { cn } from '../lib/utils';
 import { PDFAnnotation } from '../types';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -52,17 +53,17 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
   const [currentTool, setCurrentTool] = useState<Tool>('select');
   const [scale, setScale] = useState<number>(1.0);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]); // ✅ Array de coordenadas
+  const [currentPath, setCurrentPath] = useState<string>('');
   const [history, setHistory] = useState<PDFAnnotation[][]>([initialAnnotations]);
   const [historyIndex, setHistoryIndex] = useState<number>(0);
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false); // ✅ FIX: Estado para mover anotaciones
+  const [strokeWidth, setStrokeWidth] = useState<number>(0.5); // ✅ FIX: Grosor del lápiz
+  const [fontSize, setFontSize] = useState<number>(16); // ✅ FIX: Tamaño del texto (renombrado de textSize a fontSize)
   const [error, setError] = useState<string>('');
   
   const canvasRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null); // ✅ NUEVO: Ref al contenedor de interacción
   const svgRef = useRef<SVGSVGElement>(null);
-  const tool = currentTool; // ✅ Alias para simplificar
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -97,79 +98,35 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
     }
   };
 
-  // ✅ REESCRITA: Función de coordenadas a prueba de balas
-  const getRelativeCoords = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!containerRef.current) return { x: 0, y: 0 };
-    
-    // Obtenemos el rectángulo EXACTO del contenedor (el div sobre el PDF)
-    const rect = containerRef.current.getBoundingClientRect();
-    
-    // Obtenemos coordenadas del cliente (mouse o touch)
-    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-
-    // Calculamos la posición relativa restando el offset del contenedor
-    // Esto corrige el desfase por scroll o márgenes
-    const relativeX = clientX - rect.left;
-    const relativeY = clientY - rect.top;
-
-    // Convertimos a porcentaje con 2 decimales de precisión
-    return {
-      x: Number(((relativeX / rect.width) * 100).toFixed(2)),
-      y: Number(((relativeY / rect.height) * 100).toFixed(2))
-    };
+  // Convertir coordenadas del mouse a porcentajes relativos
+  const getRelativePosition = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    return { x, y };
   };
 
-  // ✅ REESCRITO: Handlers con bloqueo de permisos y prevención de scroll
-  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+  // Handlers de dibujo
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (readOnly) return;
     
-    // Prevenir scroll en móviles al dibujar
-    if (tool === 'pen') e.preventDefault();
-    
-    const coords = getRelativeCoords(e);
+    const pos = getRelativePosition(e);
 
-    // 1. Lógica para herramienta SELECCIONAR (Mover)
-    if (tool === 'select') {
-      const target = e.target as HTMLElement;
-      // Buscamos el ID del elemento clickeado
-      const clickedId = target.closest('[data-annotation-id]')?.getAttribute('data-annotation-id');
-      
-      if (clickedId) {
-        // ✅ SI ES PROFESOR: Bloquear mover anotaciones que venían en 'initialAnnotations' (las del alumno)
-        const isInitial = initialAnnotations.some(a => a.id === clickedId);
-        if (mode === 'teacher' && isInitial) {
-          return; // No hacer nada, es del alumno
-        }
-        
-        setDraggingId(clickedId);
-        setSelectedAnnotation(clickedId);
-        return;
-      }
-      
-      // Si no hay anotación, deseleccionar
-      setSelectedAnnotation(null);
-      return;
-    }
-
-    // 2. Lógica para herramienta LÁPIZ
-    if (tool === 'pen') {
+    if (currentTool === 'pen') {
       setIsDrawing(true);
-      setCurrentPath([coords]);
-      return;
-    }
-    
-    // 3. Lógica para TEXTO
-    if (tool === 'text') {
+      setCurrentPath(`M ${pos.x} ${pos.y}`);
+    } else if (currentTool === 'text') {
       const content = prompt('Escribe tu anotación:');
       if (content) {
         const newAnnotation: PDFAnnotation = {
           id: `text-${Date.now()}`,
           type: 'text',
-          x: coords.x,
-          y: coords.y,
+          x: pos.x,
+          y: pos.y,
           content,
           color: mode === 'teacher' ? '#ef4444' : '#3b82f6',
+          fontSize: fontSize, // ✅ FIX: Guardar tamaño de fuente actual
           author: mode,
           timestamp: new Date().toISOString()
         };
@@ -177,97 +134,113 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
         setAnnotations(newAnnotations);
         saveToHistory(newAnnotations);
       }
-      return;
-    }
-    
-    // 4. Lógica para SELLOS
-    if (tool === 'stamp-check' || tool === 'stamp-x') {
+    } else if (currentTool === 'stamp-check' || currentTool === 'stamp-x') {
       const newAnnotation: PDFAnnotation = {
         id: `stamp-${Date.now()}`,
         type: 'stamp',
-        x: coords.x,
-        y: coords.y,
-        content: tool === 'stamp-check' ? 'check' : 'x',
-        color: tool === 'stamp-check' ? '#22c55e' : '#ef4444',
+        x: pos.x,
+        y: pos.y,
+        content: currentTool === 'stamp-check' ? 'check' : 'x',
+        color: currentTool === 'stamp-check' ? '#22c55e' : '#ef4444',
         author: mode,
         timestamp: new Date().toISOString()
       };
       const newAnnotations = [...annotations, newAnnotation];
       setAnnotations(newAnnotations);
       saveToHistory(newAnnotations);
-      return;
-    }
-    
-    // 5. Lógica para BORRADOR
-    if (tool === 'eraser') {
+    } else if (currentTool === 'eraser') {
       // Buscar anotación cercana y eliminarla
       const clicked = annotations.find(ann => {
-        const distance = Math.sqrt(Math.pow(ann.x - coords.x, 2) + Math.pow(ann.y - coords.y, 2));
+        const distance = Math.sqrt(Math.pow(ann.x - pos.x, 2) + Math.pow(ann.y - pos.y, 2));
         return distance < 5; // 5% de tolerancia
       });
+      
+      // ✅ FIX CRÍTICO: Profesor NO puede borrar anotaciones del estudiante
+      if (mode === 'teacher' && clicked?.author === 'student') {
+        return; // Bloquear borrado
+      }
+      
       if (clicked) {
         const newAnnotations = annotations.filter(ann => ann.id !== clicked.id);
         setAnnotations(newAnnotations);
         saveToHistory(newAnnotations);
       }
+    } else if (currentTool === 'select') {
+      // Seleccionar anotación y preparar para mover
+      const clicked = annotations.find(ann => {
+        const distance = Math.sqrt(Math.pow(ann.x - pos.x, 2) + Math.pow(ann.y - pos.y, 2));
+        return distance < 5;
+      });
+      
+      // ✅ FIX: Profesor NO puede mover/seleccionar anotaciones del estudiante
+      if (mode === 'teacher' && clicked?.author === 'student') {
+        return; // Bloquear acción
+      }
+      
+      setSelectedAnnotation(clicked?.id || null);
+      if (clicked) {
+        setIsDragging(true); // ✅ FIX: Habilitar modo arrastre si se selecciona anotación
+      }
     }
   };
 
-  // ✅ MEJORADO: handleMouseMove con soporte para arrastrar Y dibujar
-  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
-    const coords = getRelativeCoords(e);
-
-    // A. Moviendo una anotación
-    if (draggingId && tool === 'select') {
-      setAnnotations(prev => prev.map(ann => 
-        ann.id === draggingId ? { ...ann, x: coords.x, y: coords.y } : ann
-      ));
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const pos = getRelativePosition(e);
+    
+    // ✅ FIX: Mover anotación si estamos en modo arrastre
+    if (isDragging && currentTool === 'select' && selectedAnnotation) {
+      const newAnnotations = annotations.map(ann =>
+        ann.id === selectedAnnotation
+          ? { ...ann, x: pos.x, y: pos.y }
+          : ann
+      );
+      setAnnotations(newAnnotations);
       return;
     }
-
-    // B. Dibujando con lápiz
-    if (isDrawing && tool === 'pen') {
-      setCurrentPath(prev => [...prev, coords]);
-    }
+    
+    // Lógica original del lápiz
+    if (!isDrawing || currentTool !== 'pen') return;
+    setCurrentPath(prev => `${prev} L ${pos.x} ${pos.y}`);
   };
 
-  // ✅ MEJORADO: handleMouseUp con limpieza de estado de arrastre
   const handleMouseUp = () => {
-    // Guardar trazo del lápiz si existe
-    if (isDrawing && tool === 'pen' && currentPath.length > 1) {
-      // Convertir array de coordenadas a pathData SVG
-      const pathData = currentPath.map((p, i) => 
-        i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`
-      ).join(' ');
-      
+    // ✅ FIX: Finalizar arrastre y guardar en historial
+    if (isDragging) {
+      setIsDragging(false);
+      saveToHistory(annotations); // Guardar posición final
+      return;
+    }
+    
+    // Lógica original del lápiz
+    if (isDrawing && currentTool === 'pen' && currentPath) {
       const newAnnotation: PDFAnnotation = {
         id: `path-${Date.now()}`,
         type: 'path',
         x: 0,
         y: 0,
-        pathData,
+        pathData: currentPath,
         color: mode === 'teacher' ? '#ef4444' : '#3b82f6',
+        strokeWidth, // ✅ FIX: Guardar grosor actual
         author: mode,
         timestamp: new Date().toISOString()
       };
       const newAnnotations = [...annotations, newAnnotation];
       setAnnotations(newAnnotations);
       saveToHistory(newAnnotations);
-      setCurrentPath([]);
+      setCurrentPath('');
     }
-    
-    // Guardar en historial si se movió una anotación
-    if (draggingId) {
-      saveToHistory(annotations);
-    }
-    
     setIsDrawing(false);
-    setDraggingId(null); // ✅ Soltar elemento
   };
 
   // Eliminar anotación seleccionada
   const deleteSelected = () => {
     if (selectedAnnotation) {
+      // ✅ FIX: Profesor NO puede borrar anotaciones del estudiante
+      const targetAnnotation = annotations.find(a => a.id === selectedAnnotation);
+      if (mode === 'teacher' && targetAnnotation?.author === 'student') {
+        return; // Bloquear borrado
+      }
+      
       const newAnnotations = annotations.filter(ann => ann.id !== selectedAnnotation);
       setAnnotations(newAnnotations);
       saveToHistory(newAnnotations);
@@ -337,7 +310,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                   title="Sello Correcto"
                   className="text-green-600"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-5 h-5" />
                 </Button>
                 <Button
                   size="sm"
@@ -346,8 +319,47 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                   title="Sello Error"
                   className="text-red-600"
                 >
-                  <XCircle className="w-4 h-4" />
+                  <XCircle className="w-5 h-5" />
                 </Button>
+              </>
+            )}
+
+            {/* ✅ FIX: Control de grosor del lápiz */}
+            {currentTool === 'pen' && (
+              <>
+                <div className="w-px h-6 bg-slate-300" />
+                <div className="flex items-center gap-2 px-2">
+                  <span className="text-xs font-medium text-slate-600 whitespace-nowrap">Grosor:</span>
+                  <Slider
+                    value={[strokeWidth]}
+                    onValueChange={(values) => setStrokeWidth(values[0])}
+                    min={0.1}
+                    max={2.0}
+                    step={0.1}
+                    className="w-24"
+                  />
+                  <span className="text-xs font-mono text-slate-600">{strokeWidth.toFixed(1)}</span>
+                </div>
+              </>
+            )}
+
+            {/* ✅ FIX: Control de tamaño de texto */}
+            {currentTool === 'text' && (
+              <>
+                <div className="w-px h-6 bg-slate-300" />
+                <div className="flex items-center gap-2 px-2">
+                  <span className="text-xs font-medium text-slate-600 whitespace-nowrap">Tamaño:</span>
+                  <select 
+                    value={fontSize} 
+                    onChange={(e) => setFontSize(Number(e.target.value))}
+                    className="h-8 px-2 text-xs border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value={12}>Pequeño (12px)</option>
+                    <option value={16}>Normal (16px)</option>
+                    <option value={24}>Grande (24px)</option>
+                    <option value={32}>Muy Grande (32px)</option>
+                  </select>
+                </div>
               </>
             )}
 
@@ -432,13 +444,22 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
           ) : (
             <div
               ref={canvasRef}
-              className="relative bg-white shadow-2xl rounded-lg overflow-hidden"
-              style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
+              className="relative bg-white shadow-2xl rounded-lg overflow-hidden w-fit mx-auto"
+              style={{
+                cursor: currentTool === 'pen' ? 'crosshair' : 
+                        currentTool === 'text' ? 'text' :
+                        currentTool === 'eraser' ? 'not-allowed' :
+                        currentTool === 'select' ? 'move' : 'default'
+              }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
             >
+              {/* ✅ FIX CRÍTICO: w-fit + mx-auto centra y ajusta el contenedor al tamaño exacto del PDF, 
+                  evitando que las coordenadas relativas (%) se desalineen al hacer zoom */}
+              {/* ✅ FIX: Cursor dinámico según herramienta */}
+              {/* ✅ FIX: Eliminado transform: scale() para evitar doble escalado - solo Page maneja zoom */}
               {/* PDF de fondo */}
               <Document
                 file={pdfUrl}
@@ -455,9 +476,11 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
               >
                 <Page 
                   pageNumber={pageNumber} 
+                  scale={scale}
                   renderTextLayer={true}
                   renderAnnotationLayer={false}
                 />
+                {/* ✅ FIX: scale prop sincroniza zoom con anotaciones */}
               </Document>
 
               {/* Capa de anotaciones SVG */}
@@ -465,86 +488,54 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                 ref={svgRef}
                 className="absolute inset-0 w-full h-full pointer-events-none"
                 style={{ zIndex: 10 }}
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
               >
+                {/* ✅ FIX: viewBox hace que coordenadas 0-100 se mapeen correctamente al canvas */}
                 {/* Renderizar anotaciones guardadas */}
                 {annotations.map(ann => {
                   if (ann.type === 'path') {
-                    // ✅ Bloquear interacción con paths del alumno si el profesor está dibujando
-                    const isStudentAnnotation = ann.author === 'student';
-                    const blockInteraction = mode === 'teacher' && isStudentAnnotation && tool !== 'select';
-                    
+                    // ✅ FIX: vectorEffect mantiene grosor constante con zoom
                     return (
                       <path
                         key={ann.id}
-                        data-annotation-id={ann.id}
                         d={ann.pathData}
                         stroke={ann.color}
-                        strokeWidth="2"
+                        strokeWidth={ann.strokeWidth || strokeWidth}
                         fill="none"
-                        opacity={blockInteraction ? 0.4 : (selectedAnnotation === ann.id ? 0.5 : 0.8)}
+                        opacity={selectedAnnotation === ann.id ? 0.5 : 0.8}
+                        vectorEffect="non-scaling-stroke"
                         className={cn(
-                          blockInteraction ? "pointer-events-none" : "pointer-events-auto cursor-pointer",
                           selectedAnnotation === ann.id && 'drop-shadow-lg'
                         )}
-                        onClick={() => !readOnly && !blockInteraction && setSelectedAnnotation(ann.id)}
                       />
                     );
                   }
                   return null;
                 })}
 
-                {/* Trazo actual mientras se dibuja */}
-                {isDrawing && currentPath.length > 0 && (
+                {/* Trazo actual mientras se dibuja - Aplicar grosor actual al preview */}
+                {isDrawing && currentPath && (
                   <path
-                    d={currentPath.map((p, i) => 
-                      i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`
-                    ).join(' ')}
+                    d={currentPath}
                     stroke={mode === 'teacher' ? '#ef4444' : '#3b82f6'}
-                    strokeWidth="2"
+                    strokeWidth={strokeWidth}
                     fill="none"
                     opacity="0.6"
+                    vectorEffect="non-scaling-stroke"
                   />
                 )}
               </svg>
-
-              {/* ✅ CRÍTICO: Capa de captura de eventos con containerRef y cursores dinámicos */}
-              {!readOnly && (
-                <div 
-                  ref={containerRef}
-                  className={cn(
-                    "absolute inset-0 z-50 touch-none",
-                    tool === 'pen' && "cursor-crosshair",
-                    tool === 'text' && "cursor-text",
-                    tool === 'eraser' && "cursor-not-allowed",
-                    tool === 'select' && "cursor-default",
-                    tool === 'stamp-check' && "cursor-copy",
-                    tool === 'stamp-x' && "cursor-copy"
-                  )}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                  onTouchStart={handleMouseDown}
-                  onTouchMove={handleMouseMove}
-                  onTouchEnd={handleMouseUp}
-                />
-              )}
 
               {/* Capa de textos y sellos */}
               <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 11 }}>
                 {annotations.map(ann => {
                   if (ann.type === 'text') {
-                    // ✅ Bloquear interacción con anotaciones del alumno si el profesor está dibujando
-                    const isStudentAnnotation = ann.author === 'student';
-                    const blockInteraction = mode === 'teacher' && isStudentAnnotation && tool !== 'select';
-                    
                     return (
                       <div
                         key={ann.id}
-                        data-annotation-id={ann.id}
                         className={cn(
-                          "absolute px-2 py-1 rounded text-sm font-medium shadow-md",
-                          blockInteraction ? "pointer-events-none" : "pointer-events-auto cursor-pointer",
+                          "absolute px-2 py-1 rounded font-medium shadow-md pointer-events-auto cursor-pointer",
                           selectedAnnotation === ann.id && 'ring-2 ring-offset-2 ring-indigo-500'
                         )}
                         style={{
@@ -552,46 +543,40 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
                           top: `${ann.y}%`,
                           backgroundColor: ann.color === '#ef4444' ? '#fee2e2' : '#dbeafe',
                           color: ann.color,
-                          transform: 'translate(-50%, -50%)',
-                          opacity: blockInteraction ? 0.6 : 1
+                          fontSize: `${(ann.fontSize || fontSize) * scale}px`,
+                          transform: `translate(-50%, -50%)`
                         }}
-                        onClick={() => !blockInteraction && setSelectedAnnotation(ann.id)}
+                        onClick={() => setSelectedAnnotation(ann.id)}
                       >
+                        {/* ✅ FIX: fontSize se multiplica por scale para zoom sincronizado */}
                         {ann.content}
                       </div>
                     );
                   } else if (ann.type === 'stamp') {
                     const Icon = ann.content === 'check' ? CheckCircle2 : XCircle;
-                    
-                    // ✅ Bloquear interacción con anotaciones del alumno si el profesor está dibujando
-                    const isStudentAnnotation = ann.author === 'student';
-                    const blockInteraction = mode === 'teacher' && isStudentAnnotation && tool !== 'select';
-                    
                     return (
                       <div
                         key={ann.id}
-                        data-annotation-id={ann.id}
                         className={cn(
-                          "absolute",
-                          blockInteraction ? "pointer-events-none" : "pointer-events-auto cursor-pointer",
+                          "absolute pointer-events-auto cursor-pointer",
                           selectedAnnotation === ann.id && 'ring-2 ring-offset-2 ring-indigo-500 rounded-full'
                         )}
                         style={{
                           left: `${ann.x}%`,
                           top: `${ann.y}%`,
-                          transform: 'translate(-50%, -50%)',
-                          opacity: blockInteraction ? 0.6 : 1
+                          transform: `translate(-50%, -50%) scale(${scale})`,
+                          zIndex: 20
                         }}
-                        onClick={() => !blockInteraction && setSelectedAnnotation(ann.id)}
+                        onClick={() => setSelectedAnnotation(ann.id)}
                       >
-                        {/* ✅ MEJORADO: Sellos con mejor contraste y visibilidad */}
+                        {/* ✅ FIX CRÍTICO: Eliminado fill={ann.color} para que se vea el símbolo ✓ o ✗ */}
                         <Icon 
-                          className={cn(
-                            "w-12 h-12 drop-shadow-lg",
-                            ann.content === 'check' ? "text-green-600" : "text-red-600"
-                          )}
+                          className="w-12 h-12 drop-shadow-lg" 
+                          color={ann.color}
                           fill="white"
+                          strokeWidth={2.5}
                         />
+                        {/* color define el borde, fill="white" da fondo blanco al círculo */}
                       </div>
                     );
                   }
