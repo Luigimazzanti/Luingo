@@ -9,7 +9,6 @@ import { toast } from 'sonner@2.0.3';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { createClient } from '@supabase/supabase-js';
 import { Student } from '../types'; // ✅ NUEVO: Import de Student
-import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ NUEVO: Notificaciones
 
 // ========== TIPOS ==========
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -266,34 +265,23 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       }
     }
 
-    // ✅ 1. PREPARAR DESTINATARIOS PARA EMAIL
-    let recipientEmails: string[] = [];
+    // ✅ LÓGICA DE ASIGNACIÓN SEGÚN MODO
     let finalAssignees = ['all'];
     let finalScopeType = 'level';
     let finalTargetId = selectedLevel;
 
     if (assignMode === 'individual') {
+      finalAssignees = assignedTo; // Array con el ID del estudiante
       finalScopeType = 'individual';
-      finalTargetId = assignedTo[0]; // ID del estudiante
-      finalAssignees = assignedTo;
-      
-      // Buscar email del alumno específico
-      const targetStudent = students.find(s => s.id === assignedTo[0]);
-      if (targetStudent?.email) recipientEmails.push(targetStudent.email);
+      finalTargetId = assignedTo[0]; // El ID del estudiante
+      // Nota: selectedLevel se guarda igual como level_tag para indicar la dificultad de la tarea
     } else {
       // Modo Nivel
+      finalAssignees = ['all'];
       finalScopeType = 'level';
       finalTargetId = selectedLevel;
-      finalAssignees = ['all'];
-      
-      // Buscar emails de todos los alumnos de ese nivel
-      recipientEmails = students
-        .filter(s => s.current_level_code === selectedLevel)
-        .map(s => s.email)
-        .filter(Boolean) as string[];
     }
 
-    // ✅ 2. CONSTRUIR OBJETO TAREA
     const taskData = {
       ...initialData,
       title,
@@ -302,7 +290,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       level_tag: selectedLevel, // ✅ FIX CRÍTICO: Guardar el nivel explícitamente DESPUÉS del spread
       content_data: taskType === 'writing' ? {
         // ✅ CONTENIDO PARA WRITING
-        level: selectedLevel, // ✅ FIX: Añadimos 'level' para que getMoodleTasks lo lea bien
         type: 'writing',
         writing_prompt: writingPrompt,
         min_words: minWords,
@@ -316,7 +303,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         assignees: finalAssignees
       } : taskType === 'document' ? {
         // ✅ CONTENIDO PARA DOCUMENT PDF
-        level: selectedLevel, // ✅ FIX: Añadimos 'level' para que getMoodleTasks lo lea bien
         type: 'document',
         pdf_url: pdfUrl,
         instructions: pdfInstructions,
@@ -327,7 +313,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         assignees: finalAssignees
       } : {
         // ✅ CONTENIDO PARA QUIZ
-        level: selectedLevel, // ✅ FIX: Añadimos 'level' para que getMoodleTasks lo lea bien
         type: 'form',
         questions,
         max_attempts: maxAttempts,
@@ -341,18 +326,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       due_date: dueDate // ✅ FECHA LÍMITE
     };
 
-    // ✅ 3. GUARDAR
     onSaveTask(taskData);
-
-    // ✅ 4. ENVIAR NOTIFICACIÓN POR EMAIL
-    if (recipientEmails.length > 0) {
-      sendNotification(
-        recipientEmails,
-        `Nueva Tarea: ${title}`,
-        emailTemplates.newTask(title, assignMode === 'individual' ? 'individual' : selectedLevel)
-      );
-      toast.success(`📧 Notificando a ${recipientEmails.length} estudiante(s)...`);
-    }
   };
 
   // ========== ✅ GENERACIÓN IA (GROQ SECURE) ==========
@@ -405,21 +379,19 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         }
       `;
 
-      // ✅ USAR PROXY EN LUGAR DE LLAMADA DIRECTA A GROQ
-      const proxyUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/ai-proxy`;
-      
-      const response = await fetch(proxyUrl, {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${publicAnonKey}`
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          apiKey: apiKey,
-          model: "llama-3.3-70b-versatile",
           messages: [
             { role: "system", content: systemPrompt }
-          ]
+          ],
+          model: "llama-3.3-70b-versatile",
+          temperature: 0.5,
+          response_format: { type: "json_object" }
         })
       });
 

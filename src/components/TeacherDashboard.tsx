@@ -12,7 +12,6 @@ import { toast } from 'sonner@2.0.3';
 import { TextAnnotator, Annotation } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
 import { CommunityFeed } from './community/CommunityFeed';
-import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ NUEVO: Notificaciones
 
 interface TeacherDashboardProps {
   classroom: Classroom;
@@ -163,17 +162,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
       const correctionCount = finalCorrections.length + finalPdfAnnotations.length;
       toast.success(`✅ Calificación guardada (${correctionCount} anotaciones/correcciones)`);
-      
-      // ✅ ENVIAR NOTIFICACIÓN AL ESTUDIANTE
-      const studentEmail = students.find(s => s.id === attempt.student_id)?.email;
-      if (studentEmail) {
-        sendNotification(
-          [studentEmail],
-          `Tarea Calificada: ${attempt.task_title}`,
-          emailTemplates.graded(attempt.task_title, newGrade, feedbackInput)
-        );
-        toast.success('📧 Notificación enviada al estudiante');
-      }
       
       if (onRefreshSubmissions) {
         onRefreshSubmissions();
