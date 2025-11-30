@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { toast } from 'sonner@2.0.3';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { createClient } from '@supabase/supabase-js';
+import { Student } from '../types'; // ✅ NUEVO: Import de Student
 
 // ========== TIPOS ==========
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -29,6 +30,7 @@ interface TaskBuilderProps {
   initialStudentId?: string;
   studentName?: string;
   autoOpenAI?: boolean;
+  students: Student[]; // ✅ NUEVO: Recibir lista de estudiantes
 }
 
 export const TaskBuilder: React.FC<TaskBuilderProps> = ({
@@ -37,7 +39,8 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   initialData,
   initialStudentId,
   studentName,
-  autoOpenAI
+  autoOpenAI,
+  students // ✅ NUEVO: Desestructurar students
 }) => {
   // ========== ESTADOS BÁSICOS ==========
   const [title, setTitle] = useState(initialData?.title || '');
@@ -48,6 +51,16 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   );
   const [selectedLevel, setSelectedLevel] = useState(initialData?.content_data?.assignment_scope?.targetId || 'A1');
   const [maxAttempts, setMaxAttempts] = useState(initialData?.content_data?.max_attempts || 3);
+
+  // ✅ NUEVO: Estado para asignación de estudiantes (Default: 'all')
+  const [assignedTo, setAssignedTo] = useState<string[]>(
+    initialData?.content_data?.assignees || ['all']
+  );
+
+  // ✅ NUEVO: Modo de asignación ('level' = todos del nivel, 'individual' = estudiante específico)
+  const [assignMode, setAssignMode] = useState<'level' | 'individual'>(
+    initialData?.content_data?.assignment_scope?.type === 'individual' ? 'individual' : 'level'
+  );
 
   // ✅ NUEVO: Tipo de tarea (Quiz vs Writing vs Document)
   const [taskType, setTaskType] = useState<'quiz' | 'writing' | 'document'>(
@@ -252,11 +265,29 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       }
     }
 
+    // ✅ LÓGICA DE ASIGNACIÓN SEGÚN MODO
+    let finalAssignees = ['all'];
+    let finalScopeType = 'level';
+    let finalTargetId = selectedLevel;
+
+    if (assignMode === 'individual') {
+      finalAssignees = assignedTo; // Array con el ID del estudiante
+      finalScopeType = 'individual';
+      finalTargetId = assignedTo[0]; // El ID del estudiante
+      // Nota: selectedLevel se guarda igual como level_tag para indicar la dificultad de la tarea
+    } else {
+      // Modo Nivel
+      finalAssignees = ['all'];
+      finalScopeType = 'level';
+      finalTargetId = selectedLevel;
+    }
+
     const taskData = {
       ...initialData,
       title,
       description,
       category: taskType === 'writing' ? 'writing' : taskType === 'document' ? 'document' : category,
+      level_tag: selectedLevel, // ✅ FIX CRÍTICO: Guardar el nivel explícitamente DESPUÉS del spread
       content_data: taskType === 'writing' ? {
         // ✅ CONTENIDO PARA WRITING
         type: 'writing',
@@ -266,30 +297,30 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         resource_url: resourceUrl,
         resource_type: resourceType,
         assignment_scope: {
-          type: assignType,
-          targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
-          targetName: assignType === 'individual' ? studentName : undefined
-        }
+          type: finalScopeType,
+          targetId: finalTargetId
+        },
+        assignees: finalAssignees
       } : taskType === 'document' ? {
         // ✅ CONTENIDO PARA DOCUMENT PDF
         type: 'document',
         pdf_url: pdfUrl,
         instructions: pdfInstructions,
         assignment_scope: {
-          type: assignType,
-          targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
-          targetName: assignType === 'individual' ? studentName : undefined
-        }
+          type: finalScopeType,
+          targetId: finalTargetId
+        },
+        assignees: finalAssignees
       } : {
         // ✅ CONTENIDO PARA QUIZ
         type: 'form',
         questions,
         max_attempts: maxAttempts,
         assignment_scope: {
-          type: assignType,
-          targetId: assignType === 'individual' ? initialStudentId : assignType === 'level' ? selectedLevel : undefined,
-          targetName: assignType === 'individual' ? studentName : undefined
-        }
+          type: finalScopeType,
+          targetId: finalTargetId
+        },
+        assignees: finalAssignees
       },
       color_tag: '#A8D8FF',
       due_date: dueDate // ✅ FECHA LÍMITE
@@ -885,30 +916,48 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         {/* ========== FOOTER ========== */}
         <div className="p-6 border-t border-slate-200 bg-white shrink-0 flex gap-4 items-center">
           <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-200 flex-1">
-            <span className="text-xs font-black text-slate-400 uppercase ml-2 hidden md:block">Asignar:</span>
-            <div className="relative flex-1">
+            <span className="text-xs font-black text-slate-400 uppercase ml-2 hidden md:block">Asignar a:</span>
+            
+            {/* SELECTOR DE MODO */}
+            <div className="relative">
               <select
-                value={assignType}
-                onChange={e => setAssignType(e.target.value as any)}
-                className="h-10 pl-3 pr-8 bg-white border rounded-lg font-bold text-sm w-full"
+                value={assignMode}
+                onChange={(e) => setAssignMode(e.target.value as 'level' | 'individual')}
+                className="h-10 pl-3 pr-8 bg-white border rounded-lg font-bold text-sm focus:ring-indigo-500 focus:border-indigo-500"
               >
-                <option value="class">Toda la Clase</option>
-                <option value="level">Por Nivel</option>
-                {initialStudentId && <option value="individual">Individual</option>}
+                <option value="level">📚 Por Nivel</option>
+                <option value="individual">👤 Estudiante Específico</option>
               </select>
             </div>
-            {assignType === 'level' && (
-              <div className="relative w-24">
+
+            {/* CONTROLES DINÁMICOS */}
+            {assignMode === 'level' ? (
+              // MODO NIVEL: Selecciona el nivel del contenido
+              <div className="relative flex-1">
                 <select
                   value={selectedLevel}
-                  onChange={e => setSelectedLevel(e.target.value)}
+                  onChange={(e) => setSelectedLevel(e.target.value)}
                   className="h-10 pl-3 bg-indigo-50 border-indigo-200 text-indigo-700 rounded-lg font-bold text-sm w-full"
                 >
-                  <option>A1</option>
-                  <option>A2</option>
-                  <option>B1</option>
-                  <option>B2</option>
-                  <option>C1</option>
+                  {['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(lvl => (
+                    <option key={lvl} value={lvl}>Todos los {lvl}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              // MODO INDIVIDUAL: Selecciona al estudiante
+              <div className="relative flex-1">
+                <select
+                  value={assignedTo[0] === 'all' ? '' : assignedTo[0]}
+                  onChange={(e) => setAssignedTo([e.target.value])}
+                  className="h-10 pl-3 bg-white border-slate-200 text-slate-700 rounded-lg font-bold text-sm w-full"
+                >
+                  <option value="" disabled>Seleccionar alumno...</option>
+                  {students.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.current_level_code})
+                    </option>
+                  ))}
                 </select>
               </div>
             )}

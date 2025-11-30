@@ -11,12 +11,14 @@ import { StudentDashboard } from './components/StudentDashboard';
 import { TaskBuilder } from './components/TaskBuilder';
 import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
-import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask, getMoodleSubmissions, createCourse } from './lib/moodle';
+import { ProfileEditor } from './components/ProfileEditor'; // ✅ NUEVO: Editor de perfil
+import { ForgotPasswordModal } from './components/ForgotPasswordModal'; // ✅ NUEVO: Modal de recuperación de contraseña
+import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask, getMoodleSubmissions, createCourse, loginToMoodle, getMe, getUserCourses, getUserPreferences, saveUserPreferences, getMyCourseProfile } from './lib/moodle';
 import { mockClassroom, LUINGO_LEVELS } from './lib/mockData';
 import { Comment, Correction, Notification, User, Task, Student, Exercise, Submission } from './types'; 
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
-import { ArrowLeft, MessageCircle, Play, LogOut, Sparkles, Target, Home, Settings, RefreshCw } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Play, LogOut, Sparkles, Target, Home, Settings, RefreshCw, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './components/ui/dialog';
 import { Toaster, toast } from 'sonner@2.0.3';
@@ -79,7 +81,10 @@ export default function App() {
   const [taskBuilderMode, setTaskBuilderMode] = useState<'create' | 'edit'>('create');
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const [startBuilderWithAI, setStartBuilderWithAI] = useState(false);
-
+  
+  // ✅ NUEVO: Estado para el editor de perfil
+  const [showProfileEditor, setShowProfileEditor] = useState(false);
+  
   const [classroom, setClassroom] = useState(mockClassroom);
   const [students, setStudents] = useState<Student[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
@@ -91,6 +96,11 @@ export default function App() {
   const [realSubmissions, setRealSubmissions] = useState<Submission[]>([]);
   
   const [usernameInput, setUsernameInput] = useState("");
+  
+  // ✅ NUEVO: Estados para login real
+  const [passwordInput, setPasswordInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
 
   // ========== FUNCIÓN HELPER: RECARGAR ENTREGAS SIN PÉRDIDA DE ESTADO ==========
   const loadSubmissions = async () => {
@@ -159,95 +169,120 @@ export default function App() {
   }, []);
 
   // ========== INICIALIZACIÓN DE USUARIO ==========
-  const initializeUser = async (username: string) => {
+  const handleRealLogin = async () => {
+    if (!usernameInput || !passwordInput) return toast.error("Faltan credenciales");
     setLoading(true);
-    
+
     try {
-      const moodleUser = await getUserByUsername(username);
-      
-      if (moodleUser) {
-        const lowerName = username.toLowerCase();
-        let role: 'teacher' | 'student' = 'student';
-        
-        if (lowerName === 'luigi' || lowerName.includes('teacher')) {
-          role = 'teacher';
-        } else if (lowerName === 'admin') {
-          role = 'student';
+        // 1️⃣ AUTENTICACIÓN
+        const token = await loginToMoodle(usernameInput, passwordInput);
+        if (!token) {
+            setLoading(false);
+            return toast.error("Credenciales inválidas");
         }
 
-        const userProfile: User = {
-          id: String(moodleUser.id),
-          email: moodleUser.email,
-          name: moodleUser.fullname,
-          role: role,
-          avatar_url: moodleUser.profileimageurl,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+        // 2️⃣ IDENTIDAD
+        const meData = await getMe(token);
+        if (!meData || !meData.userid) throw new Error("Error de perfil");
+
+        console.log("🔍 Usuario autenticado:", meData.username, `(ID: ${meData.userid})`);
+
+        // 3️⃣ CARGAR PREFERENCIAS (Avatar persistente)
+        const userPrefs = await getUserPreferences(meData.userid);
+        console.log("🎨 Preferencias cargadas:", userPrefs);
+        
+        // ✅ RECUPERAR EL NIVEL GUARDADO (O DEFAULT A1)
+        const savedLevel = userPrefs?.level_code || 'A1';
+        console.log(`📊 Nivel de idioma: ${savedLevel}`);
+
+        // 4️⃣ DETECCIÓN DE ROL PURISTA (Solo basada en roles reales de Moodle)
+        let detectedRole: 'teacher' | 'student' = 'student'; // Default: estudiante
+
+        // Obtener todos los cursos donde está matriculado
+        const myCourses = await getUserCourses(meData.userid);
+        console.log(`📚 Cursos matriculados: ${myCourses?.length || 0}`);
+
+        if (myCourses && myCourses.length > 0) {
+            // 🔍 VERIFICAR ROL EN CADA CURSO (buscar editingteacher o manager en CUALQUIERA)
+            for (const course of myCourses) {
+                console.log(`  🔎 Verificando curso: ${course.fullname} (ID: ${course.id})`);
+                
+                try {
+                    const myProfileInCourse = await getMyCourseProfile(meData.userid, course.id);
+                    
+                    if (myProfileInCourse && myProfileInCourse.roles) {
+                        console.log(`    📋 Roles en curso ${course.id}:`, myProfileInCourse.roles.map((r: any) => r.shortname));
+                        
+                        // ✅ REGLA DE ORO: editingteacher o manager = Profesor
+                        const hasAuthorityRole = myProfileInCourse.roles.some((r: any) => 
+                            r.shortname === 'editingteacher' || 
+                            r.shortname === 'manager'
+                        );
+
+                        if (hasAuthorityRole) {
+                            console.log(`    ✅ Rol de autoridad encontrado en curso ${course.id}`);
+                            detectedRole = 'teacher';
+                            break; // ✅ Ya sabemos que es profesor, no hace falta seguir
+                        } else {
+                            console.log(`    ℹ️ Sin rol de autoridad en curso ${course.id}`);
+                        }
+                    }
+                } catch (courseError) {
+                    console.warn(`    ⚠️ Error al verificar curso ${course.id}:`, courseError);
+                    // Continuar con el siguiente curso
+                }
+            }
+        } else {
+            console.log("⚠️ Usuario sin cursos matriculados → Asignado como estudiante");
+        }
+
+        console.log(`🎯 ROL FINAL ASIGNADO: ${detectedRole.toUpperCase()}`);
+
+        // 5️⃣ CREAR SESIÓN LOCAL
+        // Usamos 'as any' temporalmente para permitir propiedades extra como current_level_code
+        const userProfile: any = {
+            id: String(meData.userid),
+            email: meData.email || `${usernameInput}@campus.xyz`,
+            name: meData.fullname,
+            role: detectedRole, // ✅ Rol purista basado SOLO en Moodle
+            // 🔥 Avatar: Preferencias > Moodle > Generado
+            avatar_url: userPrefs?.avatar_url || meData.userpictureurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${meData.username}`,
+            current_level_code: savedLevel, // ✅ AQUÍ SE INYECTA EL NIVEL REAL
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
         };
 
-        toast.loading("Cargando datos del usuario...");
+        // 6️⃣ CARGAR DATOS INICIALES
+        setCurrentUser(userProfile);
+        
+        const tasksData = await getMoodleTasks();
+        setTasks(tasksData);
+        const subsData = await getMoodleSubmissions();
 
-        try {
-          const [latestTasks, allSubs] = await Promise.all([
-            getMoodleTasks(),
-            getMoodleSubmissions()
-          ]);
-
-          setTasks(latestTasks);
-
-          if (role === 'teacher') {
-            setRealSubmissions(allSubs);
-          } else {
-            // Estudiante solo ve las suyas (match por ID o nombre)
-            const mySubs = allSubs.filter((s: any) => 
-              String(s.student_id) === String(moodleUser.id) || 
-              s.student_name === moodleUser.fullname
-            );
+        if (detectedRole === 'teacher') {
+            // Profesor ve todas las entregas
+            setRealSubmissions(subsData);
+        } else {
+            // Estudiante solo ve las suyas
+            const mySubs = subsData.filter((s: any) => String(s.student_id) === String(userProfile.id));
             setRealSubmissions(mySubs);
-            
-            console.log(`👨‍🎓 Submissions del estudiante "${moodleUser.fullname}":`, mySubs.length);
-            
-            // Calcular XP real basado en submissions
-            const xp = mySubs.length * 15;
-            const level = calculateLevelFromXP(xp);
-            userProfile.xp_points = xp;
-            userProfile.level = level;
-          }
-          
-          setCurrentUser(userProfile);
-          
-          // ✅ Configurar estudiante por defecto si soy alumno
-          if (role === 'student') {
-            const studentProfile: Student = {
-              ...userProfile,
-              level: userProfile.level || 1,
-              current_level_code: 'A1',
-              completed_tasks: 0,
-              total_tasks: latestTasks.length,
-              average_grade: 0,
-              materials_viewed: [],
-              joined_at: new Date().toISOString()
-            } as Student;
-            
-            setStudents([studentProfile]);
-          }
-          
-          const streak = checkStreak();
-          toast.success(`¡Hola ${userProfile.name}! 🔥 Racha: ${streak} días`);
-        } catch (e) {
-          console.error("Error cargando datos extra:", e);
-          setCurrentUser(userProfile);
-          toast.dismiss();
-          toast.warning("Entraste con datos limitados");
+            setStudents([{
+                ...userProfile, // ✅ Hereda el current_level_code del perfil
+                level: 1, 
+                xp_points: mySubs.length * 50, 
+                completed_tasks: mySubs.length,
+                total_tasks: tasksData.length, 
+                materials_viewed: []
+            } as Student]);
         }
-      } else {
-        toast.error("Usuario no encontrado en Moodle");
-      }
-    } catch (error) {
-      console.error("Error al inicializar usuario:", error);
-      toast.error("Error al entrar");
+
+        toast.success(`¡Hola ${meData.firstname}! Nivel: ${savedLevel}`);
+
+    } catch (e) {
+        console.error("❌ Login Error:", e);
+        toast.error("Error de conexión con Moodle");
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
@@ -269,36 +304,42 @@ export default function App() {
 
         console.log(`👥 Estudiantes encontrados: ${realStudents.length}`);
 
-        // ✅ Mapear estudiantes con sus datos reales de entregas
-        const mappedStudents: Student[] = realStudents.map((u: any) => {
+        // ✅ CARGA PARALELA DE PREFERENCIAS (AVATAR Y NIVEL)
+        const studentsWithPrefs = await Promise.all(realStudents.map(async (u: any) => {
+          // Obtener preferencias guardadas (Avatar y Nivel)
+          const prefs = await getUserPreferences(u.id);
+          
           const userSubs = realSubmissions.filter(s => 
             s.student_name === u.fullname || 
             String(s.student_id) === String(u.id)
           );
           
           const xp = userSubs.length * 15;
-          const level = calculateLevelFromXP(xp);
+          const calculatedLevel = calculateLevelFromXP(xp); // Nivel de juego (RPG)
           
+          // Nivel de Idioma: Prioridad a la preferencia guardada, fallback a A1
+          const languageLevel = prefs?.level_code || 'A1';
+
           return {
             id: String(u.id),
             name: u.fullname,
             email: u.email,
-            avatar_url: u.profileimageurl,
-            level: level,
+            avatar_url: prefs?.avatar_url || u.profileimageurl, // ✅ Usar avatar guardado también
+            level: calculatedLevel,
             xp_points: xp,
             completed_tasks: userSubs.length,
             total_tasks: tasks.length,
             average_grade: 0,
             materials_viewed: [],
-            current_level_code: 'A1',
+            current_level_code: languageLevel, // ✅ AQUÍ SE ASIGNA EL NIVEL REAL
             role: 'student',
             joined_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-          };
-        });
+          } as Student;
+        }));
 
-        setStudents(mappedStudents);
+        setStudents(studentsWithPrefs);
       } else {
         console.warn("⚠️ No se pudo cargar la lista de estudiantes (falta de permisos o error)");
       }
@@ -471,20 +512,46 @@ export default function App() {
           <div className="space-y-4">
             <Input
               type="text"
-              placeholder="Ingresa tu usuario de Moodle"
+              placeholder="Usuario (ej: alumno1)"
               value={usernameInput}
               onChange={(e) => setUsernameInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && usernameInput && initializeUser(usernameInput)}
+              onKeyDown={(e) => e.key === 'Enter' && handleRealLogin()}
               className="h-12 text-lg"
             />
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder="Contraseña"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRealLogin()}
+                className="h-12 text-lg pr-10"
+              />
+              <button 
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+            
             <Button 
-              onClick={() => usernameInput && initializeUser(usernameInput)}
-              disabled={!usernameInput}
-              className="w-full h-12 text-lg font-bold"
+              onClick={handleRealLogin}
+              disabled={!usernameInput || !passwordInput}
+              className="w-full h-12 text-lg font-bold bg-indigo-600 hover:bg-indigo-700 shadow-lg transition-all"
             >
-              <LogOut className="w-5 h-5 mr-2 rotate-180" />
-              Entrar
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Entrar al Campus"}
             </Button>
+
+            <div className="text-center mt-4">
+              <button 
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                className="text-sm text-indigo-500 hover:text-indigo-700 hover:underline font-medium flex items-center justify-center gap-1 mx-auto transition-colors"
+              >
+                <KeyRound className="w-3 h-3" /> ¿Olvidaste tu contraseña?
+              </button>
+            </div>
           </div>
 
           <div className="mt-6 pt-6 border-t border-slate-100">
@@ -492,6 +559,13 @@ export default function App() {
               Conectado a Moodle • Sistema de Gamificación Activo 🎮
             </p>
           </div>
+
+          {/* ========== FORGOT PASSWORD MODAL ========== */}
+          <ForgotPasswordModal 
+            isOpen={showForgotModal} 
+            onClose={() => setShowForgotModal(false)}
+            initialValue={usernameInput} 
+          />
         </div>
       </div>
     );
@@ -523,15 +597,21 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="text-right mr-2">
-                <p className="text-sm font-bold text-slate-700">{currentUser.name}</p>
-                <p className="text-xs text-slate-500">{currentUser.role === 'teacher' ? 'Profesor' : 'Estudiante'}</p>
+              <div 
+                className="flex items-center gap-3 cursor-pointer hover:bg-slate-100 p-1.5 pr-3 rounded-full transition-all border border-transparent hover:border-slate-200"
+                onClick={() => setShowProfileEditor(true)}
+                title="Editar mi perfil"
+              >
+                <div className="text-right mr-1 hidden sm:block">
+                  <p className="text-sm font-bold text-slate-700 leading-none">{currentUser.name}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{currentUser.role === 'teacher' ? 'Profesor' : 'Estudiante'}</p>
+                </div>
+                <img 
+                  src={currentUser.avatar_url} 
+                  alt={currentUser.name}
+                  className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-indigo-50"
+                />
               </div>
-              <img 
-                src={currentUser.avatar_url} 
-                alt={currentUser.name}
-                className="w-10 h-10 rounded-full border-2 border-indigo-200"
-              />
               <Button
                 variant="ghost"
                 size="icon"
@@ -558,6 +638,7 @@ export default function App() {
             }}
             initialData={taskToEdit || undefined}
             autoOpenAI={startBuilderWithAI}
+            students={students} // ✅ PASAR LA LISTA DE ESTUDIANTES
           />
         )}
 
@@ -910,6 +991,22 @@ export default function App() {
           );
         })()}
       </main>
+      
+      {/* ========== PROFILE EDITOR MODAL ========== */}
+      {showProfileEditor && currentUser && (
+        <ProfileEditor 
+          user={currentUser}
+          isOpen={showProfileEditor}
+          onClose={() => setShowProfileEditor(false)}
+          onUpdate={(updatedData) => {
+             setCurrentUser({ ...currentUser, ...updatedData });
+             // Actualizar también la lista de estudiantes si soy uno
+             if (currentUser.role === 'student') {
+                setStudents(prev => prev.map(s => s.id === currentUser.id ? { ...s, ...updatedData } : s));
+             }
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -5,98 +5,123 @@
 :root {
   --font-size: 16px;
   
-  /* Colores Pasteles EdTech */
-  --pastel-sky-blue: #A8D8FF;
-  --pastel-vanilla: #FFF4B7;
-  --pastel-coral: #FFB5A7;
-  --pastel-mint: #B5F8D4;
-  --pastel-lavender: #E0BBE4;
-  --pastel-peach: #FFE5D9;
+  /* --- PALETA EXTRACTADA DE LA IMAGEN (MAÍZ) --- */
+  /* Usamos nombres semánticos para mantener orden */
+  --corn-purple-deep: #5B2C6F;   /* Morado Oscuro (Maíz) */
+  --corn-purple-light: #9B59B6;  /* Morado Medio (Brillo) */
+  --corn-yellow-gold: #F4D03F;   /* Amarillo Dorado (Granos) */
+  --corn-yellow-soft: #FCF3CF;   /* Amarillo Crema (Fondo claro) */
+  --corn-surface-lilac: #F4ECF7; /* Lila muy suave (Superficie luz) */
   
-  /* Colores de fondo y texto */
-  --background: #FAFBFC;
-  --foreground: #2D3748;
-  --card: #ffffff;
-  --card-foreground: #2D3748;
-  --popover: #ffffff;
-  --popover-foreground: #2D3748;
+  /* --- VARIABLES DE SISTEMA --- */
   
-  /* Colores primarios basados en pasteles */
-  --primary: #A8D8FF;
-  --primary-foreground: #1A365D;
-  --secondary: #B5F8D4;
-  --secondary-foreground: #1C4532;
+  /* Fondo y Texto: Base blanca limpia con texto gris oscuro para lectura cómoda */
+  --background: #FFFFFF;
+  --foreground: #1A202C; /* Gris muy oscuro, casi negro */
+
+  /* Tarjetas y Popovers */
+  --card: #FFFFFF;
+  --card-foreground: #1A202C;
+  --popover: #FFFFFF;
+  --popover-foreground: #5B2C6F; /* Texto morado en popups para elegancia */
+
+  /* PRIMARIO: El Morado Profundo. Botones y acciones principales */
+  --primary: #5B2C6F;
+  --primary-foreground: #FFFFFF; /* Texto blanco sobre botón morado */
+
+  /* SECUNDARIO: Un lila suave. Para botones secundarios o fondos de bloque */
+  --secondary: #F4ECF7;
+  --secondary-foreground: #5B2C6F; /* Texto morado sobre fondo lila */
+
+  /* MUTED: Elementos deshabilitados o sutiles */
   --muted: #F7FAFC;
   --muted-foreground: #718096;
-  --accent: #FFE5D9;
-  --accent-foreground: #2D3748;
-  --destructive: #FFB5A7;
-  --destructive-foreground: #742A2A;
-  
-  /* Bordes y componentes */
-  --border: rgba(0, 0, 0, 0.08);
-  --input: transparent;
+
+  /* ACENTO: El Amarillo Dorado. Para destacar cosas importantes */
+  --accent: #F4D03F;
+  --accent-foreground: #2D3748; /* Texto oscuro sobre amarillo para contraste */
+
+  /* DESTRUCTIVE: Mantenemos un tono salmón/rojo pero armonizado */
+  --destructive: #E57373;
+  --destructive-foreground: #FFFFFF;
+
+  /* Bordes y Componentes */
+  --border: rgba(91, 44, 111, 0.15); /* Borde sutilmente morado */
+  --input: rgba(91, 44, 111, 0.1);
   --input-background: #FFFFFF;
   --switch-background: #CBD5E0;
+  
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #A8D8FF;
   
-  /* Colores de gráficos */
-  --chart-1: #A8D8FF;
-  --chart-2: #B5F8D4;
-  --chart-3: #FFF4B7;
-  --chart-4: #FFB5A7;
-  --chart-5: #E0BBE4;
-  
+  /* Ring: El anillo de foco al hacer clic */
+  --ring: #9B59B6;
+
+  /* GRÁFICOS: Gradiente derivado de la imagen */
+  --chart-1: #5B2C6F; /* Morado Oscuro */
+  --chart-2: #F4D03F; /* Amarillo */
+  --chart-3: #9B59B6; /* Morado Medio */
+  --chart-4: #F5B041; /* Naranja/Amarillo oscuro */
+  --chart-5: #D2B4DE; /* Lila */
+
   --radius: 1rem;
-  
-  /* Sidebar */
-  --sidebar: #ffffff;
+
+  /* Sidebar: Un toque muy sutil de lila para diferenciar del contenido principal */
+  --sidebar: #FAFAFA; 
   --sidebar-foreground: #2D3748;
-  --sidebar-primary: #A8D8FF;
-  --sidebar-primary-foreground: #1A365D;
-  --sidebar-accent: #F7FAFC;
-  --sidebar-accent-foreground: #2D3748;
-  --sidebar-border: rgba(0, 0, 0, 0.08);
-  --sidebar-ring: #A8D8FF;
+  --sidebar-primary: #5B2C6F;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F4ECF7;
+  --sidebar-accent-foreground: #5B2C6F;
+  --sidebar-border: rgba(91, 44, 111, 0.08);
+  --sidebar-ring: #9B59B6;
 }
 
+/* MODO OSCURO: Invertimos la lógica. Fondo Morado Muy Oscuro, Texto Claro */
 .dark {
-  --background: #1A202C;
-  --foreground: #F7FAFC;
-  --card: #2D3748;
-  --card-foreground: #F7FAFC;
-  --popover: #2D3748;
-  --popover-foreground: #F7FAFC;
-  --primary: #63B3ED;
-  --primary-foreground: #F7FAFC;
-  --secondary: #68D391;
-  --secondary-foreground: #F7FAFC;
-  --muted: #4A5568;
-  --muted-foreground: #CBD5E0;
-  --accent: #4A5568;
-  --accent-foreground: #F7FAFC;
-  --destructive: #FC8181;
-  --destructive-foreground: #F7FAFC;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: #63B3ED;
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
-  --chart-1: #63B3ED;
-  --chart-2: #68D391;
-  --chart-3: #F6E05E;
-  --chart-4: #FC8181;
-  --chart-5: #D6BCFA;
-  --sidebar: #2D3748;
-  --sidebar-foreground: #F7FAFC;
-  --sidebar-primary: #63B3ED;
-  --sidebar-primary-foreground: #F7FAFC;
-  --sidebar-accent: #4A5568;
-  --sidebar-accent-foreground: #F7FAFC;
+  --background: #181221; /* Casi negro con tinte morado */
+  --foreground: #F4ECF7; /* Blanco lila */
+
+  --card: #241B35; /* Morado oscuro para tarjetas */
+  --card-foreground: #F4ECF7;
+
+  --popover: #241B35;
+  --popover-foreground: #F4ECF7;
+
+  /* En modo oscuro, el primario se aclara para brillar */
+  --primary: #9B59B6; 
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #4A235A;
+  --secondary-foreground: #F4D03F; /* Texto amarillo sobre fondo morado */
+
+  --muted: #372E48;
+  --muted-foreground: #A0AEC0;
+
+  --accent: #F4D03F; /* El amarillo sigue siendo acento */
+  --accent-foreground: #1A202C;
+
+  --destructive: #EF5350;
+  --destructive-foreground: #FFFFFF;
+
+  --border: rgba(255, 255, 255, 0.15);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #9B59B6;
+
+  --chart-1: #9B59B6;
+  --chart-2: #F4D03F;
+  --chart-3: #D2B4DE;
+  --chart-4: #F5B041;
+  --chart-5: #5B2C6F;
+
+  --sidebar: #1F162B;
+  --sidebar-foreground: #F4ECF7;
+  --sidebar-primary: #9B59B6;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #4A235A;
+  --sidebar-accent-foreground: #F4D03F;
   --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #63B3ED;
+  --sidebar-ring: #9B59B6;
 }
 
 @theme inline {
@@ -138,14 +163,6 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  
-  /* Colores pasteles personalizados */
-  --color-pastel-sky-blue: var(--pastel-sky-blue);
-  --color-pastel-vanilla: var(--pastel-vanilla);
-  --color-pastel-coral: var(--pastel-coral);
-  --color-pastel-mint: var(--pastel-mint);
-  --color-pastel-lavender: var(--pastel-lavender);
-  --color-pastel-peach: var(--pastel-peach);
 }
 
 @layer base {
@@ -160,7 +177,7 @@
 }
 
 /**
- * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ * Typography Scaling
  */
 @layer base {
   :where(:not(:has([class*=' text-']), :not(:has([class^='text-'])))) {
@@ -168,45 +185,25 @@
       font-size: var(--text-2xl);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
+      color: var(--primary); /* Los títulos ahora usan el color de marca */
     }
-
     h2 {
       font-size: var(--text-xl);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
+      color: var(--foreground);
     }
-
     h3 {
       font-size: var(--text-lg);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
     }
-
     h4 {
       font-size: var(--text-base);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
     }
-
     p {
-      font-size: var(--text-base);
-      font-weight: var(--font-weight-normal);
-      line-height: 1.5;
-    }
-
-    label {
-      font-size: var(--text-base);
-      font-weight: var(--font-weight-medium);
-      line-height: 1.5;
-    }
-
-    button {
-      font-size: var(--text-base);
-      font-weight: var(--font-weight-medium);
-      line-height: 1.5;
-    }
-
-    input {
       font-size: var(--text-base);
       font-weight: var(--font-weight-normal);
       line-height: 1.5;
@@ -237,7 +234,7 @@ html {
   animation: slideIn 0.3s ease-out;
 }
 
-/* Estilos para scrollbar suaves */
+/* Scrollbar personalizado con los colores nuevos */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -248,15 +245,14 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E0;
+  background: #D7BDE2; /* Un lila medio para el scroll */
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #A0AEC0;
+  background: #9B59B6; /* Morado al hacer hover */
 }
 
-/* Utilidad de accesibilidad para screen readers */
 .sr-only {
   position: absolute;
   width: 1px;

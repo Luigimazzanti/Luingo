@@ -55,7 +55,36 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return sub ? (sub.status || 'submitted') : 'assigned';
   };
 
-  const pendingTasks = tasks.filter(t => {
+  // ✅ FILTRO MAESTRO DE VISIBILIDAD (SIMPLIFICADO Y DIRECTO)
+  const visibleTasks = tasks.filter(t => {
+    const scope = t.content_data?.assignment_scope;
+    const studentId = String(student.id);
+    const studentLevel = student.current_level_code || 'A1'; // Fallback seguro
+
+    // 🔍 DEBUGGING (Puedes quitar esto luego)
+    // console.log(`Tarea: ${t.title} | Tipo: ${scope?.type} | Target: ${scope?.targetId} | Mi Nivel: ${studentLevel}`);
+
+    // CASO 1: Tarea Individual
+    // Si el tipo es 'individual', SOLO importa si el ID coincide.
+    if (scope?.type === 'individual') {
+      return String(scope.targetId) === studentId;
+    }
+
+    // CASO 2: Tarea Por Nivel
+    // Si el tipo es 'level', SOLO importa si el nivel coincide.
+    if (scope?.type === 'level') {
+      return String(scope.targetId) === String(studentLevel);
+    }
+
+    // CASO 3: Tarea Antigua / Sin Scope (Retrocompatibilidad)
+    // Si no tiene scope definido, asumimos que es para el nivel marcado en level_tag
+    // O si es muy vieja, asumimos que es para todos (o lo ocultamos según prefieras)
+    // Aquí asumimos: Si no tiene scope, se rige por level_tag.
+    const legacyLevel = t.level_tag || 'A1';
+    return legacyLevel === studentLevel;
+  });
+
+  const pendingTasks = visibleTasks.filter(t => {
     const status = getTaskStatus(t.id);
     
     // 🔥 LÓGICA ESPECÍFICA PARA PDFs: Siempre mostrar como pendiente si tiene borrador
@@ -77,7 +106,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return true;
   });
 
-  const completedTasks = tasks.filter(t => {
+  const completedTasks = visibleTasks.filter(t => {
     const status = getTaskStatus(t.id);
     return status === 'submitted' || status === 'graded';
   });

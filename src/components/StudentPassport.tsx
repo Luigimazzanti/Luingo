@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Submission, Task } from '../types';
-import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle, Trash2, BookOpen } from 'lucide-react';
+import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle, Trash2, BookOpen, Check, Edit2, Save } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { LUINGO_LEVELS } from '../lib/mockData';
 import { cn } from '../lib/utils';
-import { deleteMoodlePost, gradeSubmission } from '../lib/moodle';
+import { deleteMoodlePost, gradeSubmission, saveUserPreferences } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 import { TextAnnotator } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
@@ -41,6 +41,34 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
   const [currentCorrections, setCurrentCorrections] = useState<any[]>([]); // ✅ NUEVO: Estado local para correcciones
   const [isEditingPdf, setIsEditingPdf] = useState(false); // ✅ NUEVO: Estado para editar PDF
   const [pdfAnnotations, setPdfAnnotations] = useState<any[]>([]); // ✅ NUEVO: Anotaciones PDF locales
+  
+  // ✅ NUEVO: Estados para gestión de nivel
+  const [isEditingLevel, setIsEditingLevel] = useState(false);
+  const [tempLevel, setTempLevel] = useState(student.current_level_code);
+
+  // ✅ NUEVO: Función para guardar el nivel definitivo
+  const handleLevelUpdate = async (newLevel: string) => {
+    try {
+      // 1. Guardar en BD (Supabase/Moodle)
+      await saveUserPreferences(student.id, { 
+        level_code: newLevel,    // Nuevo nivel oficial
+        pending_level: null      // Limpiamos la solicitud pendiente
+      });
+
+      // 2. Actualizar visualmente (Optimistic UI)
+      student.current_level_code = newLevel as any;
+      student.pending_level = undefined;
+      
+      toast.success(`Nivel actualizado a ${newLevel}`);
+      setIsEditingLevel(false);
+      
+      // 3. Refrescar datos globales si existe la función
+      if (onRefresh) onRefresh();
+      
+    } catch (e) {
+      toast.error("Error al guardar el nivel");
+    }
+  };
 
   // ✅ PRECARGAR DATOS AL ABRIR MODAL
   useEffect(() => {
@@ -236,7 +264,49 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                             <Medal className="w-3 h-3 text-amber-500" /> {currentLevelInfo.label}
                         </div>
                         <h1 className="text-lg md:text-2xl font-black text-slate-800 truncate leading-tight mb-0.5">{student.name}</h1>
-                        <p className="text-slate-400 text-xs font-medium truncate mb-3">{student.email}</p>
+                        
+                        {/* ✅ EMAIL + SELECTOR DE NIVEL INTEGRADO */}
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-slate-500 text-xs font-medium">{student.email}</span>
+                          
+                          {/* SEPARADOR */}
+                          <span className="text-slate-300">•</span>
+
+                          {/* ✅ SELECTOR DE NIVEL INTEGRADO */}
+                          <div className="relative group">
+                            {isTeacher ? (
+                              // MODO PROFESOR: Selector Discreto
+                              <select
+                                value={student.current_level_code}
+                                onChange={async (e) => {
+                                  const newLvl = e.target.value;
+                                  // Actualizar estado local visualmente
+                                  student.current_level_code = newLvl as any;
+                                  // Guardar en BD
+                                  await saveUserPreferences(student.id, { level_code: newLvl });
+                                  toast.success(`Nivel de ${student.name} cambiado a ${newLvl}`);
+                                  if(onRefresh) onRefresh(); // Recargar para asegurar consistencia
+                                }}
+                                className="bg-indigo-50 border-none text-indigo-700 text-xs font-black uppercase py-1 px-2 pr-6 rounded-md cursor-pointer hover:bg-indigo-100 transition-colors appearance-none focus:ring-2 focus:ring-indigo-500"
+                              >
+                                {['A1','A2','B1','B2','C1','C2'].map(l => <option key={l} value={l}>{l}</option>)}
+                              </select>
+                            ) : (
+                              // MODO ESTUDIANTE: Solo Badge
+                              <span className="bg-indigo-50 text-indigo-700 text-xs font-black uppercase py-1 px-2 rounded-md border border-indigo-100">
+                                Nivel {student.current_level_code}
+                              </span>
+                            )}
+                            
+                            {/* Icono de flechita para el select del profe */}
+                            {isTeacher && (
+                              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-400">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
                         <div className="flex gap-1 md:gap-2">
                             <Button onClick={onAssignTask} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 rounded-lg text-[10px] md:text-xs shadow-sm min-w-0">✨ Nueva Misión</Button>
                             <Button variant="outline" onClick={onBack} className="px-2 md:px-4 border-slate-200 text-slate-500 font-bold h-9 rounded-lg text-[10px] md:text-xs hover:bg-slate-50 shrink-0">Cerrar</Button>

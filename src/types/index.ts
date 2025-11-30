@@ -46,6 +46,9 @@ export interface ContentData {
   // Campos para Document (PDF)
   pdf_url?: string;
   instructions?: string; // Instrucciones del profesor para el documento
+  
+  // ✅ NUEVO: Asignación de estudiantes
+  assignees?: string[]; // Array de IDs de estudiantes o ['all']
 }
 
 // 1. TABLE: TASKS_LIBRARY (La Biblioteca)
@@ -137,6 +140,7 @@ export interface Student extends User {
   xp_points: number;
   level: number;
   current_level_code: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'; // New prop for filtering
+  pending_level?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'; // ✅ NUEVO: Solicitud de cambio pendiente
   materials_viewed: string[];
 }
 
