@@ -11,6 +11,7 @@ import { deleteMoodlePost, gradeSubmission, saveUserPreferences } from '../lib/m
 import { toast } from 'sonner@2.0.3';
 import { TextAnnotator } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
+import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ AGREGADO: Sistema de notificaciones
 
 interface StudentPassportProps {
   student: Student;
@@ -61,6 +62,11 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
       
       toast.success(`Nivel actualizado a ${newLevel}`);
       setIsEditingLevel(false);
+      
+      // ✅ NOTIFICACIÓN POR EMAIL (LÓGICA AGREGADA)
+      if (student.email) {
+        sendNotification([student.email], "Nivel Actualizado", emailTemplates.levelUp(newLevel));
+      }
       
       // 3. Refrescar datos globales si existe la función
       if (onRefresh) onRefresh();

@@ -9,6 +9,7 @@ import { toast } from 'sonner@2.0.3';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { createClient } from '@supabase/supabase-js';
 import { Student } from '../types'; // ✅ NUEVO: Import de Student
+import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ AGREGADO: Sistema de notificaciones
 
 // ========== TIPOS ==========
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
@@ -327,6 +328,19 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     };
 
     onSaveTask(taskData);
+
+    // ✅ NOTIFICACIÓN POR EMAIL (LÓGICA AGREGADA)
+    if (taskData.content_data.assignees && taskData.content_data.assignees[0] !== 'all') {
+      // Lógica para individuales
+      const targets = students.filter(s => taskData.content_data.assignees.includes(s.id));
+      const emails = targets.map(t => t.email).filter(Boolean);
+      sendNotification(emails, `Nueva Tarea: ${title}`, emailTemplates.newTask(title));
+    } else {
+      // Lógica para nivel (si assignees es 'all', buscamos por nivel)
+      const targets = students.filter(s => s.current_level_code === selectedLevel);
+      const emails = targets.map(t => t.email).filter(Boolean);
+      sendNotification(emails, `Nueva Tarea: ${title}`, emailTemplates.newTask(title));
+    }
   };
 
   // ========== ✅ GENERACIÓN IA (GROQ SECURE) ==========

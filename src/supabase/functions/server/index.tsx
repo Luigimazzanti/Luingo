@@ -144,4 +144,31 @@ app.post("/make-server-ebbb5c67/user-prefs", async (c) => {
   }
 });
 
+// ✅ NUEVO ENDPOINT: RESEND EMAIL
+app.post("/make-server-ebbb5c67/send-email", async (c) => {
+  try {
+    const { to, subject, html } = await c.req.json();
+    const RESEND_KEY = "re_d6oDB5rh_6EHLuWjQxqzWiXtJxmjcM2kB"; // Tu clave real
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${RESEND_KEY}`
+      },
+      body: JSON.stringify({
+        from: 'LuinGo <onboarding@resend.dev>',
+        to: to,
+        subject: subject,
+        html: html
+      })
+    });
+
+    const data = await res.json();
+    return c.json(data);
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
+});
+
 Deno.serve(app.fetch);
