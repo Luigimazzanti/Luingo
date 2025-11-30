@@ -59,28 +59,30 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const visibleTasks = tasks.filter(t => {
     const scope = t.content_data?.assignment_scope;
     const studentId = String(student.id);
-    const studentLevel = student.current_level_code || 'A1'; // Fallback seguro
+    const studentLevel = student.current_level_code || 'A1';
 
-    // 🔍 DEBUGGING (Puedes quitar esto luego)
-    // console.log(`Tarea: ${t.title} | Tipo: ${scope?.type} | Target: ${scope?.targetId} | Mi Nivel: ${studentLevel}`);
-
-    // CASO 1: Tarea Individual
-    // Si el tipo es 'individual', SOLO importa si el ID coincide.
+    // 1. ASIGNACIÓN INDIVIDUAL (Prioridad Máxima)
+    // Si la tarea es individual, solo importa si soy yo el destinatario.
+    // Ignoramos totalmente los niveles aquí.
     if (scope?.type === 'individual') {
-      return String(scope.targetId) === studentId;
+       return String(scope.targetId) === studentId;
     }
 
-    // CASO 2: Tarea Por Nivel
-    // Si el tipo es 'level', SOLO importa si el nivel coincide.
+    // 2. ASIGNACIÓN POR NIVEL
+    // Si la tarea es por nivel, comparamos el targetId del scope.
+    // NO usamos t.level_tag aquí porque puede venir corrupto como 'A1'.
     if (scope?.type === 'level') {
-      return String(scope.targetId) === String(studentLevel);
+       return String(scope.targetId) === String(studentLevel);
     }
-
-    // CASO 3: Tarea Antigua / Sin Scope (Retrocompatibilidad)
-    // Si no tiene scope definido, asumimos que es para el nivel marcado en level_tag
-    // O si es muy vieja, asumimos que es para todos (o lo ocultamos según prefieras)
-    // Aquí asumimos: Si no tiene scope, se rige por level_tag.
+    
+    // 3. FALLBACK (Tareas antiguas sin scope)
+    // Solo aquí confiamos en la etiqueta general
     const legacyLevel = t.level_tag || 'A1';
+    const assignees = t.content_data?.assignees || ['all'];
+    // Si tiene lista de asignados explícita (legacy)
+    if (assignees.length > 0 && !assignees.includes('all')) {
+        return assignees.includes(studentId);
+    }
     return legacyLevel === studentLevel;
   });
 

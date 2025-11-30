@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Task, Classroom, Submission, User, PDFAnnotation } from '../types';
 import { StudentCard } from './StudentCard';
-import { Users, QrCode, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText } from 'lucide-react';
+import { Users, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -12,6 +12,7 @@ import { toast } from 'sonner@2.0.3';
 import { TextAnnotator, Annotation } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
 import { CommunityFeed } from './community/CommunityFeed';
+import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ NUEVO: Notificaciones
 
 interface TeacherDashboardProps {
   classroom: Classroom;
@@ -40,7 +41,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onRefreshSubmissions,
   onLogout
 }) => {
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
   // ✅ AÑADIDO 'community' AL ESTADO
   const [viewMode, setViewMode] = useState<'students' | 'tasks' | 'grades' | 'community'>('students');
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
@@ -164,6 +164,17 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       const correctionCount = finalCorrections.length + finalPdfAnnotations.length;
       toast.success(`✅ Calificación guardada (${correctionCount} anotaciones/correcciones)`);
       
+      // ✅ ENVIAR NOTIFICACIÓN AL ESTUDIANTE
+      const studentEmail = students.find(s => s.id === attempt.student_id)?.email;
+      if (studentEmail) {
+        sendNotification(
+          [studentEmail],
+          `Tarea Calificada: ${attempt.task_title}`,
+          emailTemplates.graded(attempt.task_title, newGrade, feedbackInput)
+        );
+        toast.success('📧 Notificación enviada al estudiante');
+      }
+      
       if (onRefreshSubmissions) {
         onRefreshSubmissions();
       }
@@ -192,16 +203,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             </div>
             
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <Button
-                onClick={() => setShowInviteDialog(true)}
-                variant="outline"
-                className="gap-2 rounded-xl border-slate-200 hover:border-indigo-300 flex-1 sm:flex-none"
-              >
-                <QrCode className="w-4 h-4" />
-                <span className="hidden sm:inline">Código de Invitación</span>
-                <span className="sm:hidden">Invitación</span>
-              </Button>
-              
               <Button
                 onClick={onGenerateTask}
                 className="gap-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold shadow-md flex-1 sm:flex-none"
@@ -282,7 +283,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 <div className="col-span-full text-center py-20">
                   <Users className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                   <p className="text-slate-400 font-bold">No hay estudiantes inscritos</p>
-                  <p className="text-slate-400 text-sm">Comparte el código de invitación para que se unan</p>
+                  <p className="text-slate-400 text-sm">Los estudiantes aparecerán cuando se unan a la clase</p>
                 </div>
               )}
             </div>
@@ -712,31 +713,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           )}
           </div>
           {/* ✅ FIX: Cierre del contenedor con padding */}
-        </DialogContent>
-      </Dialog>
-
-      {/* ========== DIALOG DE INVITACIÓN ========== */}
-      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
-        <DialogContent className="max-w-md rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-slate-800">
-              Código de Invitación
-            </DialogTitle>
-          </DialogHeader>
-          <div className="text-center py-6">
-            <div className="bg-slate-50 p-8 rounded-2xl border-2 border-dashed border-slate-300 mb-6">
-              <QrCode className="w-32 h-32 mx-auto text-slate-400 mb-4" />
-              <p className="text-xs font-bold text-slate-500 uppercase mb-2">
-                Código de Clase
-              </p>
-              <p className="text-4xl font-black text-indigo-600 tracking-wider">
-                {classroom.invite_code}
-              </p>
-            </div>
-            <p className="text-sm text-slate-600">
-              Comparte este código con tus estudiantes para que se unan a la clase
-            </p>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -22,6 +22,7 @@ import { ArrowLeft, MessageCircle, Play, LogOut, Sparkles, Target, Home, Setting
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './components/ui/dialog';
 import { Toaster, toast } from 'sonner@2.0.3';
+import luingoLogo from 'figma:asset/5c3aee031df4e645d2ea41499714325beb9cd4f4.png';
 import { createClient } from '@supabase/supabase-js';
 import { projectId, publicAnonKey } from './utils/supabase/info';
 
@@ -502,7 +503,7 @@ export default function App() {
         <div className="bg-white p-8 rounded-3xl shadow-xl border-b-4 border-indigo-300 max-w-md w-full">
           <div className="text-center mb-8">
             <div className="w-24 h-24 rounded-2xl flex items-center justify-center mx-auto mb-4 overflow-hidden">
-              <img src="/luingo-logo.png" alt="LuinGo Logo" className="w-full h-full object-cover" />
+              <img src={luingoLogo} alt="LuinGo Logo" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-3xl font-black text-slate-800 mb-2">LuinGo</h1>
             <p className="text-slate-500">Plataforma de Aprendizaje Gamificado</p>

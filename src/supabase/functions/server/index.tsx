@@ -144,4 +144,82 @@ app.post("/make-server-ebbb5c67/user-prefs", async (c) => {
   }
 });
 
+// ✅ EMAIL SERVICE (RESEND)
+app.post("/make-server-ebbb5c67/send-email", async (c) => {
+  try {
+    const { to, subject, html } = await c.req.json();
+    
+    // 🔑 CLAVE REAL DE RESEND
+    const RESEND_KEY = "re_d6oDB5rh_6EHLuWjQxqzWiXtJxmjcM2kB"; 
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${RESEND_KEY}`
+      },
+      body: JSON.stringify({
+        from: 'LuinGo <onboarding@resend.dev>', // Cambia esto si verificas tu dominio en Resend
+        to: to, 
+        subject: subject,
+        html: html
+      })
+    });
+
+    const data = await res.json();
+    
+    if (!res.ok) {
+      console.error("Resend API error:", data);
+      return c.json({ error: data }, res.status);
+    }
+    
+    console.log("✅ Email enviado exitosamente:", data);
+    return c.json(data);
+
+  } catch (e) {
+    console.error("Email error:", e);
+    return c.json({ error: String(e) }, 500);
+  }
+});
+
+// ✅ AI PROXY (GROQ - Fix CORS)
+app.post("/make-server-ebbb5c67/ai-proxy", async (c) => {
+  try {
+    const { messages, model, apiKey } = await c.req.json();
+    
+    if (!apiKey) {
+      return c.json({ error: "API Key is required" }, 400);
+    }
+
+    console.log("🤖 Llamando a Groq API con modelo:", model);
+    
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({ 
+        model: model || "llama3-70b-8192", 
+        messages, 
+        temperature: 0.5 
+      })
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error("Groq API error:", data);
+      return c.json({ error: data }, response.status);
+    }
+    
+    console.log("✅ IA respondió exitosamente");
+    return c.json(data);
+
+  } catch (e) {
+    console.error("AI Proxy error:", e);
+    return c.json({ error: String(e) }, 500);
+  }
+});
+
 Deno.serve(app.fetch);

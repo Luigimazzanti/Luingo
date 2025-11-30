@@ -1,16 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Submission, Task } from '../types';
-import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle, Trash2, BookOpen, Check, Edit2, Save } from 'lucide-react';
+import { X, Send, Loader2, Calendar, TrendingUp, FileText, Eye, Award, Trash2, Edit2, Save, Target, Sparkles, MapPin, Star, Trophy } from 'lucide-react';
 import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { TextAnnotator } from './TextAnnotator';
+import { saveUserPreferences } from '../lib/moodle';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { LUINGO_LEVELS } from '../lib/mockData';
-import { cn } from '../lib/utils';
-import { deleteMoodlePost, gradeSubmission, saveUserPreferences } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
-import { TextAnnotator } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
+import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ NUEVO: Notificaciones
+
+// ✅ FIX CRÍTICO: Definir LUINGO_LEVELS localmente
+const LUINGO_LEVELS = [
+  { level: 1, min_xp: 0, label: 'Aprendiz', icon: '🪨', color: 'from-stone-400 to-stone-600' },
+  { level: 2, min_xp: 101, label: 'Adepto', icon: '💧', color: 'from-blue-400 to-cyan-600' },
+  { level: 3, min_xp: 251, label: 'Experto', icon: '⚡', color: 'from-amber-400 to-orange-600' },
+  { level: 4, min_xp: 451, label: 'Maestro', icon: '🔥', color: 'from-rose-400 to-pink-600' },
+  { level: 5, min_xp: 701, label: 'Leyenda', icon: '💎', color: 'from-purple-400 to-violet-600' },
+  { level: 6, min_xp: 1001, label: 'Titán', icon: '👑', color: 'from-yellow-400 to-amber-600' },
+  { level: 7, min_xp: 1501, label: 'Dios', icon: '⭐', color: 'from-cyan-400 to-blue-600' }
+];
 
 interface StudentPassportProps {
   student: Student;
@@ -62,7 +72,17 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
       toast.success(`Nivel actualizado a ${newLevel}`);
       setIsEditingLevel(false);
       
-      // 3. Refrescar datos globales si existe la función
+      // ✅ 3. ENVIAR NOTIFICACIÓN AL ESTUDIANTE
+      if (student.email) {
+        sendNotification(
+          [student.email],
+          `Nivel Actualizado: ${newLevel}`,
+          emailTemplates.levelUp(newLevel)
+        );
+        toast.success('📧 Notificación enviada al estudiante');
+      }
+      
+      // 4. Refrescar datos globales si existe la función
       if (onRefresh) onRefresh();
       
     } catch (e) {
