@@ -1394,6 +1394,10 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .grid-cols-6 {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
   .flex-col {
     flex-direction: column;
   }
@@ -1757,6 +1761,10 @@
 
   .border-indigo-600 {
     border-color: var(--color-indigo-600);
+  }
+
+  .border-indigo-700 {
+    border-color: var(--color-indigo-700);
   }
 
   .border-indigo-800 {
@@ -2472,6 +2480,10 @@
     padding-inline: calc(var(--spacing) * 8);
   }
 
+  .px-10 {
+    padding-inline: calc(var(--spacing) * 10);
+  }
+
   .py-0\.5 {
     padding-block: calc(var(--spacing) * .5);
   }
@@ -2546,10 +2558,6 @@
 
   .pr-6 {
     padding-right: calc(var(--spacing) * 6);
-  }
-
-  .pr-8 {
-    padding-right: calc(var(--spacing) * 8);
   }
 
   .pr-10 {
@@ -3832,6 +3840,11 @@
 
   .active\:translate-y-1:active {
     --tw-translate-y: calc(var(--spacing) * 1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .active\:translate-y-\[2px\]:active {
+    --tw-translate-y: 2px;
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 

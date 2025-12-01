@@ -439,6 +439,7 @@ export const getCommunityPosts = async () => {
         .split("<span")[0]
         .replace(/<[^>]*>?/gm, ""),
       targetLevel: meta?.level || "ALL",
+      scope: meta?.scope || { type: 'level', targetId: meta?.level || 'ALL' }, // ✅ Scope incluido
       likes: likesArray, // ✅ Usamos la variable segura
       date: safeDate(disc.created),
       commentsCount: disc.numreplies || 0,
@@ -450,9 +451,12 @@ export const createCommunityPost = async (
   title: string,
   blocks: any[],
   level: string,
+  scope?: any // ✅ Nuevo parámetro opcional
 ) => {
-  const meta = { level, type: "mixed", blocks, likes: [] };
+  // Guardamos el scope dentro de los metadatos
+  const meta = { level, type: "mixed", blocks, likes: [], scope };
   const message = `Post...<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
+  
   return (
     await callMoodle("mod_forum_add_discussion", {
       forumid: COMMUNITY_FORUM_ID,

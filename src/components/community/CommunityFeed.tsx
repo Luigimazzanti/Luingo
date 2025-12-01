@@ -24,11 +24,13 @@ import { toast } from "sonner@2.0.3";
 interface CommunityFeedProps {
   student: any;
   isTeacher?: boolean;
+  students?: any[]; // ✅ NUEVO: Lista de estudiantes para ResourceComposer
 }
 
 export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   student,
   isTeacher = false,
+  students = [], // ✅ NUEVO
 }) => {
   const [posts, setPosts] = useState<any[]>([]);
   const [filterMode, setFilterMode] = useState<
@@ -65,18 +67,41 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     loadPosts();
   }, []);
 
-  const filteredPosts = posts.filter((p) => {
-    if (isTeacher || filterMode === "all") return true;
-    const userLevel = student?.current_level_code || "A1";
-    return (
-      p.targetLevel === "ALL" || p.targetLevel === userLevel
-    );
+  // ✅ FILTRO DE VISIBILIDAD COMUNIDAD (Lógica Scope Robusta)
+  const filteredPosts = posts.filter(post => {
+    // 1. Si soy profesor, veo TODO.
+    if (isTeacher) return true;
+
+    // 2. Recuperar datos del post
+    // Moodle a veces guarda el scope, a veces no (legacy).
+    // Intentamos leer 'post.scope' (si viene de la API enriquecida) o parsear si es necesario.
+    // Asumimos que 'post' ya viene procesado con la propiedad 'scope' desde getCommunityPosts.
+    // Si no tiene scope, creamos un fallback basado en targetLevel.
+    const scope = (post as any).scope || { type: 'level', targetId: (post as any).targetLevel || 'ALL' };
+    
+    const myId = String(student.id);
+    const myLevel = student.current_level_code || 'A1';
+
+    // 3. Lógica OR (Igual que en Tareas)
+    
+    // A. Asignación Individual
+    if (scope.type === 'individual') {
+        return String(scope.targetId) === myId;
+    }
+
+    // B. Asignación por Nivel (o Público 'ALL')
+    if (scope.type === 'level') {
+        return scope.targetId === 'ALL' || String(scope.targetId) === String(myLevel);
+    }
+
+    return false;
   });
 
   const handlePublish = async (
     title: string,
     blocks: any[],
     level: string,
+    scope?: any // ✅ Nuevo parámetro opcional
   ) => {
     toast.loading("Publicando...");
     let success = false;
@@ -89,7 +114,8 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
         editingPost.likes,
       );
     } else {
-      success = await createCommunityPost(title, blocks, level);
+      // Llamada a la API con el nuevo parámetro scope
+      success = await createCommunityPost(title, blocks, level, scope);
     }
     toast.dismiss();
 
@@ -244,6 +270,8 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
                 setShowCreate(false);
                 setEditingPost(null);
               }}
+              students={students} // ✅ Pasamos la lista de estudiantes
+              userRole={isTeacher ? 'teacher' : 'student'} // ✅ Pasamos el rol
             />
           </div>
         </DialogContent>

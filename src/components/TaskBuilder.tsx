@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Upload, File } from 'lucide-react';
+import { X, Save, Plus, Trash2, CheckCircle2, List, Type, AlignLeft, CheckSquare, Mic, Sparkles, Loader2, Settings2, KeyRound, FileText, ImageIcon, Video, FileIcon, Upload, File, Users } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
@@ -601,6 +601,66 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
               </div>
             </div>
 
+            {/* ✅ NUEVO BLOQUE DE ASIGNACIÓN (Movido desde el footer) */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                 <label className="text-xs font-black text-slate-500 uppercase flex items-center gap-2">
+                    <Users className="w-4 h-4" /> Asignación
+                 </label>
+                 
+                 <div className="flex bg-white rounded-lg p-1 border border-slate-200">
+                    <button 
+                       onClick={() => setAssignMode('level')}
+                       className={cn("px-3 py-1 rounded-md text-xs font-bold transition-all", assignMode === 'level' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600')}
+                    >
+                       Por Nivel
+                    </button>
+                    <button 
+                       onClick={() => setAssignMode('individual')}
+                       className={cn("px-3 py-1 rounded-md text-xs font-bold transition-all", assignMode === 'individual' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600')}
+                    >
+                       Individual
+                    </button>
+                 </div>
+              </div>
+
+              {assignMode === 'level' ? (
+                 <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Selecciona el Nivel</label>
+                    <div className="grid grid-cols-6 gap-2">
+                       {['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(lvl => (
+                          <button
+                             key={lvl}
+                             onClick={() => setSelectedLevel(lvl)}
+                             className={cn(
+                                "h-9 rounded-lg font-black text-xs border-b-4 active:border-b-0 active:translate-y-[2px] transition-all",
+                                selectedLevel === lvl 
+                                   ? "bg-indigo-500 border-indigo-700 text-white shadow-indigo-200" 
+                                   : "bg-white border-slate-200 text-slate-400 hover:bg-slate-50"
+                             )}
+                          >
+                             {lvl}
+                          </button>
+                       ))}
+                    </div>
+                 </div>
+              ) : (
+                 <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Selecciona el Estudiante</label>
+                    <select
+                       value={assignedTo[0] === 'all' ? '' : assignedTo[0]}
+                       onChange={(e) => setAssignedTo([e.target.value])}
+                       className="w-full h-10 pl-3 bg-white border-2 border-slate-200 rounded-xl font-bold text-sm text-slate-700 focus:border-indigo-500 focus:ring-0"
+                    >
+                       <option value="" disabled>Buscar estudiante...</option>
+                       {students.map(s => (
+                          <option key={s.id} value={s.id}>{s.name} ({s.current_level_code})</option>
+                       ))}
+                    </select>
+                 </div>
+              )}
+            </div>
+
             <div>
               <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Título</label>
               <Input
@@ -907,60 +967,13 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
           )}
         </div>
 
-        {/* ========== FOOTER ========== */}
-        <div className="p-6 border-t border-slate-200 bg-white shrink-0 flex gap-4 items-center">
-          <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-200 flex-1">
-            <span className="text-xs font-black text-slate-400 uppercase ml-2 hidden md:block">Asignar a:</span>
-            
-            {/* SELECTOR DE MODO */}
-            <div className="relative">
-              <select
-                value={assignMode}
-                onChange={(e) => setAssignMode(e.target.value as 'level' | 'individual')}
-                className="h-10 pl-3 pr-8 bg-white border rounded-lg font-bold text-sm focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                <option value="level">📚 Por Nivel</option>
-                <option value="individual">👤 Estudiante Específico</option>
-              </select>
-            </div>
-
-            {/* CONTROLES DINÁMICOS */}
-            {assignMode === 'level' ? (
-              // MODO NIVEL: Selecciona el nivel del contenido
-              <div className="relative flex-1">
-                <select
-                  value={selectedLevel}
-                  onChange={(e) => setSelectedLevel(e.target.value)}
-                  className="h-10 pl-3 bg-indigo-50 border-indigo-200 text-indigo-700 rounded-lg font-bold text-sm w-full"
-                >
-                  {['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(lvl => (
-                    <option key={lvl} value={lvl}>Todos los {lvl}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              // MODO INDIVIDUAL: Selecciona al estudiante
-              <div className="relative flex-1">
-                <select
-                  value={assignedTo[0] === 'all' ? '' : assignedTo[0]}
-                  onChange={(e) => setAssignedTo([e.target.value])}
-                  className="h-10 pl-3 bg-white border-slate-200 text-slate-700 rounded-lg font-bold text-sm w-full"
-                >
-                  <option value="" disabled>Seleccionar alumno...</option>
-                  {students.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.current_level_code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
+        {/* ========== FOOTER LIMPIO ========== */}
+        <div className="p-6 border-t border-slate-200 bg-white shrink-0 flex justify-end">
           <Button
             onClick={handleSave}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 rounded-xl h-12 text-lg shadow-lg"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-10 rounded-xl h-12 text-lg shadow-lg shadow-indigo-200 transition-all hover:scale-105 active:scale-95"
           >
-            {initialData ? 'ACTUALIZAR' : 'GUARDAR'}
+            {initialData ? 'Guardar Cambios' : 'Crear Tarea'}
           </Button>
         </div>
 

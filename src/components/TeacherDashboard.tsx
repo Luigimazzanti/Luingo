@@ -425,7 +425,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           {viewMode === 'community' && (
             <CommunityFeed 
               student={currentUser} // ✅ Pasamos currentUser para que el profesor pueda firmar sus comentarios
-              isTeacher={true} 
+              isTeacher={true}
+              students={students} // ✅ Pasamos la lista de estudiantes para el selector
             />
           )}
         </div>

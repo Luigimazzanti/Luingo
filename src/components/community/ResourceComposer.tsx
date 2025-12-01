@@ -7,17 +7,30 @@ import { toast } from 'sonner@2.0.3';
 
 interface ResourceComposerProps {
   initialData?: { title: string, blocks: any[], level: string }; // ✅ CAMBIADO: blocks en lugar de content
-  onPublish: (title: string, blocks: any[], level: string) => void; // ✅ CAMBIADO: blocks en lugar de contentHtml
+  onPublish: (title: string, blocks: any[], level: string, scope?: any) => void; // ✅ CAMBIADO: Agregado scope
   onCancel: () => void;
+  students?: any[]; // ✅ NUEVO: Lista de estudiantes para selector individual
+  userRole?: string; // ✅ NUEVO: Rol del usuario (teacher/student)
 }
 
-export const ResourceComposer: React.FC<ResourceComposerProps> = ({ initialData, onPublish, onCancel }) => {
+export const ResourceComposer: React.FC<ResourceComposerProps> = ({ 
+  initialData, 
+  onPublish, 
+  onCancel,
+  students = [],
+  userRole = 'student'
+}) => {
   const [title, setTitle] = useState(initialData?.title || '');
   const [level, setLevel] = useState(initialData?.level || 'ALL');
   const [blocks, setBlocks] = useState<{type: string, content: string}[]>(
     initialData?.blocks || [{type: 'text', content: ''}] // ✅ RECUPERAR BLOQUES DIRECTAMENTE
   );
 
+  // ✅ Estados de Asignación (Inyectar esto)
+  const [assignMode, setAssignMode] = useState<'level' | 'individual'>('level');
+  const [selectedLevel, setSelectedLevel] = useState('ALL');
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  
   // ✅ VALIDACIÓN: Límite de 10 bloques
   const addBlock = (type: any) => {
     if (blocks.length >= 10) {
@@ -74,10 +87,22 @@ export const ResourceComposer: React.FC<ResourceComposerProps> = ({ initialData,
       return;
     }
 
-    console.log("📤 Publicando bloques puros:", validBlocks);
+    // ✅ Construcción del Scope (Igual que en Tareas)
+    let finalScope = { type: 'level', targetId: 'ALL' }; // Default Público
     
-    // ✅ ENVIAR BLOQUES DIRECTAMENTE (No HTML)
-    onPublish(title, validBlocks, level);
+    if (userRole === 'teacher') {
+        if (assignMode === 'individual') {
+            if (!selectedStudentId) return toast.error("Selecciona un estudiante");
+            finalScope = { type: 'individual', targetId: selectedStudentId };
+        } else {
+            finalScope = { type: 'level', targetId: selectedLevel };
+        }
+    }
+
+    console.log("📤 Publicando bloques puros con scope:", validBlocks, finalScope);
+    
+    // Pasamos el scope explícito a la función padre
+    onPublish(title, validBlocks, finalScope.targetId, finalScope);
   };
 
   return (
@@ -98,7 +123,7 @@ export const ResourceComposer: React.FC<ResourceComposerProps> = ({ initialData,
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
           <div>
             <label className="text-xs font-bold uppercase text-slate-500 mb-2 block">Título *</label>
             <Input
@@ -109,22 +134,44 @@ export const ResourceComposer: React.FC<ResourceComposerProps> = ({ initialData,
             />
           </div>
 
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500 mb-2 block">Nivel Target</label>
-            <select
-              className="w-full h-12 rounded-lg border border-slate-200 px-3 text-sm font-bold bg-white"
-              value={level}
-              onChange={e => setLevel(e.target.value)}
-            >
-              <option value="ALL">🌍 Todos los Niveles</option>
-              <option value="A1">🌱 A1 - Principiante</option>
-              <option value="A2">🌿 A2 - Elemental</option>
-              <option value="B1">🌳 B1 - Intermedio</option>
-              <option value="B2">🌲 B2 - Intermedio Alto</option>
-              <option value="C1">🏔️ C1 - Avanzado</option>
-              <option value="C2">⛰️ C2 - Maestría</option>
-            </select>
-          </div>
+          {/* ✅ SELECTOR DE AUDIENCIA (Solo Profesor) */}
+          {userRole === 'teacher' && (
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500 mb-2 block">Nivel Target</label>
+              <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-100">
+                  <select 
+                      value={assignMode}
+                      onChange={e => setAssignMode(e.target.value as any)}
+                      className="h-10 text-sm font-bold bg-transparent border-none rounded-lg cursor-pointer focus:ring-0 text-slate-600"
+                  >
+                      <option value="level">📚 Nivel</option>
+                      <option value="individual">👤 Alumno</option>
+                  </select>
+
+                  {assignMode === 'level' ? (
+                      <select 
+                          value={selectedLevel}
+                          onChange={e => setSelectedLevel(e.target.value)}
+                          className="h-10 text-sm font-bold bg-white border border-slate-200 rounded-md cursor-pointer focus:ring-0 flex-1 text-indigo-600"
+                      >
+                          <option value="ALL">Todos</option>
+                          {['A1','A2','B1','B2','C1','C2'].map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                  ) : (
+                      <select 
+                          value={selectedStudentId}
+                          onChange={e => setSelectedStudentId(e.target.value)}
+                          className="h-10 text-sm font-bold bg-white border border-slate-200 rounded-md cursor-pointer focus:ring-0 flex-1 text-indigo-600"
+                      >
+                          <option value="" disabled>Elegir estudiante...</option>
+                          {students.map(s => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                      </select>
+                  )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -208,7 +255,7 @@ export const ResourceComposer: React.FC<ResourceComposerProps> = ({ initialData,
         <div className="text-sm text-slate-500">
           <span className="font-bold">{blocks.filter(b => b.content.trim()).length}</span> bloque{blocks.filter(b => b.content.trim()).length !== 1 ? 's' : ''} con contenido
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
+        <div className="flex gap-3 w-full md:w-auto items-center">
           <Button
             variant="ghost"
             onClick={onCancel}
