@@ -171,7 +171,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
           {isTeacher && (
             <Button
               onClick={() => setShowCreate(true)}
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl shadow-lg"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl shadow-lg bg-[rgb(91,44,111)]"
             >
               <Plus className="w-5 h-5 mr-2" /> Nuevo Post
             </Button>

@@ -55,33 +55,32 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return sub ? (sub.status || 'submitted') : 'assigned';
   };
 
-  // ✅ FILTRO MAESTRO DE VISIBILIDAD (SIMPLIFICADO Y DIRECTO)
+  // ✅ FILTRO VISIBILIDAD (LÓGICA SCOPE ROBUSTA)
   const visibleTasks = tasks.filter(t => {
     const scope = t.content_data?.assignment_scope;
-    const studentId = String(student.id);
-    const studentLevel = student.current_level_code || 'A1'; // Fallback seguro
+    // Fallback si la tarea es vieja y no tiene scope
+    const legacyLevel = t.level_tag || t.content_data?.level || 'A1';
+    
+    const myId = String(student.id);
+    const myLevel = student.current_level_code || 'A1';
 
-    // 🔍 DEBUGGING (Puedes quitar esto luego)
-    // console.log(`Tarea: ${t.title} | Tipo: ${scope?.type} | Target: ${scope?.targetId} | Mi Nivel: ${studentLevel}`);
-
-    // CASO 1: Tarea Individual
-    // Si el tipo es 'individual', SOLO importa si el ID coincide.
+    // CASO 1: Tarea Individual (Prioridad)
     if (scope?.type === 'individual') {
-      return String(scope.targetId) === studentId;
+       return String(scope.targetId) === myId;
     }
 
     // CASO 2: Tarea Por Nivel
-    // Si el tipo es 'level', SOLO importa si el nivel coincide.
     if (scope?.type === 'level') {
-      return String(scope.targetId) === String(studentLevel);
+       return String(scope.targetId) === String(myLevel);
     }
 
-    // CASO 3: Tarea Antigua / Sin Scope (Retrocompatibilidad)
-    // Si no tiene scope definido, asumimos que es para el nivel marcado en level_tag
-    // O si es muy vieja, asumimos que es para todos (o lo ocultamos según prefieras)
-    // Aquí asumimos: Si no tiene scope, se rige por level_tag.
-    const legacyLevel = t.level_tag || 'A1';
-    return legacyLevel === studentLevel;
+    // CASO 3: Tarea Antigua (Sin Scope moderno)
+    // Si no tiene scope, confiamos en la etiqueta de nivel simple
+    if (!scope) {
+        return legacyLevel === myLevel;
+    }
+    
+    return false;
   });
 
   const pendingTasks = visibleTasks.filter(t => {

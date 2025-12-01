@@ -1875,6 +1875,10 @@
     background-color: #f0f4f8;
   }
 
+  .bg-\[rgb\(91\,44\,111\)\] {
+    background-color: #5b2c6f;
+  }
+
   .bg-\[rgba\(50\,50\,50\,0\.9\)\] {
     background-color: #323232e6;
   }
@@ -2734,6 +2738,10 @@
 
   .whitespace-pre-wrap {
     white-space: pre-wrap;
+  }
+
+  .text-\[rgb\(91\,44\,111\)\] {
+    color: #5b2c6f;
   }
 
   .text-amber-400 {

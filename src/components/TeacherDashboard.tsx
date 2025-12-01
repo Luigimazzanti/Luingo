@@ -204,7 +204,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <Button
                 onClick={onGenerateTask}
-                className="gap-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold shadow-md flex-1 sm:flex-none"
+                className="gap-2 bg-[rgb(91,44,111)] hover:bg-indigo-700 rounded-xl font-bold shadow-md flex-1 sm:flex-none"
               >
                 <Sparkles className="w-4 h-4" />
                 <span className="hidden sm:inline">Generar con IA</span>
@@ -320,7 +320,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="font-bold text-slate-800 text-lg">{t.title}</h3>
-                      <span className="bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg text-xs font-bold uppercase">
+                      <span className="bg-indigo-50 text-[rgb(91,44,111)] px-2 py-1 rounded-lg text-xs font-bold uppercase">
                         {t.category || 'Tarea'}
                       </span>
                     </div>

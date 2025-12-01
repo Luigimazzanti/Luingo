@@ -249,74 +249,53 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       return;
     }
 
-    // ✅ VALIDAR SEGÚN EL TIPO DE TAREA
-    if (taskType === 'writing') {
-      if (!writingPrompt.trim()) {
-        toast.error("❌ La instrucción de redacción es obligatoria");
-        return;
-      }
-      if (minWords <= 0) {
-        toast.error("❌ El mínimo de palabras debe ser mayor a 0");
-        return;
-      }
-    } else if (taskType === 'document') {
-      if (!pdfUrl) {
-        toast.error("❌ Debes subir un archivo PDF");
-        return;
-      }
-    }
-
-    // ✅ LÓGICA DE ASIGNACIÓN SEGÚN MODO
+    // 1. Lógica de Destinatarios
     let finalAssignees = ['all'];
     let finalScopeType = 'level';
     let finalTargetId = selectedLevel;
+    let recipientEmails: string[] = [];
 
     if (assignMode === 'individual') {
-      finalAssignees = assignedTo; // Array con el ID del estudiante
       finalScopeType = 'individual';
-      finalTargetId = assignedTo[0]; // El ID del estudiante
-      // Nota: selectedLevel se guarda igual como level_tag para indicar la dificultad de la tarea
+      finalTargetId = assignedTo[0]; 
+      finalAssignees = assignedTo;
+      
+      const targetStudent = students.find(s => s.id === assignedTo[0]);
+      if (targetStudent?.email) recipientEmails.push(targetStudent.email);
     } else {
-      // Modo Nivel
-      finalAssignees = ['all'];
       finalScopeType = 'level';
       finalTargetId = selectedLevel;
+      finalAssignees = ['all'];
+      
+      recipientEmails = students
+        .filter(s => s.current_level_code === selectedLevel)
+        .map(s => s.email)
+        .filter(Boolean) as string[];
     }
 
+    // 2. Construcción del Objeto (CON FIX DE NIVEL)
     const taskData = {
       ...initialData,
       title,
       description,
+      level_tag: selectedLevel, // Nivel externo
       category: taskType === 'writing' ? 'writing' : taskType === 'document' ? 'document' : category,
-      level_tag: selectedLevel, // ✅ FIX CRÍTICO: Guardar el nivel explícitamente DESPUÉS del spread
-      content_data: taskType === 'writing' ? {
-        // ✅ CONTENIDO PARA WRITING
-        type: 'writing',
+      content_data: {
+        // ✅ FIX: Guardamos 'level' explícitamente dentro de content_data para que el lector no falle
+        level: selectedLevel, 
+        
+        type: taskType === 'writing' ? 'writing' : taskType === 'document' ? 'document' : 'form',
         writing_prompt: writingPrompt,
         min_words: minWords,
         max_words: maxWords,
         resource_url: resourceUrl,
         resource_type: resourceType,
-        assignment_scope: {
-          type: finalScopeType,
-          targetId: finalTargetId
-        },
-        assignees: finalAssignees
-      } : taskType === 'document' ? {
-        // ✅ CONTENIDO PARA DOCUMENT PDF
-        type: 'document',
         pdf_url: pdfUrl,
         instructions: pdfInstructions,
-        assignment_scope: {
-          type: finalScopeType,
-          targetId: finalTargetId
-        },
-        assignees: finalAssignees
-      } : {
-        // ✅ CONTENIDO PARA QUIZ
-        type: 'form',
-        questions,
+        questions: questions,
         max_attempts: maxAttempts,
+        
+        // Scope de asignación correcto
         assignment_scope: {
           type: finalScopeType,
           targetId: finalTargetId
@@ -324,20 +303,23 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         assignees: finalAssignees
       },
       color_tag: '#A8D8FF',
-      due_date: dueDate // ✅ FECHA LÍMITE
+      due_date: dueDate
     };
 
+    // 3. Guardar
     onSaveTask(taskData);
 
-    // 📧 Notificación de Nueva Tarea
-    const recipients = assignMode === 'individual'
-      ? students.filter(s => s.id === assignedTo[0]).map(s => s.email)
-      : students.filter(s => s.current_level_code === selectedLevel).map(s => s.email);
-    
-    const validRecipients = recipients.filter(Boolean) as string[];
-
-    if (validRecipients.length > 0) {
-      sendNotification(validRecipients, `Nueva Tarea: ${title}`, emailTemplates.newTask(title, selectedLevel));
+    // 4. Notificar
+    if (recipientEmails.length > 0) {
+      // Import dinámico para no romper cabeceras si falta el import arriba
+      import('../lib/notifications').then(({ sendNotification, emailTemplates }) => {
+          sendNotification(
+            recipientEmails,
+            `Nueva Tarea: ${title}`,
+            emailTemplates.newTask(title, assignMode === 'individual' ? 'TI' : selectedLevel)
+          );
+      });
+      toast.success(`📧 Notificando a ${recipientEmails.length} alumnos...`);
     }
   };
 

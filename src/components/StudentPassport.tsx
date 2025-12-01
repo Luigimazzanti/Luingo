@@ -5,13 +5,23 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { LUINGO_LEVELS } from '../lib/mockData';
 import { cn } from '../lib/utils';
 import { deleteMoodlePost, gradeSubmission, saveUserPreferences } from '../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 import { TextAnnotator } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
 import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ AGREGADO: Sistema de notificaciones
+
+// ✅ FIX: Constante local para evitar errores de importación
+const LUINGO_LEVELS = [
+  { level: 1, min_xp: 0, max_xp: 100, label: 'Aprendiz de Tierra', icon: '🪨', color: 'from-stone-400 to-stone-600' },
+  { level: 2, min_xp: 101, max_xp: 300, label: 'Adepto de Agua', icon: '💧', color: 'from-blue-400 to-cyan-600' },
+  { level: 3, min_xp: 301, max_xp: 600, label: 'Guardián del Bosque', icon: '🍃', color: 'from-emerald-400 to-green-600' },
+  { level: 4, min_xp: 601, max_xp: 1000, label: 'Maestro de Fuego', icon: '🔥', color: 'from-orange-400 to-red-600' },
+  { level: 5, min_xp: 1001, max_xp: 2000, label: 'Sabio del Aire', icon: '🌪️', color: 'from-sky-400 to-indigo-600' },
+  { level: 6, min_xp: 2001, max_xp: 5000, label: 'Espíritu de Éter', icon: '✨', color: 'from-purple-400 to-fuchsia-600' },
+  { level: 7, min_xp: 5001, max_xp: 99999, label: 'Leyenda LuinGo', icon: '👑', color: 'from-yellow-400 to-amber-600' },
+];
 
 interface StudentPassportProps {
   student: Student;
@@ -315,7 +325,7 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                         </div>
                         
                         <div className="flex gap-1 md:gap-2">
-                            <Button onClick={onAssignTask} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 rounded-lg text-[10px] md:text-xs shadow-sm min-w-0">✨ Nueva Misión</Button>
+                            <Button onClick={onAssignTask} className="flex-1 bg-[rgb(91,44,111)] hover:bg-indigo-700 text-white font-bold h-9 rounded-lg text-[10px] md:text-xs shadow-sm min-w-0">✨ Nueva Misión</Button>
                             <Button variant="outline" onClick={onBack} className="px-2 md:px-4 border-slate-200 text-slate-500 font-bold h-9 rounded-lg text-[10px] md:text-xs hover:bg-slate-50 shrink-0">Cerrar</Button>
                         </div>
                     </div>
