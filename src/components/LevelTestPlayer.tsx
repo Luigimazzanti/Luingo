@@ -2,9 +2,11 @@ import React, { useState, useRef } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { LEVEL_TEST_DATA } from '../lib/levelTestContent';
-import { ArrowLeft, ArrowRight, Save, Send, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Save, Send, HelpCircle, CheckCircle2, Loader2, Trophy } from 'lucide-react'; // ✅ AGREGADO Loader2, Trophy
 import { toast } from 'sonner@2.0.3';
 import { submitTaskResult } from '../lib/moodle';
+import { Confetti } from './ui/Confetti'; // ✅ AGREGADO Confetti
+import { projectId, publicAnonKey } from '../utils/supabase/info'; // ✅ AGREGADO publicAnonKey
 
 interface LevelTestPlayerProps {
   studentName: string;
@@ -12,11 +14,12 @@ interface LevelTestPlayerProps {
   studentEmail: string; // ✅ NUEVO
   taskId: string;
   initialData?: any; // ✅ NUEVO: Submission previa
+  teacherEmail?: string; // ✅ NUEVO: Email del profesor (opcional)
   onExit: () => void;
 }
 
 export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({ 
-  studentName, studentId, studentEmail, taskId, initialData, onExit 
+  studentName, studentId, studentEmail, taskId, initialData, teacherEmail, onExit 
 }) => {
   // ✅ INICIALIZACIÓN INTELIGENTE: Cargar respuestas previas si existen
   const [answers, setAnswers] = useState<Record<number, string>>(() => {
@@ -108,69 +111,77 @@ export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({
     }
 
     setIsSubmitting(true);
-    const toastId = toast.loading("Evaluando tu nivel con IA...");
+    const toastId = toast.loading("Analizando resultados con IA...");
 
     try {
-      // Calcular nota bruta del test (para referencia interna)
+      // 1. Preparar datos para la IA
       let rawScore = 0;
       LEVEL_TEST_DATA.questions.forEach(q => {
         if (answers[q.id] === q.correctAnswer) rawScore++;
       });
+      
+      const payload = {
+        studentId, 
+        studentName, 
+        studentEmail, // ✅ YA VIENE COMO PROP
+        teacherEmail, // ✅ NUEVO: Email del profesor (opcional)
+        answers: formatAnswersForMoodle(),
+        writingText, 
+        rawScore
+      };
 
-      // 1. Guardar en Moodle
+      // 2. ✅ ENVIAR A LA IA (El cerebro real)
+      const endpointUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/evaluate-level-test`;
+      
+      try {
+        const aiResponse = await fetch(endpointUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${publicAnonKey}` // ✅ LLAVE PARA EVITAR ERROR 401
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!aiResponse.ok) {
+          // Si sigue fallando (ej. 401 o 500), lanzamos error para verlo en consola
+          const errText = await aiResponse.text();
+          throw new Error(`Error ${aiResponse.status}: ${errText}`);
+        }
+        
+        console.log('✅ Evaluación IA enviada correctamente');
+
+      } catch (aiError) {
+        console.warn('⚠️ Falló la conexión con la IA, pero el test se marcó como completado.', aiError);
+        // No bloqueamos el flujo, dejamos que el usuario termine
+      }
+      
+      // 3. ✅ GUARDADO "FANTASMA" EN MOODLE
+      // Guardamos la tarea como 'submitted' para que desaparezca de la lista de pendientes,
+      // PERO no guardamos las respuestas ni la nota real. Solo un placeholder.
       await submitTaskResult(
         taskId,
         LEVEL_TEST_DATA.title,
         studentId,
         studentName,
-        rawScore,
-        LEVEL_TEST_DATA.questions.length,
-        formatAnswersForMoodle(),
-        writingText,
+        0, // Nota 0 o nula para no afectar estadísticas
+        0, // Total 0
+        [], // ¡Array vacío! No guardamos las respuestas en la BD
+        "Evaluación realizada por IA. Resultados enviados por email.", // Texto placeholder
         'submitted'
       );
-
-      // 2. ✅ LLAMAR AL SERVIDOR PARA EVALUACIÓN CON IA
-      try {
-        const evaluationResponse = await fetch(`${window.location.origin}/supabase/functions/v1/make-server-ebbb5c67/evaluate-level-test`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            studentId,
-            studentName,
-            studentEmail, // Email del estudiante
-            teacherEmail: 'hola@luingo.es', // Email del profesor (o dinámico)
-            answers: formatAnswersForMoodle(),
-            writingText,
-            rawScore,
-            totalQuestions: LEVEL_TEST_DATA.questions.length
-          })
-        });
-
-        if (!evaluationResponse.ok) {
-          throw new Error('Error en la evaluación');
-        }
-
-        const evaluationData = await evaluationResponse.json();
-        console.log('✅ Evaluación completada:', evaluationData);
-      } catch (evalError) {
-        console.error('⚠️ Error en evaluación con IA (no crítico):', evalError);
-        // Continuamos aunque falle la evaluación IA
-      }
       
       toast.dismiss(toastId);
       setShowConfetti(true);
       
       setTimeout(() => {
-        toast.success("¡Test completado! Recibirás tu nivel por email.");
+        toast.success("¡Evaluación enviada! Revisa tu correo.");
         onExit();
       }, 3000);
 
     } catch (e) {
       console.error(e);
-      toast.error("Error al enviar el test");
+      toast.error("Error al procesar el test. Inténtalo de nuevo.");
       setIsSubmitting(false);
     }
   };

@@ -2008,6 +2008,10 @@
     background-color: var(--color-amber-400);
   }
 
+  .bg-amber-500 {
+    background-color: var(--color-amber-500);
+  }
+
   .bg-background {
     background-color: var(--background);
   }
@@ -3234,6 +3238,16 @@
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
+  .shadow-amber-200 {
+    --tw-shadow-color: oklch(.924 .12 95.746);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .shadow-amber-200 {
+      --tw-shadow-color: color-mix(in oklab, var(--color-amber-200) var(--tw-shadow-alpha), transparent);
+    }
+  }
+
   .shadow-indigo-200 {
     --tw-shadow-color: oklch(.87 .065 274.039);
   }
@@ -3609,6 +3623,12 @@
   @media (hover: hover) {
     .hover\:bg-amber-100:hover {
       background-color: var(--color-amber-100);
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:bg-amber-600:hover {
+      background-color: var(--color-amber-600);
     }
   }
 

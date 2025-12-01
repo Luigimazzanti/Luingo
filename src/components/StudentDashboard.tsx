@@ -206,10 +206,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   {pendingTasks.map(task => {
                     // ✅ DETECTAR SI ES LEVEL TEST
                     if (task.content_data?.type === 'level_test' || (task.content_data as any)?.content_data?.type === 'level_test') {
+                      // Verificamos si hay un borrador guardado en submissions
+                      const hasDraft = submissions.some(s => s.task_id === task.id && s.status === 'draft');
+                      
                       return (
                         <LevelTestCard 
                           key={task.id} 
                           onClick={() => setActiveLevelTest(task)} 
+                          hasProgress={hasDraft} // <--- PASAMOS EL DATO AQUÍ
                         />
                       );
                     }

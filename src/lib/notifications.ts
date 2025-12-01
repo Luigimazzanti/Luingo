@@ -43,29 +43,24 @@ export const emailTemplates = {
   `,
   // ✅ NUEVO: Plantilla para Test de Nivel con branding
   levelTestAssigned: (studentName: string, teacherMessage: string) => `
-    <div style="font-family: sans-serif; background-color: #F0F4F8; padding: 40px 20px;">
-      <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        <div style="background: linear-gradient(135deg, #6344A6 0%, #8B6BC7 100%); padding: 40px 0; text-align: center;">
-          <div style="font-size: 48px; margin-bottom: 10px;">🎯</div>
-          <h1 style="color: white; margin: 0; font-family: 'Poppins', sans-serif;">Test de Nivel Oficial</h1>
+    <div style="font-family: 'Helvetica', sans-serif; background-color: #F0F4F8; padding: 40px 20px;">
+      <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; border: 1px solid #E2E8F0;">
+        <div style="background: #6344A6; padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 22px;">🎯 Nuevo Reto: Test de Nivel</h1>
         </div>
-        <div style="padding: 40px 30px;">
-          <p style="font-size: 18px; color: #1e293b;">Hola <strong>${studentName}</strong>,</p>
-          <p style="color: #475569; line-height: 1.6;">Tu profesor te ha asignado una prueba diagnóstica. Es importante que la completes con calma para personalizar tu aprendizaje.</p>
+        <div style="padding: 30px;">
+          <p style="color: #334155; font-size: 16px;">Hola <strong>${studentName}</strong>,</p>
+          <p style="color: #475569; line-height: 1.5;">Tu profesor te ha asignado una prueba de nivel oficial.</p>
+          <p style="color: #475569; line-height: 1.5;">Por favor, entra en <strong>LuinGo</strong> cuando tengas tiempo y complétala con calma.</p>
           
-          <div style="background: #F3F0F9; border-left: 4px solid #6344A6; padding: 20px; margin: 30px 0; border-radius: 8px;">
-            <p style="margin: 0; font-size: 12px; color: #6344A6; font-weight: bold; text-transform: uppercase;">Mensaje del Profesor</p>
+          <div style="background: #F3F0F9; border-left: 4px solid #F2B705; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong style="color: #6344A6; font-size: 12px; text-transform: uppercase;">Mensaje:</strong>
             <p style="margin: 5px 0 0; color: #334155; font-style: italic;">"${teacherMessage}"</p>
           </div>
 
-          <div style="text-align: center; margin-top: 40px;">
-            <a href="https://luingo.web.app" style="background-color: #F2B705; color: #211259; text-decoration: none; padding: 16px 32px; border-radius: 50px; font-weight: 900; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(242, 183, 5, 0.3);">
-              COMENZAR PRUEBA 🚀
-            </a>
-          </div>
-        </div>
-        <div style="background: #f8fafc; padding: 20px; text-align: center; color: #94a3b8; font-size: 12px; border-top: 1px solid #e2e8f0;">
-          LuinGo - Plataforma Educativa
+          <p style="text-align: center; color: #94a3b8; font-size: 12px; margin-top: 30px;">
+            Recibirás los resultados detallados y tu nivel certificado por email al finalizar.
+          </p>
         </div>
       </div>
     </div>
