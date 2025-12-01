@@ -313,11 +313,13 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     if (recipientEmails.length > 0) {
       // Import dinámico para no romper cabeceras si falta el import arriba
       import('../lib/notifications').then(({ sendNotification, emailTemplates }) => {
-          sendNotification(
-            recipientEmails,
-            `Nueva Tarea: ${title}`,
-            emailTemplates.newTask(title, assignMode === 'individual' ? 'TI' : selectedLevel)
-          );
+          recipientEmails.forEach(email => {
+            sendNotification({
+              to: email,
+              subject: `Nueva Tarea: ${title}`,
+              html: emailTemplates.newTask(title, assignMode === 'individual' ? 'TI' : selectedLevel)
+            });
+          });
       });
       toast.success(`📧 Notificando a ${recipientEmails.length} alumnos...`);
     }

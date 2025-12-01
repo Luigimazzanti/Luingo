@@ -18,6 +18,8 @@ import { cn } from '../lib/utils';
 import { CommunityFeed } from './community/CommunityFeed';
 import { TextAnnotator } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
+import { LevelTestCard } from './LevelTestCard'; // ✅ NUEVO
+import { LevelTestPlayer } from './LevelTestPlayer'; // ✅ NUEVO
 
 interface StudentDashboardProps {
   student: Student;
@@ -32,6 +34,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'tasks' | 'portfolio' | 'community' | 'achievements'>('tasks');
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  
+  // ✅ NUEVO: Estado para el Level Test Player
+  const [activeLevelTest, setActiveLevelTest] = useState<Task | null>(null);
 
   // --- PROTECCIÓN CONTRA CRASH ---
   if (!student) {
@@ -198,15 +203,28 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               
               {pendingTasks.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {pendingTasks.map(task => (
-                    <TaskCard 
-                      key={task.id} 
-                      task={task} 
-                      status={getTaskStatus(task.id)} 
-                      attemptsUsed={getAttemptsCount(task.id)} 
-                      onClick={() => onSelectTask(task)} 
-                    />
-                  ))}
+                  {pendingTasks.map(task => {
+                    // ✅ DETECTAR SI ES LEVEL TEST
+                    if (task.content_data?.type === 'level_test' || (task.content_data as any)?.content_data?.type === 'level_test') {
+                      return (
+                        <LevelTestCard 
+                          key={task.id} 
+                          onClick={() => setActiveLevelTest(task)} 
+                        />
+                      );
+                    }
+
+                    // Renderizado normal de TaskCard
+                    return (
+                      <TaskCard 
+                        key={task.id} 
+                        task={task} 
+                        status={getTaskStatus(task.id)} 
+                        attemptsUsed={getAttemptsCount(task.id)} 
+                        onClick={() => onSelectTask(task)} 
+                      />
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="bg-white rounded-3xl p-10 text-center border-2 border-dashed border-slate-200 shadow-sm">
@@ -262,6 +280,22 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       {/* NAVEGACIÓN FLOTANTE */}
       <NavDock />
+
+      {/* ✅ NUEVO: LEVEL TEST PLAYER */}
+      {activeLevelTest && (
+        <LevelTestPlayer
+          studentName={student.name}
+          studentId={student.id}
+          studentEmail={student.email}
+          taskId={activeLevelTest.id}
+          initialData={submissions.find(s => s.task_id === activeLevelTest.id && String(s.student_id) === String(student.id))} // ✅ PASAR DATOS PREVIOS
+          onExit={() => {
+            setActiveLevelTest(null);
+            // Recargar la página para actualizar el estado
+            window.location.reload();
+          }}
+        />
+      )}
 
       {/* VISOR DE DETALLES (RESUMEN) */}
       <Dialog open={!!selectedSubmission} onOpenChange={(o) => !o && setSelectedSubmission(null)}>

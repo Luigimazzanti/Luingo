@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Task, Classroom, Submission, User, PDFAnnotation } from '../types';
 import { StudentCard } from './StudentCard';
-import { Users, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText } from 'lucide-react';
+import { Users, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText, Target } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -13,6 +13,7 @@ import { TextAnnotator, Annotation } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
 import { CommunityFeed } from './community/CommunityFeed';
 import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ AGREGADO: Sistema de notificaciones
+import { AssignLevelTestModal } from './AssignLevelTestModal'; // ✅ NUEVO: Modal de Test de Nivel
 
 interface TeacherDashboardProps {
   classroom: Classroom;
@@ -53,6 +54,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   
   // ✅ ESTADO PARA ANOTACIONES PDF DEL PROFESOR (DOCUMENT TASKS)
   const [currentPdfAnnotations, setCurrentPdfAnnotations] = useState<any[]>([]);
+
+  // ✅ NUEVO: Estado para el modal de Test de Nivel
+  const [showLevelTestModal, setShowLevelTestModal] = useState(false);
 
   // ✅ Limpiar anotaciones PDF cuando cambie el grupo seleccionado
   useEffect(() => {
@@ -164,11 +168,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       // 📧 Notificación de Nota
       const targetStudent = students.find(s => String(s.id) === String(attempt.student_id));
       if (targetStudent?.email) {
-         sendNotification(
-           [targetStudent.email], 
-           `Tarea Calificada: ${attempt.task_title}`, 
-           emailTemplates.graded(attempt.task_title, newGrade, feedbackInput)
-         );
+         sendNotification({
+           to: targetStudent.email,
+           subject: `Tarea Calificada: ${attempt.task_title}`,
+           html: emailTemplates.graded(attempt.task_title, newGrade, feedbackInput)
+         });
       }
 
       const correctionCount = finalCorrections.length + finalPdfAnnotations.length;
@@ -202,6 +206,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             </div>
             
             <div className="flex items-center gap-3 w-full sm:w-auto">
+              {/* BOTÓN NUEVO: TEST DE NIVEL */}
+              <Button
+                onClick={() => setShowLevelTestModal(true)}
+                className="gap-2 bg-[#8B6BC7] hover:bg-[#7a5eb0] text-white rounded-xl font-bold shadow-md flex-1 sm:flex-none"
+              >
+                <Target className="w-4 h-4" />
+                <span className="hidden sm:inline">Test de Nivel</span>
+                <span className="sm:hidden">Test</span>
+              </Button>
+
               <Button
                 onClick={onGenerateTask}
                 className="gap-2 bg-[rgb(91,44,111)] hover:bg-indigo-700 rounded-xl font-bold shadow-md flex-1 sm:flex-none"
@@ -736,6 +750,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           {/* ✅ FIX: Cierre del contenedor con padding */}
         </DialogContent>
       </Dialog>
+
+      {/* ✅ NUEVO: Modal de Test de Nivel */}
+      <AssignLevelTestModal
+        isOpen={showLevelTestModal}
+        onClose={() => setShowLevelTestModal(false)}
+        students={students}
+        onAssigned={() => {
+          if (onRefreshSubmissions) onRefreshSubmissions();
+        }}
+      />
     </div>
   );
 };
