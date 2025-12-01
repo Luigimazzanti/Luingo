@@ -271,13 +271,34 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           {/* Vista Estudiantes */}
           {viewMode === 'students' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {students.map(s => (
-                <StudentCard
-                  key={s.id}
-                  student={s}
-                  onClick={() => onSelectStudent(s.id)}
-                />
-              ))}
+              {students.map(s => {
+                // ✅ CÁLCULO DE PROMEDIO REAL
+                const studentSubmissions = submissions.filter(sub => String(sub.student_id) === String(s.id));
+                
+                // Filtramos solo notas válidas (> 0 o calificadas)
+                const validGrades = studentSubmissions
+                    .map(sub => (sub.grade && sub.grade > 0) ? sub.grade : 0)
+                    .filter(g => g > 0);
+
+                const realAverage = validGrades.length > 0 
+                    ? validGrades.reduce((a, b) => a + b, 0) / validGrades.length 
+                    : 0;
+
+                // Inyectamos el promedio real en el objeto visual
+                const studentWithRealStats = { 
+                    ...s, 
+                    average_grade: realAverage,
+                    completed_tasks: studentSubmissions.length // También actualizamos tareas completadas
+                };
+
+                return (
+                  <StudentCard
+                    key={s.id}
+                    student={studentWithRealStats} // Pasamos el objeto enriquecido
+                    onClick={() => onSelectStudent(s.id)}
+                  />
+                );
+              })}
               {students.length === 0 && (
                 <div className="col-span-full text-center py-20">
                   <Users className="w-16 h-16 text-slate-200 mx-auto mb-4" />

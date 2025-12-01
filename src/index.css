@@ -606,6 +606,10 @@
     top: calc(var(--spacing) * 4);
   }
 
+  .top-6 {
+    top: calc(var(--spacing) * 6);
+  }
+
   .top-\[50\%\] {
     top: 50%;
   }
@@ -642,6 +646,18 @@
     right: calc(var(--spacing) * 4);
   }
 
+  .right-6 {
+    right: calc(var(--spacing) * 6);
+  }
+
+  .right-8 {
+    right: calc(var(--spacing) * 8);
+  }
+
+  .right-20 {
+    right: calc(var(--spacing) * 20);
+  }
+
   .-bottom-1 {
     bottom: calc(var(--spacing) * -1);
   }
@@ -668,6 +684,10 @@
 
   .bottom-6 {
     bottom: calc(var(--spacing) * 6);
+  }
+
+  .bottom-8 {
+    bottom: calc(var(--spacing) * 8);
   }
 
   .left-0 {
@@ -3221,12 +3241,6 @@
   }
 
   @media (hover: hover) {
-    .group-hover\:bg-slate-800:is(:where(.group):hover *) {
-      background-color: var(--color-slate-800);
-    }
-  }
-
-  @media (hover: hover) {
     .group-hover\:text-indigo-600:is(:where(.group):hover *) {
       color: var(--color-indigo-600);
     }
@@ -3235,12 +3249,6 @@
   @media (hover: hover) {
     .group-hover\:text-indigo-700:is(:where(.group):hover *) {
       color: var(--color-indigo-700);
-    }
-  }
-
-  @media (hover: hover) {
-    .group-hover\:text-white:is(:where(.group):hover *) {
-      color: var(--color-white);
     }
   }
 
@@ -3467,6 +3475,12 @@
   }
 
   @media (hover: hover) {
+    .hover\:bg-indigo-600:hover {
+      background-color: var(--color-indigo-600);
+    }
+  }
+
+  @media (hover: hover) {
     .hover\:bg-indigo-700:hover {
       background-color: var(--color-indigo-700);
     }
@@ -3547,12 +3561,6 @@
       .hover\:bg-slate-200\/50:hover {
         background-color: color-mix(in oklab, var(--color-slate-200) 50%, transparent);
       }
-    }
-  }
-
-  @media (hover: hover) {
-    .hover\:bg-slate-700:hover {
-      background-color: var(--color-slate-700);
     }
   }
 

@@ -216,9 +216,10 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
   const totalXP = submissions.length * 15;
   const currentLevelInfo = LUINGO_LEVELS.slice().reverse().find(l => totalXP >= l.min_xp) || LUINGO_LEVELS[0];
 
-  const validGrades = submissions.map(s => 
-    (s.grade && s.grade > 0) ? s.grade : (s.score && s.total) ? (s.score / s.total) * 10 : 0
-  ).filter(g => g > 0);
+  // --- CÁLCULO DE PROMEDIO (LÓGICA UNIFICADA) ---
+  const validGrades = submissions
+    .map(s => (s.grade && s.grade > 0) ? s.grade : 0)
+    .filter(g => g > 0);
 
   const averageGrade = validGrades.length > 0 
     ? validGrades.reduce((acc, curr) => acc + curr, 0) / validGrades.length 

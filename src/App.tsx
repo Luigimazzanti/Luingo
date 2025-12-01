@@ -148,7 +148,11 @@ export default function App() {
         
         const moodleCourses = await getCourses();
         if (Array.isArray(moodleCourses)) {
-          setCourses(moodleCourses);
+          // ✅ FIX: Filtramos el curso "Site Home" (id: 1) y el curso plantilla "LuinGo"
+          const cleanCourses = moodleCourses.filter((c: any) => 
+             c.id !== 1 && c.shortname !== 'LuinGo' && c.format !== 'site'
+          );
+          setCourses(cleanCourses);
         }
         
         const forumTasks = await getMoodleTasks();
@@ -623,6 +627,7 @@ export default function App() {
             courses={courses}
             onSelectClass={handleSelectClass}
             onCreateClass={handleCreateClass}
+            onLogout={handleLogout} // ✅ AGREGADO: Conectamos la función de salir
           />
         )}
 
