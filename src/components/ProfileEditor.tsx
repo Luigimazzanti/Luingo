@@ -172,7 +172,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ user, isOpen, onCl
 
           {/* NIVEL (SOLO ESTUDIANTES - SOLO LECTURA) */}
           {isStudent && (
-             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center justify-between">
+             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                    <div className="bg-white p-2 rounded-full shadow-sm">
                       <GraduationCap className="w-5 h-5 text-indigo-600" />
@@ -182,7 +182,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ user, isOpen, onCl
                       <p className="text-lg font-black text-slate-800">{selectedLevel}</p>
                    </div>
                 </div>
-                <div className="text-[10px] text-slate-400 font-medium text-right max-w-[120px] leading-tight">
+                <div className="text-[10px] text-slate-400 font-medium text-center md:text-right max-w-full md:max-w-[120px] leading-tight">
                    Tu profesor asigna tu nivel de español.
                 </div>
              </div>

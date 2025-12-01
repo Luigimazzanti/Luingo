@@ -176,7 +176,7 @@ app.post("/make-server-ebbb5c67/send-email", async (c) => {
       },
       body: JSON.stringify({
         // ✅ CAMBIO: Usamos el dominio verificado para que lleguen los correos
-        from: "LuinGo <onboarding@resend.dev>",
+        from: "LuinGo <hola@luingo.es>",
         to: to,
         subject: subject,
         html: html,
