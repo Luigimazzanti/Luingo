@@ -157,7 +157,8 @@ app.post("/make-server-ebbb5c67/send-email", async (c) => {
         'Authorization': `Bearer ${RESEND_KEY}`
       },
       body: JSON.stringify({
-        from: 'LuinGo <onboarding@resend.dev>',
+        // ✅ CAMBIO: Usamos el dominio verificado para que lleguen los correos
+        from: 'LuinGo <hola@luingo.es>',
         to: to,
         subject: subject,
         html: html

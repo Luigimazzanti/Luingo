@@ -174,100 +174,75 @@ export default function App() {
     setLoading(true);
 
     try {
-        // 1️⃣ AUTENTICACIÓN
+        // 1. Autenticación (Token Personal)
         const token = await loginToMoodle(usernameInput, passwordInput);
         if (!token) {
             setLoading(false);
-            return toast.error("Credenciales inválidas");
+            return toast.error("Credenciales incorrectas");
         }
 
-        // 2️⃣ IDENTIDAD
+        // 2. Identidad Básica (ID y Nombre)
         const meData = await getMe(token);
-        if (!meData || !meData.userid) throw new Error("Error de perfil");
+        if (!meData || !meData.userid) throw new Error("No se pudo cargar el perfil");
 
-        console.log("🔍 Usuario autenticado:", meData.username, `(ID: ${meData.userid})`);
+        // 3. 🔥 RECUPERAR DATOS REALES (EMAIL) USANDO LLAVE MAESTRA
+        // Usamos el username para pedir la ficha completa a Moodle
+        const fullProfile = await getUserByUsername(usernameInput);
+        const realEmail = fullProfile?.email || meData.email; // Prioridad al perfil completo
 
-        // 3️⃣ CARGAR PREFERENCIAS (Avatar persistente)
-        const userPrefs = await getUserPreferences(meData.userid);
-        console.log("🎨 Preferencias cargadas:", userPrefs);
-        
-        // ✅ RECUPERAR EL NIVEL GUARDADO (O DEFAULT A1)
-        const savedLevel = userPrefs?.level_code || 'A1';
-        console.log(`📊 Nivel de idioma: ${savedLevel}`);
-
-        // 4️⃣ DETECCIÓN DE ROL PURISTA (Solo basada en roles reales de Moodle)
-        let detectedRole: 'teacher' | 'student' = 'student'; // Default: estudiante
-
-        // Obtener todos los cursos donde está matriculado
-        const myCourses = await getUserCourses(meData.userid);
-        console.log(`📚 Cursos matriculados: ${myCourses?.length || 0}`);
-
-        if (myCourses && myCourses.length > 0) {
-            // 🔍 VERIFICAR ROL EN CADA CURSO (buscar editingteacher o manager en CUALQUIERA)
-            for (const course of myCourses) {
-                console.log(`  🔎 Verificando curso: ${course.fullname} (ID: ${course.id})`);
-                
-                try {
-                    const myProfileInCourse = await getMyCourseProfile(meData.userid, course.id);
-                    
-                    if (myProfileInCourse && myProfileInCourse.roles) {
-                        console.log(`    📋 Roles en curso ${course.id}:`, myProfileInCourse.roles.map((r: any) => r.shortname));
-                        
-                        // ✅ REGLA DE ORO: editingteacher o manager = Profesor
-                        const hasAuthorityRole = myProfileInCourse.roles.some((r: any) => 
-                            r.shortname === 'editingteacher' || 
-                            r.shortname === 'manager'
-                        );
-
-                        if (hasAuthorityRole) {
-                            console.log(`    ✅ Rol de autoridad encontrado en curso ${course.id}`);
-                            detectedRole = 'teacher';
-                            break; // ✅ Ya sabemos que es profesor, no hace falta seguir
-                        } else {
-                            console.log(`    ℹ️ Sin rol de autoridad en curso ${course.id}`);
-                        }
-                    }
-                } catch (courseError) {
-                    console.warn(`    ⚠️ Error al verificar curso ${course.id}:`, courseError);
-                    // Continuar con el siguiente curso
-                }
-            }
-        } else {
-            console.log("⚠️ Usuario sin cursos matriculados → Asignado como estudiante");
+        if (!realEmail) {
+            console.warn("⚠️ Moodle no devolvió el email. Verifica los permisos del servicio.");
         }
 
-        console.log(`🎯 ROL FINAL ASIGNADO: ${detectedRole.toUpperCase()}`);
+        console.log("👤 Usuario:", meData.fullname, "| Email:", realEmail);
 
-        // 5️⃣ CREAR SESIÓN LOCAL
-        // Usamos 'as any' temporalmente para permitir propiedades extra como current_level_code
+        // 4. Roles (Lógica Moodle-First)
+        let finalRole: 'teacher' | 'student' = 'student';
+        try {
+            const myCourses = await getUserCourses(meData.userid);
+            if (myCourses?.length > 0) {
+                const roleChecks = await Promise.all(myCourses.map(async (course: any) => {
+                    const profile = await getMyCourseProfile(meData.userid, course.id);
+                    return profile?.roles?.some((r: any) => 
+                        ['editingteacher', 'teacher', 'manager'].includes(r.shortname)
+                    );
+                }));
+                if (roleChecks.includes(true)) finalRole = 'teacher';
+            }
+            // Fallback para admin global
+            if (meData.userissiteadmin) finalRole = 'teacher';
+        } catch (e) { console.warn("Rol por defecto: student"); }
+
+        // 5. Preferencias (Avatar/Nivel)
+        const userPrefs = await getUserPreferences(meData.userid);
+        const savedLevel = userPrefs?.level_code || 'A1';
+
+        // 6. Crear Perfil de Sesión
         const userProfile: any = {
             id: String(meData.userid),
-            email: meData.email || `${usernameInput}@campus.xyz`,
+            email: realEmail || `${usernameInput}@sin-email.com`, // ✅ Usamos el email real
             name: meData.fullname,
-            role: detectedRole, // ✅ Rol purista basado SOLO en Moodle
-            // 🔥 Avatar: Preferencias > Moodle > Generado
-            avatar_url: userPrefs?.avatar_url || meData.userpictureurl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${meData.username}`,
-            current_level_code: savedLevel, // ✅ AQUÍ SE INYECTA EL NIVEL REAL
+            role: finalRole,
+            avatar_url: userPrefs?.avatar_url || meData.userpictureurl,
+            current_level_code: savedLevel,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         };
 
-        // 6️⃣ CARGAR DATOS INICIALES
         setCurrentUser(userProfile);
         
+        // Cargar contenido
         const tasksData = await getMoodleTasks();
         setTasks(tasksData);
         const subsData = await getMoodleSubmissions();
 
-        if (detectedRole === 'teacher') {
-            // Profesor ve todas las entregas
+        if (finalRole === 'teacher') {
             setRealSubmissions(subsData);
         } else {
-            // Estudiante solo ve las suyas
             const mySubs = subsData.filter((s: any) => String(s.student_id) === String(userProfile.id));
             setRealSubmissions(mySubs);
             setStudents([{
-                ...userProfile, // ✅ Hereda el current_level_code del perfil
+                ...userProfile,
                 level: 1, 
                 xp_points: mySubs.length * 50, 
                 completed_tasks: mySubs.length,
@@ -276,11 +251,11 @@ export default function App() {
             } as Student]);
         }
 
-        toast.success(`¡Hola ${meData.firstname}! Nivel: ${savedLevel}`);
+        toast.success(`¡Hola ${meData.firstname}!`);
 
     } catch (e) {
-        console.error("❌ Login Error:", e);
-        toast.error("Error de conexión con Moodle");
+        console.error("Login Error:", e);
+        toast.error("Error de conexión.");
     } finally {
         setLoading(false);
     }

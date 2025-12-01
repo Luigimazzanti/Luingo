@@ -12,6 +12,7 @@ import { toast } from 'sonner@2.0.3';
 import { TextAnnotator, Annotation } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
 import { CommunityFeed } from './community/CommunityFeed';
+import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ AGREGADO: Sistema de notificaciones
 
 interface TeacherDashboardProps {
   classroom: Classroom;
@@ -159,6 +160,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       const targetId = attempt.postId || attempt.id.replace('post-', '');
       
       await gradeSubmission(targetId, newGrade, feedbackInput, safePayload, finalCorrections);
+
+      // 📧 Notificación de Nota
+      const targetStudent = students.find(s => String(s.id) === String(attempt.student_id));
+      if (targetStudent?.email) {
+         sendNotification(
+           [targetStudent.email], 
+           `Tarea Calificada: ${attempt.task_title}`, 
+           emailTemplates.graded(attempt.task_title, newGrade, feedbackInput)
+         );
+      }
 
       const correctionCount = finalCorrections.length + finalPdfAnnotations.length;
       toast.success(`✅ Calificación guardada (${correctionCount} anotaciones/correcciones)`);
