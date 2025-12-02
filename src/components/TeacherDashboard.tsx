@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Task, Classroom, Submission, User, PDFAnnotation } from '../types';
 import { StudentCard } from './StudentCard';
-import { Users, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText } from 'lucide-react';
+import { Users, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText, Target } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -13,6 +13,7 @@ import { TextAnnotator, Annotation } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
 import { CommunityFeed } from './community/CommunityFeed';
 import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ AGREGADO: Sistema de notificaciones
+import { AssignLevelTestModal } from './AssignLevelTestModal'; // ✅ NUEVO: Modal de Test de Nivel
 
 interface TeacherDashboardProps {
   classroom: Classroom;
@@ -53,6 +54,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   
   // ✅ ESTADO PARA ANOTACIONES PDF DEL PROFESOR (DOCUMENT TASKS)
   const [currentPdfAnnotations, setCurrentPdfAnnotations] = useState<any[]>([]);
+
+  // ✅ NUEVO: Estado para el modal de Test de Nivel
+  const [showLevelTestModal, setShowLevelTestModal] = useState(false);
 
   // ✅ Limpiar anotaciones PDF cuando cambie el grupo seleccionado
   useEffect(() => {
@@ -164,11 +168,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       // 📧 Notificación de Nota
       const targetStudent = students.find(s => String(s.id) === String(attempt.student_id));
       if (targetStudent?.email) {
-         sendNotification(
-           [targetStudent.email], 
-           `Tarea Calificada: ${attempt.task_title}`, 
-           emailTemplates.graded(attempt.task_title, newGrade, feedbackInput)
-         );
+         sendNotification({
+           to: targetStudent.email,
+           subject: `Tarea Calificada: ${attempt.task_title}`,
+           html: emailTemplates.graded(attempt.task_title, newGrade, feedbackInput)
+         });
       }
 
       const correctionCount = finalCorrections.length + finalPdfAnnotations.length;
@@ -202,6 +206,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             </div>
             
             <div className="flex items-center gap-3 w-full sm:w-auto">
+              {/* BOTÓN NUEVO: TEST DE NIVEL */}
+              <Button
+                onClick={() => setShowLevelTestModal(true)}
+                className="gap-2 bg-[#8B6BC7] hover:bg-[#7a5eb0] text-white rounded-xl font-bold shadow-md flex-1 sm:flex-none"
+              >
+                <Target className="w-4 h-4" />
+                <span className="hidden sm:inline">Test de Nivel</span>
+                <span className="sm:hidden">Test</span>
+              </Button>
+
               <Button
                 onClick={onGenerateTask}
                 className="gap-2 bg-[rgb(91,44,111)] hover:bg-indigo-700 rounded-xl font-bold shadow-md flex-1 sm:flex-none"
@@ -315,33 +329,33 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               {tasks.map(t => (
                 <div
                   key={t.id}
-                  className="bg-white p-5 rounded-2xl border border-slate-200 flex justify-between items-center shadow-sm hover:shadow-md transition-all"
+                  className="bg-white p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm hover:shadow-md transition-all"
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-bold text-slate-800 text-lg">{t.title}</h3>
-                      <span className="bg-indigo-50 text-[rgb(91,44,111)] px-2 py-1 rounded-lg text-xs font-bold uppercase">
+                  <div className="flex-1 w-full sm:w-auto">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                      <h3 className="font-bold text-slate-800 text-base sm:text-lg">{t.title}</h3>
+                      <span className="bg-indigo-50 text-[rgb(91,44,111)] px-2 py-1 rounded-lg text-xs font-bold uppercase w-fit">
                         {t.category || 'Tarea'}
                       </span>
                     </div>
-                    <p className="text-sm text-slate-500">{t.description}</p>
+                    <p className="text-xs sm:text-sm text-slate-500 line-clamp-2">{t.description}</p>
                   </div>
-                  <div className="flex gap-2 shrink-0 ml-4">
+                  <div className="flex gap-2 shrink-0 w-full sm:w-auto justify-end sm:ml-4">
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => onEditTask && onEditTask(t)}
-                      className="text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
+                      className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg sm:rounded-xl h-9 w-9 sm:h-10 sm:w-10"
                     >
-                      <Edit2 className="w-5 h-5" />
+                      <Edit2 className="w-4 h-4 sm:w-5 sm:h-5" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => onDeleteTask(t.id)}
-                      className="text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl"
+                      className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg sm:rounded-xl h-9 w-9 sm:h-10 sm:w-10"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                     </Button>
                   </div>
                 </div>
@@ -379,26 +393,26 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   return (
                     <div
                       key={idx}
-                      className="bg-white p-5 rounded-2xl border border-slate-200 flex justify-between items-center hover:border-indigo-300 transition-all shadow-sm"
+                      className="bg-white p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 hover:border-indigo-300 transition-all shadow-sm"
                     >
-                      <div className="flex-1">
-                        <h3 className="font-bold text-slate-800">{group.student_name}</h3>
-                        <p className="text-sm text-indigo-600 font-medium">{group.task_title}</p>
-                        <div className="flex gap-3 mt-2 text-xs">
-                          <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold">
+                      <div className="flex-1 w-full sm:w-auto">
+                        <h3 className="font-bold text-slate-800 text-sm sm:text-base">{group.student_name}</h3>
+                        <p className="text-xs sm:text-sm text-indigo-600 font-medium truncate">{group.task_title}</p>
+                        <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                          <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold whitespace-nowrap">
                             Total Intentos: {group.attempts.length}
                           </span>
                           {pendingCount > 0 && (
-                            <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-md font-bold flex items-center gap-1">
+                            <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-md font-bold flex items-center gap-1 whitespace-nowrap">
                               <Clock className="w-3 h-3" /> Falta corregir: {pendingCount}
                             </span>
                           )}
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-2xl font-black text-emerald-600">
+                      <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                        <div className="text-left sm:text-right">
+                          <p className="text-xl sm:text-2xl font-black text-emerald-600">
                             {lastAttempt.grade.toFixed(1)}
                           </p>
                           <p className="text-[10px] font-bold text-slate-400 uppercase">Última Nota</p>
@@ -409,7 +423,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             setGradeInput(lastAttempt.grade.toString());
                             setFeedbackInput('');
                           }}
-                          className="h-10 px-6 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+                          className="h-9 sm:h-10 px-4 sm:px-6 rounded-lg sm:rounded-xl text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md whitespace-nowrap"
                         >
                           Revisar
                         </Button>
@@ -736,6 +750,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           {/* ✅ FIX: Cierre del contenedor con padding */}
         </DialogContent>
       </Dialog>
+
+      {/* ✅ NUEVO: Modal de Test de Nivel */}
+      <AssignLevelTestModal
+        isOpen={showLevelTestModal}
+        onClose={() => setShowLevelTestModal(false)}
+        students={students}
+        onAssigned={() => {
+          if (onRefreshSubmissions) onRefreshSubmissions();
+        }}
+      />
     </div>
   );
 };

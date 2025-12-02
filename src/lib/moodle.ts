@@ -6,33 +6,33 @@ import {
 // ========== CONFIGURACIÓN ==========
 // ✅ FIX: URL base limpia (sin /webservice/rest/server.php)
 const MOODLE_URL = "https://luingo.moodiy.com";
-const MOODLE_TOKEN = "602611eb8bce8f225f5c7959b166ee7f";
+const MOODLE_TOKEN = "602611eb8bce8f225f5c7959b166ee7f"; // Token maestro (fallback)
 
 const TASKS_FORUM_ID = 4;
 const SUBMISSIONS_FORUM_ID = 7;
 const COMMUNITY_FORUM_ID = 13;
 
-// ========== GESTIÓN DE TOKEN PERSONAL ==========
-let userToken: string | null = null;
+// ✅ ALMACENAMIENTO DEL TOKEN DEL USUARIO
+let userMoodleToken: string | null = null;
 
-export const setUserToken = (token: string | null) => {
-  userToken = token;
-  if (token) {
-    localStorage.setItem('moodle_user_token', token);
-  } else {
-    localStorage.removeItem('moodle_user_token');
-  }
+// Funciones para gestionar el token del usuario
+export const setUserToken = (token: string) => {
+  userMoodleToken = token;
+  localStorage.setItem('moodle_user_token', token);
 };
 
 export const getUserToken = (): string | null => {
-  if (userToken) return userToken;
+  if (userMoodleToken) return userMoodleToken;
   const stored = localStorage.getItem('moodle_user_token');
-  if (stored) userToken = stored;
-  return userToken;
+  if (stored) {
+    userMoodleToken = stored;
+    return stored;
+  }
+  return null;
 };
 
 export const clearUserToken = () => {
-  userToken = null;
+  userMoodleToken = null;
   localStorage.removeItem('moodle_user_token');
 };
 
@@ -61,7 +61,7 @@ const callMoodle = async (
 ) => {
   const proxyUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/moodle-proxy`;
 
-  // ✅ Usar token del usuario si está disponible, sino usar el maestro
+  // ✅ PRIORIDAD: Token de usuario > Token maestro
   const activeToken = getUserToken() || MOODLE_TOKEN;
 
   try {
@@ -81,18 +81,37 @@ const callMoodle = async (
     const text = await response.text();
     try {
       const data = JSON.parse(text);
-      if (data.exception) {
+      
+      // ✅ DETECCIÓN EXHAUSTIVA DE forcepasswordchangenotice
+      const messageStr = JSON.stringify(data).toLowerCase();
+      if (messageStr.includes("forcepasswordchange")) {
+        console.error(`🔐 DETECTADO: Moodle requiere cambio de contraseña en ${functionName}`);
+        console.error("Data completa:", data);
+        throw new Error("FORCE_PASSWORD_CHANGE");
+      }
+      
+      if (data.exception || data.errorcode) {
+        // ✅ Log de warnings normales
         console.warn(
           `⚠️ Moodle Warning (${functionName}):`,
           data.message,
         );
+        
         if (data.errorcode === "accessdenied") return null;
       }
       return data;
-    } catch {
+    } catch (e) {
+      // Re-lanzar el error de cambio de contraseña
+      if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+        throw e;
+      }
       return null;
     }
   } catch (error) {
+    // ✅ TAMBIÉN PROPAGAR AQUÍ
+    if (error instanceof Error && error.message === "FORCE_PASSWORD_CHANGE") {
+      throw error;
+    }
     return null;
   }
 };
@@ -769,7 +788,18 @@ export const getMe = async (userToken: string) => {
       settings: { url: MOODLE_URL, token: userToken }, // Usamos el token DEL USUARIO
     }),
   });
-  return await response.json();
+  
+  const data = await response.json();
+  
+  // ✅ DETECTAR ERROR DE CAMBIO DE CONTRASEÑA FORZADO
+  if (data.exception || data.errorcode) {
+    if (data.errorcode === "forcepasswordchangenotice" || 
+        data.message?.includes("forcepasswordchangenotice")) {
+      throw new Error("FORCE_PASSWORD_CHANGE");
+    }
+  }
+  
+  return data;
 };
 
 // 3. Obtener cursos para detectar ROL (Profesor o Estudiante)

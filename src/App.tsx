@@ -101,6 +101,7 @@ export default function App() {
   const [passwordInput, setPasswordInput] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [showPasswordChangeRequired, setShowPasswordChangeRequired] = useState(false); // ✅ NUEVO
 
   // ========== FUNCIÓN HELPER: RECARGAR ENTREGAS SIN PÉRDIDA DE ESTADO ==========
   const loadSubmissions = async () => {
@@ -142,27 +143,13 @@ export default function App() {
     setConnectionError(null);
     
     try {
-      const info = await getSiteInfo();
-      if (info && !info.error) {
-        toast.success(`Conectado a Moodle: ${info.sitename}`);
-        
-        const moodleCourses = await getCourses();
-        if (Array.isArray(moodleCourses)) {
-          // ✅ FIX: Filtramos el curso "Site Home" (id: 1) y el curso plantilla "LuinGo"
-          const cleanCourses = moodleCourses.filter((c: any) => 
-             c.id !== 1 && c.shortname !== 'LuinGo' && c.format !== 'site'
-          );
-          setCourses(cleanCourses);
-        }
-        
-        const forumTasks = await getMoodleTasks();
-        setTasks(forumTasks);
-      } else {
-        setConnectionError("No se pudo conectar a Moodle. Verifica la configuración.");
-      }
+      // ✅ NO HACER LLAMADAS SIN TOKEN
+      // Solo marcamos la app como lista para recibir credenciales
+      console.log('✅ LuinGo listo para autenticación');
+      // La verificación de conexión se hará DESPUÉS del login con token válido
     } catch (e) {
-      console.error("Error inicializando Moodle:", e);
-      setConnectionError("Error crítico al conectar con Moodle.");
+      console.error("Error inicializando app:", e);
+      setConnectionError("Error crítico al inicializar la aplicación.");
     } finally {
       setLoading(false);
     }
@@ -185,18 +172,35 @@ export default function App() {
             return toast.error("Credenciales incorrectas");
         }
 
-        // ✅ GUARDAR EL TOKEN DEL USUARIO PARA FUTURAS LLAMADAS A MOODLE
+        // ✅ GUARDAR EL TOKEN DEL USUARIO
         setUserToken(token);
-        console.log('🔑 Token de usuario guardado correctamente');
-        
+
         // 2. Identidad Básica (ID y Nombre)
-        const meData = await getMe(token);
+        let meData;
+        try {
+          meData = await getMe(token);
+        } catch (e) {
+          // ✅ DETECCIÓN TEMPRANA: Si getMe falla con forcepasswordchange, parar aquí
+          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+            throw e; // Re-lanzar para el catch principal
+          }
+          throw new Error("No se pudo cargar el perfil");
+        }
+        
         if (!meData || !meData.userid) throw new Error("No se pudo cargar el perfil");
 
         // 3. 🔥 RECUPERAR DATOS REALES (EMAIL) USANDO LLAVE MAESTRA
-        // Usamos el username para pedir la ficha completa a Moodle
-        const fullProfile = await getUserByUsername(usernameInput);
-        const realEmail = fullProfile?.email || meData.email; // Prioridad al perfil completo
+        let realEmail = meData.email;
+        try {
+          const fullProfile = await getUserByUsername(usernameInput);
+          realEmail = fullProfile?.email || meData.email;
+        } catch (e) {
+          // ✅ DETECCIÓN: Si getUserByUsername falla con forcepasswordchange
+          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+            throw e; // Re-lanzar para el catch principal
+          }
+          console.warn("⚠️ No se pudo obtener email del perfil completo, usando email básico");
+        }
 
         if (!realEmail) {
             console.warn("⚠️ Moodle no devolvió el email. Verifica los permisos del servicio.");
@@ -219,11 +223,23 @@ export default function App() {
             }
             // Fallback para admin global
             if (meData.userissiteadmin) finalRole = 'teacher';
-        } catch (e) { console.warn("Rol por defecto: student"); }
+        } catch (e) {
+          // ✅ DETECCIÓN: Si getUserCourses falla con forcepasswordchange
+          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+            throw e; // Re-lanzar para el catch principal
+          }
+          console.warn("Rol por defecto: student");
+        }
 
         // 5. Preferencias (Avatar/Nivel)
-        const userPrefs = await getUserPreferences(meData.userid);
-        const savedLevel = userPrefs?.level_code || 'A1';
+        let userPrefs = null;
+        let savedLevel = 'A1';
+        try {
+          userPrefs = await getUserPreferences(meData.userid);
+          savedLevel = userPrefs?.level_code || 'A1';
+        } catch (e) {
+          console.warn("No se pudieron cargar preferencias, usando valores por defecto");
+        }
 
         // 6. Crear Perfil de Sesión
         const userProfile: any = {
@@ -239,10 +255,55 @@ export default function App() {
 
         setCurrentUser(userProfile);
         
-        // Cargar contenido
-        const tasksData = await getMoodleTasks();
-        setTasks(tasksData);
-        const subsData = await getMoodleSubmissions();
+        // ✅ CARGAR DATOS DE MOODLE CON EL TOKEN DEL USUARIO
+        console.log('📚 Cargando cursos y tareas con token de usuario...');
+        
+        // Cargar cursos
+        try {
+          const moodleCourses = await getCourses();
+          if (Array.isArray(moodleCourses)) {
+            // Filtrar cursos (excluir Site Home y plantillas)
+            const cleanCourses = moodleCourses.filter((c: any) => 
+              c.id !== 1 && c.shortname !== 'LuinGo' && c.format !== 'site'
+            );
+            setCourses(cleanCourses);
+            console.log(`✅ ${cleanCourses.length} cursos cargados`);
+          }
+        } catch (e) {
+          // ✅ DETECCIÓN: Si getCourses falla con forcepasswordchange
+          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+            throw e; // Re-lanzar para el catch principal
+          }
+          console.warn("No se pudieron cargar cursos");
+          setCourses([]);
+        }
+        
+        // Cargar tareas
+        let tasksData = [];
+        try {
+          tasksData = await getMoodleTasks();
+          setTasks(tasksData);
+          console.log(`✅ ${tasksData.length} tareas cargadas`);
+        } catch (e) {
+          // ✅ DETECCIÓN: Si getMoodleTasks falla con forcepasswordchange
+          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+            throw e; // Re-lanzar para el catch principal
+          }
+          console.warn("No se pudieron cargar tareas");
+          setTasks([]);
+        }
+        
+        // Cargar submissions
+        let subsData = [];
+        try {
+          subsData = await getMoodleSubmissions();
+        } catch (e) {
+          // ✅ DETECCIÓN: Si getMoodleSubmissions falla con forcepasswordchange
+          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+            throw e; // Re-lanzar para el catch principal
+          }
+          console.warn("No se pudieron cargar submissions");
+        }
 
         if (finalRole === 'teacher') {
             setRealSubmissions(subsData);
@@ -263,6 +324,14 @@ export default function App() {
 
     } catch (e) {
         console.error("Login Error:", e);
+        
+        // ✅ DETECTAR ERROR DE CAMBIO DE CONTRASEÑA FORZADO
+        if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+          setLoading(false);
+          setShowPasswordChangeRequired(true);
+          return;
+        }
+        
         toast.error("Error de conexión.");
     } finally {
         setLoading(false);
@@ -438,10 +507,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    // ✅ Limpiar el token del usuario
-    clearUserToken();
-    console.log('🔑 Token de usuario eliminado');
-    
+    clearUserToken(); // ✅ LIMPIAR TOKEN DEL USUARIO
     setCurrentUser(null);
     setView('home');
     setRealSubmissions([]);
@@ -995,6 +1061,47 @@ export default function App() {
           }}
         />
       )}
+      
+      {/* ========== PASSWORD CHANGE REQUIRED MODAL ========== */}
+      <Dialog open={showPasswordChangeRequired} onOpenChange={setShowPasswordChangeRequired}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <KeyRound className="w-5 h-5" />
+              Cambio de Contraseña Requerido
+            </DialogTitle>
+            <DialogDescription className="text-slate-600 space-y-3 pt-2">
+              <p>
+                🔐 Por políticas de seguridad de Moodle, debes cambiar tu contraseña antes de poder acceder a LuinGo.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                <p className="font-bold text-amber-800 mb-2">📋 Instrucciones:</p>
+                <ol className="list-decimal list-inside space-y-1 text-amber-700">
+                  <li>Abre <a href="https://luingo.moodiy.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">luingo.moodiy.com</a> en otra pestaña</li>
+                  <li>Inicia sesión con tus credenciales actuales</li>
+                  <li>Moodle te pedirá cambiar la contraseña</li>
+                  <li>Elige una nueva contraseña segura</li>
+                  <li>Regresa aquí e inicia sesión con la nueva contraseña</li>
+                </ol>
+              </div>
+              <p className="text-xs text-slate-500">
+                💡 Si necesitas ayuda, contacta al administrador del campus.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              onClick={() => {
+                setShowPasswordChangeRequired(false);
+                window.open('https://luingo.moodiy.com', '_blank');
+              }}
+              className="w-full bg-amber-600 hover:bg-amber-700"
+            >
+              Abrir Moodle para Cambiar Contraseña
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
