@@ -25,12 +25,13 @@ interface StudentDashboardProps {
   student: Student;
   tasks: Task[];
   submissions: Submission[];
+  teacherEmail?: string; // 👈 [NUEVO] Añadir teacherEmail
   onSelectTask: (task: Task) => void;
   onLogout: () => void;
 }
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ 
-  student, tasks = [], submissions = [], onSelectTask, onLogout 
+  student, tasks = [], submissions = [], teacherEmail, onSelectTask, onLogout // 👈 [NUEVO] Añadir teacherEmail
 }) => {
   const [activeTab, setActiveTab] = useState<'tasks' | 'portfolio' | 'community' | 'achievements'>('tasks');
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
@@ -201,8 +202,23 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </h2>
               </div>
               
-              {pendingTasks.length > 0 ? (
+              {pendingTasks.length > 0 || (student as any).pending_level_test ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  
+                  {/* ✅ INYECCIÓN QUIRÚRGICA: Tarjeta de Test basada en la bandera */}
+                  {/* Usamos (student as any) para acceder a la propiedad dinámica sin romper tipos */}
+                  {(student as any).pending_level_test && (
+                     <LevelTestCard 
+                       key="level-test-system"
+                       onClick={() => setActiveLevelTest({ 
+                         id: 'level-test-system', 
+                         title: 'Test de Nivel',
+                         content_data: { type: 'level_test' }
+                       } as any)} 
+                     />
+                  )}
+
+                  {/* Tareas normales de Moodle */}
                   {pendingTasks.map(task => {
                     // ✅ DETECTAR SI ES LEVEL TEST
                     if (task.content_data?.type === 'level_test' || (task.content_data as any)?.content_data?.type === 'level_test') {
@@ -287,6 +303,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           studentName={student.name}
           studentId={student.id}
           studentEmail={student.email}
+          teacherEmail={teacherEmail} // 👈 [NUEVO] Pasar el email del profesor
           taskId={activeLevelTest.id}
           initialData={submissions.find(s => s.task_id === activeLevelTest.id && String(s.student_id) === String(student.id))} // ✅ PASAR DATOS PREVIOS
           onExit={() => {

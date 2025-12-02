@@ -19,9 +19,7 @@ export const LEVEL_TEST_DATA = {
     // --- NIVEL A1-A2 (Básico) ---
     {
       id: 1,
-      dialogue: [
-        { speaker: "A" as const, text: "¿___ eres?" },
-      ],
+      dialogue: [{ speaker: "A" as const, text: "¿___ eres?" }],
       options: ["Dónde", "De dónde", "A dónde", "En dónde"],
       correctAnswer: "De dónde",
     },
@@ -83,9 +81,9 @@ export const LEVEL_TEST_DATA = {
       dialogue: [
         {
           speaker: "A" as const,
-          text: "No ___ ___ nada tener que limpiar los cristales.",
+          text: "No __ nada tener que limpiar los cristales.",
         },
-        { speaker: "B" as const, text: "___ ___ ___." },
+        { speaker: "B" as const, text: "__." },
       ],
       options: [
         "te gusta / Yo sí",
@@ -105,7 +103,7 @@ export const LEVEL_TEST_DATA = {
           text: "No, no ha llamado ___.",
         },
       ],
-      options: ["alguien", "nada", "—", "nadie"],
+      options: ["alguien", "nada", "ninguno", "nadie"],
       correctAnswer: "nadie",
     },
     {

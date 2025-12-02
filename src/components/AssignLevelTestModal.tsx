@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
-import { createMoodleTask } from '../lib/moodle';
+import { saveUserPreferences } from '../lib/moodle'; // ✅ CAMBIO: Ya no importamos createMoodleTask
 import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ IMPORTAR
 import { toast } from 'sonner@2.0.3';
 import { Target, Send } from 'lucide-react';
@@ -32,25 +32,11 @@ export const AssignLevelTestModal: React.FC<AssignLevelTestModalProps> = ({
     try {
       const student = students.find(s => String(s.id) === selectedStudentId);
       
-      // Payload especial para Level Test
-      const taskData = {
-        type: 'level_test', // Flag mágico
-        studentId: selectedStudentId,
-        studentName: student?.name,
-        teacherMessage: message,
-        status: 'assigned',
-        max_attempts: 1
-      };
-
-      await createMoodleTask(
-        `Test de Nivel: ${student?.name}`,
-        message, // Descripción visible
-        {
-          assignment_scope: { type: 'individual', targetId: selectedStudentId },
-          content_data: taskData,
-          category: 'quiz' // Para compatibilidad
-        }
-      );
+      // ✅ SOLO marcamos la bandera en preferencias. NO creamos tarea en Moodle.
+      await saveUserPreferences(selectedStudentId, {
+        pending_level_test: true, // 🚩 Esto activa la tarjeta en el alumno
+        level_test_message: message
+      });
 
       // ✅ ENVIAR NOTIFICACIÓN POR EMAIL
       if (student?.email) {
@@ -61,7 +47,7 @@ export const AssignLevelTestModal: React.FC<AssignLevelTestModalProps> = ({
         });
       }
 
-      toast.success(`Test enviado a ${student?.name}`);
+      toast.success(`Test asignado a ${student?.name}`);
       onAssigned();
       onClose();
     } catch (e) {
