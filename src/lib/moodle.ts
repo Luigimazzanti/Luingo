@@ -82,16 +82,21 @@ const callMoodle = async (
     try {
       const data = JSON.parse(text);
       
-      // ✅ DETECCIÓN EXHAUSTIVA DE forcepasswordchangenotice
-      const messageStr = JSON.stringify(data).toLowerCase();
-      if (messageStr.includes("forcepasswordchange")) {
-        console.error(`🔐 DETECTADO: Moodle requiere cambio de contraseña en ${functionName}`);
-        console.error("Data completa:", data);
-        throw new Error("FORCE_PASSWORD_CHANGE");
+      // ✅ FIX: Detección estricta de error por código, no por búsqueda de texto
+      // Solo verificamos si Moodle devuelve un errorcode específico de cambio de contraseña
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        if (data.errorcode === 'forcepasswordchangenotice' || data.exception === 'moodle_exception') {
+          // Solo si es realmente un error de contraseña
+          if (data.errorcode === 'forcepasswordchangenotice') {
+            console.error(`🔐 DETECTADO: Moodle requiere cambio de contraseña real en ${functionName}`);
+            console.error("Error code:", data.errorcode, "Message:", data.message);
+            throw new Error("FORCE_PASSWORD_CHANGE");
+          }
+        }
       }
       
       if (data.exception || data.errorcode) {
-        // ✅ Log de warnings normales
+        // ✅ Log de warnings normales (otros errores)
         console.warn(
           `⚠️ Moodle Warning (${functionName}):`,
           data.message,
@@ -765,12 +770,17 @@ export const loginToMoodle = async (
       }),
     });
     const data = await response.json();
-    if (data.error || !data.token)
+    
+    // ✅ Verificar si hay error de credenciales
+    if (data.error || !data.token) {
       throw new Error(data.error || "Credenciales inválidas");
+    }
+    
     return data.token;
   } catch (error) {
     console.error("Login error:", error);
-    return null;
+    // ✅ RE-LANZAR el error para que App.tsx pueda manejarlo
+    throw error;
   }
 };
 

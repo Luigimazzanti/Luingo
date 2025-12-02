@@ -168,8 +168,9 @@ export default function App() {
         // 1. Autenticación (Token Personal)
         const token = await loginToMoodle(usernameInput, passwordInput);
         if (!token) {
+            // ⚠️ Fallback de seguridad (no debería llegar aquí con el nuevo loginToMoodle)
             setLoading(false);
-            return toast.error("Credenciales incorrectas");
+            return toast.error("❌ Usuario o contraseña incorrectos");
         }
 
         // ✅ GUARDAR EL TOKEN DEL USUARIO
@@ -192,18 +193,23 @@ export default function App() {
         // 3. 🔥 RECUPERAR DATOS REALES (EMAIL) USANDO LLAVE MAESTRA
         let realEmail = meData.email;
         try {
+          // Intentamos obtener datos extra con el token maestro
+          // ⚠️ DEGRADACIÓN SUAVE: Si falla, NO bloqueamos el login del usuario
           const fullProfile = await getUserByUsername(usernameInput);
-          realEmail = fullProfile?.email || meData.email;
-        } catch (e) {
-          // ✅ DETECCIÓN: Si getUserByUsername falla con forcepasswordchange
-          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
-            throw e; // Re-lanzar para el catch principal
+          if (fullProfile?.email) {
+            realEmail = fullProfile.email;
           }
-          console.warn("⚠️ No se pudo obtener email del perfil completo, usando email básico");
+        } catch (e) {
+          // 🛡️ CRÍTICO: Si el token maestro tiene problemas (ej: forcepasswordchange),
+          // NO re-lanzamos el error porque NO es culpa del usuario.
+          // Permitimos que entre con los datos básicos (meData)
+          console.warn("⚠️ Advertencia no crítica: No se pudo obtener perfil completo (posible error de token maestro).");
+          console.warn("   Usando email básico:", meData.email);
+          // NO hacemos throw - Degradación suave
         }
 
         if (!realEmail) {
-            console.warn("⚠️ Moodle no devolvió el email. Verifica los permisos del servicio.");
+            console.warn("⚠️ Usando email de fallback.");
         }
 
         console.log("👤 Usuario:", meData.fullname, "| Email:", realEmail);
@@ -224,11 +230,9 @@ export default function App() {
             // Fallback para admin global
             if (meData.userissiteadmin) finalRole = 'teacher';
         } catch (e) {
-          // ✅ DETECCIÓN: Si getUserCourses falla con forcepasswordchange
-          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
-            throw e; // Re-lanzar para el catch principal
-          }
-          console.warn("Rol por defecto: student");
+          // 🛡️ DEGRADACIÓN SUAVE: Si falla la detección de rol, usamos el rol por defecto
+          // NO bloqueamos el login - el usuario puede entrar como estudiante
+          console.warn("⚠️ No se pudo detectar rol, usando rol por defecto: student");
         }
 
         // 5. Preferencias (Avatar/Nivel)
@@ -260,7 +264,17 @@ export default function App() {
         
         // Cargar cursos
         try {
-          const moodleCourses = await getCourses();
+          // ✅ FIX: Estudiantes usan getUserCourses (solo sus cursos matriculados)
+          // Profesores/admins usan getCourses (todos los cursos del campus)
+          let moodleCourses = [];
+          if (finalRole === 'student') {
+            console.log('👨‍🎓 Usuario estudiante: cargando solo cursos matriculados...');
+            moodleCourses = await getUserCourses(meData.userid);
+          } else {
+            console.log('👨‍🏫 Usuario profesor/admin: cargando todos los cursos...');
+            moodleCourses = await getCourses();
+          }
+          
           if (Array.isArray(moodleCourses)) {
             // Filtrar cursos (excluir Site Home y plantillas)
             const cleanCourses = moodleCourses.filter((c: any) => 
@@ -270,11 +284,9 @@ export default function App() {
             console.log(`✅ ${cleanCourses.length} cursos cargados`);
           }
         } catch (e) {
-          // ✅ DETECCIÓN: Si getCourses falla con forcepasswordchange
-          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
-            throw e; // Re-lanzar para el catch principal
-          }
-          console.warn("No se pudieron cargar cursos");
+          // 🛡️ DEGRADACIÓN SUAVE: Si falla la carga de cursos, continuamos con lista vacía
+          // NO bloqueamos el login - el usuario puede entrar sin ver cursos inicialmente
+          console.warn("⚠️ No se pudieron cargar cursos, usando lista vacía:", e);
           setCourses([]);
         }
         
@@ -285,11 +297,8 @@ export default function App() {
           setTasks(tasksData);
           console.log(`✅ ${tasksData.length} tareas cargadas`);
         } catch (e) {
-          // ✅ DETECCIÓN: Si getMoodleTasks falla con forcepasswordchange
-          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
-            throw e; // Re-lanzar para el catch principal
-          }
-          console.warn("No se pudieron cargar tareas");
+          // 🛡️ DEGRADACIÓN SUAVE: Si falla la carga de tareas, continuamos con lista vacía
+          console.warn("⚠️ No se pudieron cargar tareas, usando lista vacía");
           setTasks([]);
         }
         
@@ -298,11 +307,8 @@ export default function App() {
         try {
           subsData = await getMoodleSubmissions();
         } catch (e) {
-          // ✅ DETECCIÓN: Si getMoodleSubmissions falla con forcepasswordchange
-          if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
-            throw e; // Re-lanzar para el catch principal
-          }
-          console.warn("No se pudieron cargar submissions");
+          // 🛡️ DEGRADACIÓN SUAVE: Si falla la carga de submissions, continuamos con lista vacía
+          console.warn("⚠️ No se pudieron cargar submissions, usando lista vacía");
         }
 
         if (finalRole === 'teacher') {
@@ -325,14 +331,38 @@ export default function App() {
     } catch (e) {
         console.error("Login Error:", e);
         
-        // ✅ DETECTAR ERROR DE CAMBIO DE CONTRASEÑA FORZADO
-        if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+        const errorMessage = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+
+        // ✅ CASO 1: CAMBIO DE CONTRASEÑA REQUERIDO
+        // Detectamos si el error contiene palabras clave de Moodle sobre cambio de password
+        if (
+          errorMessage.includes("forcepasswordchange") || 
+          errorMessage.includes("password change") ||
+          errorMessage.includes("must change your password") ||
+          errorMessage === "force_password_change"
+        ) {
           setLoading(false);
-          setShowPasswordChangeRequired(true);
+          setShowPasswordChangeRequired(true); // ✅ Abre el modal automáticamente
           return;
         }
         
-        toast.error("Error de conexión.");
+        // ✅ CASO 2: CONTRASEÑA INCORRECTA
+        // Detectamos errores típicos de login fallido
+        if (
+          errorMessage.includes("invalid login") || 
+          errorMessage.includes("credenciales inválidas") ||
+          errorMessage.includes("credenciales invalidas") ||
+          errorMessage.includes("incorrect") ||
+          errorMessage.includes("wrong password") ||
+          errorMessage.includes("authentication failed")
+        ) {
+           toast.error("❌ Usuario o contraseña incorrectos");
+           setLoading(false);
+           return;
+        }
+        
+        // ✅ CASO 3: ERROR GENÉRICO O DE CONEXIÓN
+        toast.error("⚠️ Error de conexión con el Campus.");
     } finally {
         setLoading(false);
     }
