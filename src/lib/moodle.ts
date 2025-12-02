@@ -770,12 +770,15 @@ export const loginToMoodle = async (
       }),
     });
     const data = await response.json();
+    console.log("🔐 Respuesta de login desde proxy:", data);
     
     // ✅ Verificar si hay error de credenciales
     if (data.error || !data.token) {
+      console.error("❌ Login fallido - Error detectado:", data.error);
       throw new Error(data.error || "Credenciales inválidas");
     }
     
+    console.log("✅ Login exitoso - Token obtenido");
     return data.token;
   } catch (error) {
     console.error("Login error:", error);

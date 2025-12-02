@@ -161,8 +161,13 @@ export default function App() {
 
   // ========== INICIALIZACIÓN DE USUARIO ==========
   const handleRealLogin = async () => {
-    if (!usernameInput || !passwordInput) return toast.error("Faltan credenciales");
+    console.log("🚀 handleRealLogin INICIADO");
+    if (!usernameInput || !passwordInput) {
+      toast.error("⚠️ Por favor ingresa usuario y contraseña");
+      return;
+    }
     setLoading(true);
+    console.log("🔄 Loading activado, intentando login...");
 
     try {
         // 1. Autenticación (Token Personal)
@@ -329,40 +334,46 @@ export default function App() {
         toast.success(`¡Hola ${meData.firstname}!`);
 
     } catch (e) {
-        console.error("Login Error:", e);
+        console.error("🚨 LOGIN ERROR CAPTURADO:", e);
+        setLoading(false);
         
+        // 🔥 TOAST DE DEBUG - SIEMPRE SE DEBE VER
+        toast.error("❌ ERROR DE LOGIN DETECTADO", { duration: 6000 });
+        
+        // Normalizamos el mensaje de error a minúsculas para buscar palabras clave
         const errorMessage = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+        console.log("🔍 Error message normalizado:", errorMessage);
 
-        // ✅ CASO 1: CAMBIO DE CONTRASEÑA REQUERIDO
-        // Detectamos si el error contiene palabras clave de Moodle sobre cambio de password
+        // CASO 1: CAMBIO DE CONTRASEÑA REQUERIDO 🔐
         if (
           errorMessage.includes("forcepasswordchange") || 
           errorMessage.includes("password change") ||
           errorMessage.includes("must change your password") ||
           errorMessage === "force_password_change"
         ) {
-          setLoading(false);
-          setShowPasswordChangeRequired(true); // ✅ Abre el modal automáticamente
+          console.log("✅ CASO 1 DETECTADO: Cambio de contraseña");
+          toast("⚠️ CASO 1: Tu contraseña ha caducado", { duration: 5000 });
+          setShowPasswordChangeRequired(true);
           return;
         }
         
-        // ✅ CASO 2: CONTRASEÑA INCORRECTA
-        // Detectamos errores típicos de login fallido
+        // CASO 2: CREDENCIALES INCORRECTAS 🙈
         if (
           errorMessage.includes("invalid login") || 
-          errorMessage.includes("credenciales inválidas") ||
-          errorMessage.includes("credenciales invalidas") ||
+          errorMessage.includes("credenciales") ||
           errorMessage.includes("incorrect") ||
-          errorMessage.includes("wrong password") ||
-          errorMessage.includes("authentication failed")
+          errorMessage.includes("invalidtoken") ||
+          errorMessage.includes("inválidas")
         ) {
-           toast.error("❌ Usuario o contraseña incorrectos");
-           setLoading(false);
+           console.log("✅ CASO 2 DETECTADO: Credenciales incorrectas");
+           toast.error("🙈 CASO 2: Usuario o contraseña incorrectos", { duration: 4000 });
            return;
         }
         
-        // ✅ CASO 3: ERROR GENÉRICO O DE CONEXIÓN
-        toast.error("⚠️ Error de conexión con el Campus.");
+        // CASO 3: ERROR DE CONEXIÓN O SERVIDOR 🔌
+        console.log("✅ CASO 3 DETECTADO: Error genérico de conexión");
+        toast.error("📶 CASO 3: Error de conexión con el Campus", { duration: 4000 });
+
     } finally {
         setLoading(false);
     }

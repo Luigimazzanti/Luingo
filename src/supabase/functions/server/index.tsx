@@ -79,7 +79,9 @@ app.post("/make-server-ebbb5c67/moodle-proxy", async (c) => {
       loginUrl.searchParams.append("password", params.password);
       loginUrl.searchParams.append("service", "moodle_mobile_app");
       const res = await fetch(loginUrl.toString(), { method: "POST" });
-      return c.json(await res.json());
+      const loginData = await res.json();
+      console.log("🔐 Respuesta de Moodle login:", loginData);
+      return c.json(loginData);
     }
 
     const MOODLE_TOKEN = settings?.token;
