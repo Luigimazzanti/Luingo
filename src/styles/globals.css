@@ -5,20 +5,13 @@
 :root {
   --font-size: 16px;
   
-  /* --- PALETA DE COLORES LUINGO (NUEVA) --- */
-  /* Morados/Púrpuras */
-  --luingo-purple-primary: #6344A6;   /* Morado Principal */
-  --luingo-purple-dark: #211259;      /* Púrpura Oscuro/Azul Marino */
-  
-  /* Amarillos/Naranjas (Gradiente cálido) */
-  --luingo-yellow-bright: #F2B705;    /* Amarillo Dorado Brillante */
-  --luingo-orange-medium: #F29F05;    /* Naranja Dorado */
-  --luingo-orange-deep: #F28705;      /* Naranja Profundo */
-  
-  /* Derivados suaves para fondos */
-  --luingo-purple-light: #8B6BC7;     /* Morado claro (generado) */
-  --luingo-purple-surface: #F3F0F9;   /* Superficie lila suave */
-  --luingo-yellow-soft: #FFF8E1;      /* Amarillo muy suave para fondos */
+  /* --- PALETA EXTRACTADA DE LA IMAGEN (MAÍZ) --- */
+  /* Usamos nombres semánticos para mantener orden */
+  --corn-purple-deep: #5B2C6F;   /* Morado Oscuro (Maíz) */
+  --corn-purple-light: #9B59B6;  /* Morado Medio (Brillo) */
+  --corn-yellow-gold: #F4D03F;   /* Amarillo Dorado (Granos) */
+  --corn-yellow-soft: #FCF3CF;   /* Amarillo Crema (Fondo claro) */
+  --corn-surface-lilac: #F4ECF7; /* Lila muy suave (Superficie luz) */
   
   /* --- VARIABLES DE SISTEMA --- */
   
@@ -30,31 +23,31 @@
   --card: #FFFFFF;
   --card-foreground: #1A202C;
   --popover: #FFFFFF;
-  --popover-foreground: #6344A6; /* Texto morado en popups */
+  --popover-foreground: #5B2C6F; /* Texto morado en popups para elegancia */
 
-  /* PRIMARIO: El Morado Principal (#6344A6). Botones y acciones principales */
-  --primary: #6344A6;
+  /* PRIMARIO: El Morado Profundo. Botones y acciones principales */
+  --primary: #5B2C6F;
   --primary-foreground: #FFFFFF; /* Texto blanco sobre botón morado */
 
-  /* SECUNDARIO: Púrpura oscuro para elementos secundarios importantes */
-  --secondary: #F3F0F9;
-  --secondary-foreground: #211259; /* Texto púrpura oscuro sobre fondo claro */
+  /* SECUNDARIO: Un lila suave. Para botones secundarios o fondos de bloque */
+  --secondary: #F4ECF7;
+  --secondary-foreground: #5B2C6F; /* Texto morado sobre fondo lila */
 
   /* MUTED: Elementos deshabilitados o sutiles */
   --muted: #F7FAFC;
   --muted-foreground: #718096;
 
   /* ACENTO: El Amarillo Dorado. Para destacar cosas importantes */
-  --accent: #F2B705;
-  --accent-foreground: #211259; /* Texto oscuro sobre amarillo para contraste */
+  --accent: #F4D03F;
+  --accent-foreground: #2D3748; /* Texto oscuro sobre amarillo para contraste */
 
-  /* DESTRUCTIVE: Mantenemos rojo semántico para errores */
+  /* DESTRUCTIVE: Mantenemos un tono salmón/rojo pero armonizado */
   --destructive: #E57373;
   --destructive-foreground: #FFFFFF;
 
   /* Bordes y Componentes */
-  --border: rgba(99, 68, 166, 0.15); /* Borde sutilmente morado */
-  --input: rgba(99, 68, 166, 0.1);
+  --border: rgba(91, 44, 111, 0.15); /* Borde sutilmente morado */
+  --input: rgba(91, 44, 111, 0.1);
   --input-background: #FFFFFF;
   --switch-background: #CBD5E0;
   
@@ -62,73 +55,73 @@
   --font-weight-normal: 400;
   
   /* Ring: El anillo de foco al hacer clic */
-  --ring: #6344A6;
+  --ring: #9B59B6;
 
-  /* GRÁFICOS: Gradiente derivado de los colores */
-  --chart-1: #6344A6; /* Morado Principal */
-  --chart-2: #F2B705; /* Amarillo Dorado */
-  --chart-3: #211259; /* Púrpura Oscuro */
-  --chart-4: #F29F05; /* Naranja Medio */
-  --chart-5: #F28705; /* Naranja Profundo */
+  /* GRÁFICOS: Gradiente derivado de la imagen */
+  --chart-1: #5B2C6F; /* Morado Oscuro */
+  --chart-2: #F4D03F; /* Amarillo */
+  --chart-3: #9B59B6; /* Morado Medio */
+  --chart-4: #F5B041; /* Naranja/Amarillo oscuro */
+  --chart-5: #D2B4DE; /* Lila */
 
   --radius: 1rem;
 
-  /* Sidebar */
+  /* Sidebar: Un toque muy sutil de lila para diferenciar del contenido principal */
   --sidebar: #FAFAFA; 
   --sidebar-foreground: #2D3748;
-  --sidebar-primary: #6344A6;
+  --sidebar-primary: #5B2C6F;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F3F0F9;
-  --sidebar-accent-foreground: #211259;
-  --sidebar-border: rgba(99, 68, 166, 0.08);
-  --sidebar-ring: #6344A6;
+  --sidebar-accent: #F4ECF7;
+  --sidebar-accent-foreground: #5B2C6F;
+  --sidebar-border: rgba(91, 44, 111, 0.08);
+  --sidebar-ring: #9B59B6;
 }
 
 /* MODO OSCURO: Invertimos la lógica. Fondo Morado Muy Oscuro, Texto Claro */
 .dark {
-  --background: #0F0A1E; /* Casi negro con tinte morado */
-  --foreground: #F3F0F9; /* Blanco lila */
+  --background: #181221; /* Casi negro con tinte morado */
+  --foreground: #F4ECF7; /* Blanco lila */
 
-  --card: #1A1330; /* Morado oscuro para tarjetas */
-  --card-foreground: #F3F0F9;
+  --card: #241B35; /* Morado oscuro para tarjetas */
+  --card-foreground: #F4ECF7;
 
-  --popover: #1A1330;
-  --popover-foreground: #F3F0F9;
+  --popover: #241B35;
+  --popover-foreground: #F4ECF7;
 
   /* En modo oscuro, el primario se aclara para brillar */
-  --primary: #8B6BC7; 
+  --primary: #9B59B6; 
   --primary-foreground: #FFFFFF;
 
-  --secondary: #211259;
-  --secondary-foreground: #F2B705; /* Texto amarillo sobre fondo morado oscuro */
+  --secondary: #4A235A;
+  --secondary-foreground: #F4D03F; /* Texto amarillo sobre fondo morado */
 
-  --muted: #2A1F40;
+  --muted: #372E48;
   --muted-foreground: #A0AEC0;
 
-  --accent: #F2B705; /* El amarillo sigue siendo acento */
-  --accent-foreground: #0F0A1E;
+  --accent: #F4D03F; /* El amarillo sigue siendo acento */
+  --accent-foreground: #1A202C;
 
   --destructive: #EF5350;
   --destructive-foreground: #FFFFFF;
 
   --border: rgba(255, 255, 255, 0.15);
   --input: rgba(255, 255, 255, 0.15);
-  --ring: #8B6BC7;
+  --ring: #9B59B6;
 
-  --chart-1: #8B6BC7;
-  --chart-2: #F2B705;
-  --chart-3: #F29F05;
-  --chart-4: #F28705;
-  --chart-5: #6344A6;
+  --chart-1: #9B59B6;
+  --chart-2: #F4D03F;
+  --chart-3: #D2B4DE;
+  --chart-4: #F5B041;
+  --chart-5: #5B2C6F;
 
-  --sidebar: #13102A;
-  --sidebar-foreground: #F3F0F9;
-  --sidebar-primary: #8B6BC7;
+  --sidebar: #1F162B;
+  --sidebar-foreground: #F4ECF7;
+  --sidebar-primary: #9B59B6;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #211259;
-  --sidebar-accent-foreground: #F2B705;
+  --sidebar-accent: #4A235A;
+  --sidebar-accent-foreground: #F4D03F;
   --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #8B6BC7;
+  --sidebar-ring: #9B59B6;
 }
 
 @theme inline {
@@ -252,12 +245,12 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #8B6BC7; /* Morado claro para el scroll */
+  background: #D7BDE2; /* Un lila medio para el scroll */
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6344A6; /* Morado principal al hacer hover */
+  background: #9B59B6; /* Morado al hacer hover */
 }
 
 .sr-only {

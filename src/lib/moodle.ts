@@ -12,6 +12,30 @@ const TASKS_FORUM_ID = 4;
 const SUBMISSIONS_FORUM_ID = 7;
 const COMMUNITY_FORUM_ID = 13;
 
+// ========== GESTIÓN DE TOKEN PERSONAL ==========
+let userToken: string | null = null;
+
+export const setUserToken = (token: string | null) => {
+  userToken = token;
+  if (token) {
+    localStorage.setItem('moodle_user_token', token);
+  } else {
+    localStorage.removeItem('moodle_user_token');
+  }
+};
+
+export const getUserToken = (): string | null => {
+  if (userToken) return userToken;
+  const stored = localStorage.getItem('moodle_user_token');
+  if (stored) userToken = stored;
+  return userToken;
+};
+
+export const clearUserToken = () => {
+  userToken = null;
+  localStorage.removeItem('moodle_user_token');
+};
+
 interface MoodleParams {
   [key: string]: string | number | boolean;
 }
@@ -37,6 +61,9 @@ const callMoodle = async (
 ) => {
   const proxyUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/moodle-proxy`;
 
+  // ✅ Usar token del usuario si está disponible, sino usar el maestro
+  const activeToken = getUserToken() || MOODLE_TOKEN;
+
   try {
     const response = await fetch(proxyUrl, {
       method: "POST",
@@ -47,7 +74,7 @@ const callMoodle = async (
       body: JSON.stringify({
         functionName,
         params,
-        settings: { url: MOODLE_URL, token: MOODLE_TOKEN },
+        settings: { url: MOODLE_URL, token: activeToken },
       }),
     });
 

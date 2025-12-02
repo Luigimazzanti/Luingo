@@ -313,13 +313,11 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     if (recipientEmails.length > 0) {
       // Import dinámico para no romper cabeceras si falta el import arriba
       import('../lib/notifications').then(({ sendNotification, emailTemplates }) => {
-          recipientEmails.forEach(email => {
-            sendNotification({
-              to: email,
-              subject: `Nueva Tarea: ${title}`,
-              html: emailTemplates.newTask(title, assignMode === 'individual' ? 'TI' : selectedLevel)
-            });
-          });
+          sendNotification(
+            recipientEmails,
+            `Nueva Tarea: ${title}`,
+            emailTemplates.newTask(title, assignMode === 'individual' ? 'TI' : selectedLevel)
+          );
       });
       toast.success(`📧 Notificando a ${recipientEmails.length} alumnos...`);
     }
@@ -520,106 +518,106 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-gradient-to-br from-slate-50 to-slate-100 w-full max-w-4xl h-[95vh] sm:h-[90vh] rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border-2 sm:border-4 border-white">
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-gradient-to-br from-slate-50 to-slate-100 w-full max-w-4xl h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border-4 border-white">
         
         {/* ========== HEADER ========== */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-3 sm:p-6 shrink-0 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-md rounded-xl sm:rounded-2xl flex items-center justify-center">
-              <Save className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 shrink-0 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+              <Save className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">
+              <h2 className="text-2xl font-black text-white tracking-tight">
                 {initialData ? 'Editar Tarea' : 'Nueva Tarea'}
               </h2>
-              <p className="text-indigo-100 text-xs sm:text-sm hidden sm:block">Construye tu actividad paso a paso</p>
+              <p className="text-indigo-100 text-sm">Construye tu actividad paso a paso</p>
             </div>
           </div>
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex items-center gap-2">
             {/* ✅ BOTÓN DE CONFIGURACIÓN DE API KEY */}
             <button
               onClick={() => setShowKeyModal(true)}
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white/10 backdrop-blur-md hover:bg-white/20 flex items-center justify-center transition-all"
+              className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md hover:bg-white/20 flex items-center justify-center transition-all"
               title="Configurar API Key"
             >
-              <Settings2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              <Settings2 className="w-5 h-5 text-white" />
             </button>
             <button
               onClick={onCancel}
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white/10 backdrop-blur-md hover:bg-white/20 flex items-center justify-center transition-all"
+              className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md hover:bg-white/20 flex items-center justify-center transition-all"
             >
-              <X className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              <X className="w-5 h-5 text-white" />
             </button>
           </div>
         </div>
 
         {/* ========== BODY (SCROLLABLE) ========== */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           
           {/* META INFO */}
-          <div className="bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 space-y-3 sm:space-y-4">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
             
             {/* ✅ SELECTOR DE TIPO: QUIZ VS WRITING VS DOCUMENT */}
             <div>
-              <label className="text-xs font-black text-slate-600 uppercase mb-2 sm:mb-3 block">Tipo de Tarea</label>
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <label className="text-xs font-black text-slate-600 uppercase mb-3 block">Tipo de Tarea</label>
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={() => setTaskType('quiz')}
                   className={cn(
-                    "py-3 sm:py-4 px-1 sm:px-4 rounded-lg sm:rounded-xl border-2 font-bold transition-all flex flex-col items-center justify-center gap-1 sm:gap-2",
+                    "py-4 px-2 sm:px-4 rounded-xl border-2 font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-2",
                     taskType === 'quiz'
                       ? "bg-indigo-100 border-indigo-500 text-indigo-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
                   )}
                 >
-                  <CheckSquare className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="text-[10px] sm:text-sm">Cuestionario</span>
+                  <CheckSquare className="w-5 h-5" />
+                  <span className="text-xs sm:text-sm">Cuestionario</span>
                 </button>
                 <button
                   onClick={() => setTaskType('writing')}
                   className={cn(
-                    "py-3 sm:py-4 px-1 sm:px-4 rounded-lg sm:rounded-xl border-2 font-bold transition-all flex flex-col items-center justify-center gap-1 sm:gap-2",
+                    "py-4 px-2 sm:px-4 rounded-xl border-2 font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-2",
                     taskType === 'writing'
                       ? "bg-emerald-100 border-emerald-500 text-emerald-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300"
                   )}
                 >
-                  <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="text-[10px] sm:text-sm">Redacción</span>
+                  <FileText className="w-5 h-5" />
+                  <span className="text-xs sm:text-sm">Redacción</span>
                 </button>
                 <button
                   onClick={() => setTaskType('document')}
                   className={cn(
-                    "py-3 sm:py-4 px-1 sm:px-4 rounded-lg sm:rounded-xl border-2 font-bold transition-all flex flex-col items-center justify-center gap-1 sm:gap-2",
+                    "py-4 px-2 sm:px-4 rounded-xl border-2 font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-2",
                     taskType === 'document'
                       ? "bg-amber-100 border-amber-500 text-amber-700 shadow-lg"
                       : "bg-white border-slate-200 text-slate-600 hover:border-amber-300"
                   )}
                 >
-                  <File className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="text-[10px] sm:text-sm">Doc. PDF</span>
+                  <File className="w-5 h-5" />
+                  <span className="text-xs sm:text-sm">Doc. PDF</span>
                 </button>
               </div>
             </div>
 
             {/* ✅ NUEVO BLOQUE DE ASIGNACIÓN (Movido desde el footer) */}
-            <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-slate-200 space-y-2 sm:space-y-3">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
                  <label className="text-xs font-black text-slate-500 uppercase flex items-center gap-2">
-                    <Users className="w-3 h-3 sm:w-4 sm:h-4" /> Asignación
+                    <Users className="w-4 h-4" /> Asignación
                  </label>
                  
-                 <div className="flex bg-white rounded-lg p-1 border border-slate-200 w-full sm:w-auto">
+                 <div className="flex bg-white rounded-lg p-1 border border-slate-200">
                     <button 
                        onClick={() => setAssignMode('level')}
-                       className={cn("px-2 sm:px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-all flex-1 sm:flex-none", assignMode === 'level' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600')}
+                       className={cn("px-3 py-1 rounded-md text-xs font-bold transition-all", assignMode === 'level' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600')}
                     >
                        Por Nivel
                     </button>
                     <button 
                        onClick={() => setAssignMode('individual')}
-                       className={cn("px-2 sm:px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-all flex-1 sm:flex-none", assignMode === 'individual' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600')}
+                       className={cn("px-3 py-1 rounded-md text-xs font-bold transition-all", assignMode === 'individual' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600')}
                     >
                        Individual
                     </button>
@@ -629,13 +627,13 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
               {assignMode === 'level' ? (
                  <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Selecciona el Nivel</label>
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-6 gap-2">
                        {['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(lvl => (
                           <button
                              key={lvl}
                              onClick={() => setSelectedLevel(lvl)}
                              className={cn(
-                                "h-8 sm:h-9 rounded-lg font-black text-xs border-b-4 active:border-b-0 active:translate-y-[2px] transition-all",
+                                "h-9 rounded-lg font-black text-xs border-b-4 active:border-b-0 active:translate-y-[2px] transition-all",
                                 selectedLevel === lvl 
                                    ? "bg-indigo-500 border-indigo-700 text-white shadow-indigo-200" 
                                    : "bg-white border-slate-200 text-slate-400 hover:bg-slate-50"
@@ -652,7 +650,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                     <select
                        value={assignedTo[0] === 'all' ? '' : assignedTo[0]}
                        onChange={(e) => setAssignedTo([e.target.value])}
-                       className="w-full h-9 sm:h-10 pl-2 sm:pl-3 bg-white border-2 border-slate-200 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm text-slate-700 focus:border-indigo-500 focus:ring-0"
+                       className="w-full h-10 pl-3 bg-white border-2 border-slate-200 rounded-xl font-bold text-sm text-slate-700 focus:border-indigo-500 focus:ring-0"
                     >
                        <option value="" disabled>Buscar estudiante...</option>
                        {students.map(s => (
@@ -668,7 +666,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
               <Input
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                className="bg-slate-50 border-2 border-slate-200 h-10 sm:h-12 font-bold text-base sm:text-lg"
+                className="bg-slate-50 border-2 border-slate-200 h-12 font-bold text-lg"
                 placeholder="Ej: Verbos en Presente"
               />
             </div>
@@ -677,7 +675,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
               <Textarea
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                className="bg-slate-50 border-2 border-slate-200 h-16 sm:h-20 resize-none text-sm sm:text-base"
+                className="bg-slate-50 border-2 border-slate-200 h-20 resize-none"
                 placeholder="Instrucciones claras para el alumno..."
               />
             </div>

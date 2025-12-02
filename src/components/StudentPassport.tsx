@@ -75,11 +75,7 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
       
       // ✅ NOTIFICACIÓN POR EMAIL (LÓGICA AGREGADA)
       if (student.email) {
-        sendNotification({ 
-          to: student.email, 
-          subject: "Nivel Actualizado", 
-          html: emailTemplates.levelUp(newLevel) 
-        });
+        sendNotification([student.email], "Nivel Actualizado", emailTemplates.levelUp(newLevel));
       }
       
       // 3. Refrescar datos globales si existe la función

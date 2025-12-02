@@ -13,7 +13,7 @@ import { PDFAnnotator } from './components/PDFAnnotator';
 import { ExercisePlayer } from './components/ExercisePlayer';
 import { ProfileEditor } from './components/ProfileEditor'; // ✅ NUEVO: Editor de perfil
 import { ForgotPasswordModal } from './components/ForgotPasswordModal'; // ✅ NUEVO: Modal de recuperación de contraseña
-import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask, getMoodleSubmissions, createCourse, loginToMoodle, getMe, getUserCourses, getUserPreferences, saveUserPreferences, getMyCourseProfile } from './lib/moodle';
+import { getSiteInfo, createMoodleTask, getMoodleTasks, getCourses, getEnrolledUsers, submitTaskResult, getUserByUsername, deleteMoodleTask, updateMoodleTask, getMoodleSubmissions, createCourse, loginToMoodle, getMe, getUserCourses, getUserPreferences, saveUserPreferences, getMyCourseProfile, setUserToken, clearUserToken } from './lib/moodle';
 import { mockClassroom, LUINGO_LEVELS } from './lib/mockData';
 import { Comment, Correction, Notification, User, Task, Student, Exercise, Submission } from './types'; 
 import { Button } from './components/ui/button';
@@ -185,6 +185,10 @@ export default function App() {
             return toast.error("Credenciales incorrectas");
         }
 
+        // ✅ GUARDAR EL TOKEN DEL USUARIO PARA FUTURAS LLAMADAS A MOODLE
+        setUserToken(token);
+        console.log('🔑 Token de usuario guardado correctamente');
+        
         // 2. Identidad Básica (ID y Nombre)
         const meData = await getMe(token);
         if (!meData || !meData.userid) throw new Error("No se pudo cargar el perfil");
@@ -434,6 +438,10 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    // ✅ Limpiar el token del usuario
+    clearUserToken();
+    console.log('🔑 Token de usuario eliminado');
+    
     setCurrentUser(null);
     setView('home');
     setRealSubmissions([]);

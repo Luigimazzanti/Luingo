@@ -18,8 +18,6 @@ import { cn } from '../lib/utils';
 import { CommunityFeed } from './community/CommunityFeed';
 import { TextAnnotator } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
-import { LevelTestCard } from './LevelTestCard'; // ✅ NUEVO
-import { LevelTestPlayer } from './LevelTestPlayer'; // ✅ NUEVO
 
 interface StudentDashboardProps {
   student: Student;
@@ -34,9 +32,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'tasks' | 'portfolio' | 'community' | 'achievements'>('tasks');
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
-  
-  // ✅ NUEVO: Estado para el Level Test Player
-  const [activeLevelTest, setActiveLevelTest] = useState<Task | null>(null);
 
   // --- PROTECCIÓN CONTRA CRASH ---
   if (!student) {
@@ -91,29 +86,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const pendingTasks = visibleTasks.filter(t => {
     const status = getTaskStatus(t.id);
     
-    // 1. DOCUMENTOS PDF (Se queda igual: Borrador=Visible, Enviado=Oculto)
+    // 🔥 LÓGICA ESPECÍFICA PARA PDFs: Siempre mostrar como pendiente si tiene borrador
     if (t.content_data?.type === 'document') {
+      // Si es PDF, siempre mostrar como pendiente a menos que esté 'submitted' o 'graded'
+      // Esto permite reabrir borradores infinitamente.
       if (status === 'draft' || status === 'assigned' || !status) return true;
-      return false; 
-    }
-
-    // 2. CUESTIONARIOS (FIX: Respetar Intentos Múltiples)
-    // Si es tipo form/quiz, verificamos intentos PRIMERO.
-    if (t.content_data?.type === 'form' || t.content_data?.type === 'quiz' || !t.content_data?.type) {
-       const attempts = getAttemptsCount(t.id);
-       const max = t.content_data?.max_attempts ?? 3;
-       
-       // Si ya llegó al límite, se oculta.
-       if (attempts >= max) return false;
-
-       // Si NO ha llegado al límite, se muestra SIEMPRE (aunque esté submitted)
-       // Esto permite hacer el intento 2, 3, etc.
-       return true;
+      return false;
     }
     
-    // 3. OTRAS TAREAS (Writing) (Se queda igual)
-    // Si ya se envió o calificó, se oculta.
     if (status === 'submitted' || status === 'graded') return false;
+    
+    if (t.content_data?.type !== 'writing') {
+      const attempts = getAttemptsCount(t.id);
+      const max = t.content_data?.max_attempts ?? 3;
+      return attempts < max;
+    }
     
     return true;
   });
@@ -169,22 +156,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       <div className="h-screen overflow-y-auto pb-32 scroll-smooth">
         
         {/* HEADER ESTADÍSTICAS (TRANSPARENTE) */}
-        <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
-          <div className="text-center md:text-left">
+        <div className="max-w-5xl mx-auto px-6 py-6 flex justify-between items-center">
+          <div>
             <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">
-              Hola, <span className="text-indigo-600 whitespace-nowrap">{student.name.split(' ')[0]} 👋</span>
+              Hola, <span className="text-indigo-600">{student.name.split(' ')[0]}</span> 👋
             </h1>
             <p className="text-sm text-slate-500 font-medium mt-1">¡Sigue aprendiendo!</p>
           </div>
           
           <div className="flex items-center gap-2 md:gap-3">
             <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full font-bold text-xs border border-amber-200 shadow-sm">
-              <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> 
-              <span>5 Días</span>
+              <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> 5 Días
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-full font-bold text-xs border border-indigo-200 shadow-sm whitespace-nowrap">
-              <Zap className="w-3.5 h-3.5 fill-indigo-500 text-indigo-500" /> 
-              <span>{student.xp_points} XP</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-full font-bold text-xs border border-indigo-200 shadow-sm">
+              <Zap className="w-3.5 h-3.5 fill-indigo-500 text-indigo-500" /> {student.xp_points} XP
             </div>
           </div>
         </div>
@@ -203,32 +188,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               
               {pendingTasks.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {pendingTasks.map(task => {
-                    // ✅ DETECTAR SI ES LEVEL TEST
-                    if (task.content_data?.type === 'level_test' || (task.content_data as any)?.content_data?.type === 'level_test') {
-                      // Verificamos si hay un borrador guardado en submissions
-                      const hasDraft = submissions.some(s => s.task_id === task.id && s.status === 'draft');
-                      
-                      return (
-                        <LevelTestCard 
-                          key={task.id} 
-                          onClick={() => setActiveLevelTest(task)} 
-                          hasProgress={hasDraft} // <--- PASAMOS EL DATO AQUÍ
-                        />
-                      );
-                    }
-
-                    // Renderizado normal de TaskCard
-                    return (
-                      <TaskCard 
-                        key={task.id} 
-                        task={task} 
-                        status={getTaskStatus(task.id)} 
-                        attemptsUsed={getAttemptsCount(task.id)} 
-                        onClick={() => onSelectTask(task)} 
-                      />
-                    );
-                  })}
+                  {pendingTasks.map(task => (
+                    <TaskCard 
+                      key={task.id} 
+                      task={task} 
+                      status={getTaskStatus(task.id)} 
+                      attemptsUsed={getAttemptsCount(task.id)} 
+                      onClick={() => onSelectTask(task)} 
+                    />
+                  ))}
                 </div>
               ) : (
                 <div className="bg-white rounded-3xl p-10 text-center border-2 border-dashed border-slate-200 shadow-sm">
@@ -284,22 +252,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       {/* NAVEGACIÓN FLOTANTE */}
       <NavDock />
-
-      {/* ✅ NUEVO: LEVEL TEST PLAYER */}
-      {activeLevelTest && (
-        <LevelTestPlayer
-          studentName={student.name}
-          studentId={student.id}
-          studentEmail={student.email}
-          taskId={activeLevelTest.id}
-          initialData={submissions.find(s => s.task_id === activeLevelTest.id && String(s.student_id) === String(student.id))} // ✅ PASAR DATOS PREVIOS
-          onExit={() => {
-            setActiveLevelTest(null);
-            // Recargar la página para actualizar el estado
-            window.location.reload();
-          }}
-        />
-      )}
 
       {/* VISOR DE DETALLES (RESUMEN) */}
       <Dialog open={!!selectedSubmission} onOpenChange={(o) => !o && setSelectedSubmission(null)}>
