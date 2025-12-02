@@ -3,6 +3,7 @@ import { Hono } from "https://esm.sh/hono@3.11.7";
 import { cors } from "https://esm.sh/hono@3.11.7/cors";
 import { logger } from "https://esm.sh/hono@3.11.7/logger";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { evaluateLevelTest } from "./levelTestEvaluator.tsx";
 
 // ==========================================
 // SECCIÓN DE BASE DE DATOS
@@ -79,9 +80,7 @@ app.post("/make-server-ebbb5c67/moodle-proxy", async (c) => {
       loginUrl.searchParams.append("password", params.password);
       loginUrl.searchParams.append("service", "moodle_mobile_app");
       const res = await fetch(loginUrl.toString(), { method: "POST" });
-      const loginData = await res.json();
-      console.log("🔐 Respuesta de Moodle login:", loginData);
-      return c.json(loginData);
+      return c.json(await res.json());
     }
 
     const MOODLE_TOKEN = settings?.token;
@@ -143,58 +142,51 @@ app.post("/make-server-ebbb5c67/send-email", async (c) => {
   }
 });
 
-// ✅ ENDPOINT DE EVALUACIÓN
+// ✅ ENDPOINT DE EVALUACIÓN CON IA Y NOTIFICACIONES
 app.post("/make-server-ebbb5c67/evaluate-level-test", async (c) => {
+  console.log('🎯 Endpoint /evaluate-level-test recibido');
+  
   try {
-    const { studentName, studentEmail, answers, writingText } = await c.req.json();
-    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
-    const RESEND_KEY = "re_d6oDB5rh_6EHLuWjQxqzWiXtJxmjcM2kB";
+    const body = await c.req.json();
+    const { 
+      studentId, 
+      studentName, 
+      studentEmail, 
+      teacherEmail = "profesor@luingo.es", // Email por defecto del profesor
+      answers, 
+      writingText, 
+      rawScore, 
+      totalQuestions 
+    } = body;
 
-    if (!GROQ_API_KEY) {
-      return c.json({ success: true, result: { level: "Pendiente", feedback: "Evaluación manual requerida (Falta API Key)." } });
-    }
+    console.log(`📊 Evaluando test de: ${studentName} (${studentEmail})`);
+    console.log(`📈 Nota bruta: ${rawScore}/${totalQuestions}`);
 
-    const systemPrompt = `
-      Eres un examinador experto del Instituto Cervantes. Evalúa este Test de Nivel.
-      DATOS:
-      - Respuestas: ${JSON.stringify(answers)}
-      - Redacción: "${writingText}"
-      
-      Genera un JSON ESTRICTO con: level (CEFR), score (0-100), feedback, strengths, weaknesses.
-    `;
-
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [{ role: "system", content: systemPrompt }],
-        model: "llama-3.3-70b-versatile",
-        temperature: 0.1,
-        response_format: { type: "json_object" }
-      })
+    // Llamar al evaluador profesional
+    const result = await evaluateLevelTest({
+      studentId,
+      studentName,
+      studentEmail,
+      teacherEmail,
+      answers,
+      writingText,
+      rawScore,
+      totalQuestions
     });
 
-    const groqData = await groqRes.json();
-    const content = groqData.choices?.[0]?.message?.content;
-    const result = content ? JSON.parse(content) : { level: "Error", feedback: "No se pudo generar el reporte." };
+    console.log(`✅ Evaluación completada: Nivel ${result.level}`);
 
-    // Enviar Email
-    if (studentEmail) {
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${RESEND_KEY}` },
-        body: JSON.stringify({
-          from: "LuinGo <hola@luingo.es>",
-          to: [studentEmail],
-          subject: `📈 Resultado LuinGo: Nivel ${result.level}`,
-          html: `<p>Hola ${studentName}, tu nivel es <strong>${result.level}</strong>.<br/>Feedback: ${result.feedback}</p>`
-        }),
-      });
-    }
+    return c.json({ 
+      success: true, 
+      result 
+    });
 
-    return c.json({ success: true, result });
-  } catch (e) {
-    return c.json({ success: false, error: String(e) }); // Devolver 200 con error para no romper el cliente
+  } catch (error) {
+    console.error('❌ Error en endpoint de evaluación:', error);
+    return c.json({ 
+      success: false, 
+      error: String(error) 
+    }, 500);
   }
 });
 

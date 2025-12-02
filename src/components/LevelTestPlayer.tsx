@@ -145,6 +145,7 @@ export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({
             studentId,
             studentName,
             studentEmail, // Email del estudiante
+            teacherEmail: "profesor@luingo.es", // Email por defecto del profesor (puede personalizarse)
             answers: formatAnswersForMoodle(),
             writingText,
             rawScore,
@@ -220,7 +221,16 @@ export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({
             Pregunta {currentStep + 1} de {totalSteps}
           </p>
         </div>
-        <div className="flex gap-2 sm:gap-3">
+        <div className="flex gap-2 sm:gap-3 items-center">
+          {!isWritingStep && (
+            <button 
+              onClick={handleEarlySubmit}
+              className="text-xs sm:text-sm text-[rgb(229,57,60)] hover:text-slate-600 font-bold transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-50"
+            >
+              <span className="hidden sm:inline">Terminar aquí</span>
+              <span className="text-base">🏳️</span>
+            </button>
+          )}
           <Button variant="ghost" onClick={handleSaveDraft} className="text-indigo-600 font-bold text-xs sm:text-sm px-2 sm:px-4">
             <Save className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" /> 
             <span className="hidden sm:inline">Guardar y Salir</span>
@@ -255,22 +265,32 @@ export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({
               
               {/* DIÁLOGO CON SPEAKERS Y RESPUESTAS INTEGRADAS */}
               <div className="space-y-3 sm:space-y-4">
-                {LEVEL_TEST_DATA.questions[currentStep].dialogue.map((line, idx) => {
-                  const textWithBlanks = line.text.split('___');
+                {LEVEL_TEST_DATA.questions[currentStep].dialogue.map((line, lineIdx) => {
+                  const textWithBlanks = line.text.split('__');
                   const currentAnswer = answers[LEVEL_TEST_DATA.questions[currentStep].id];
                   
-                  // 🎯 LÓGICA ESPECIAL: Si la respuesta tiene "/" y hay múltiples blanks, dividir
+                  // 🎯 LÓGICA CORRECTA: Dividir respuesta por líneas y luego por palabras
                   let answerParts: string[] = [];
-                  if (currentAnswer && currentAnswer !== "NO_LO_SE" && currentAnswer.includes('/')) {
-                    answerParts = currentAnswer.split('/');
-                  } else if (currentAnswer && currentAnswer !== "NO_LO_SE") {
-                    // Si NO tiene "/", usar la misma respuesta para todos los blanks
-                    answerParts = Array(textWithBlanks.length - 1).fill(currentAnswer);
+                  if (currentAnswer && currentAnswer !== "NO_LO_SE") {
+                    if (currentAnswer.includes('/')) {
+                      // Respuesta con "/" → cada parte va en una línea diferente
+                      const lineParts = currentAnswer.split('/').map(p => p.trim());
+                      // Esta línea usa SU parte específica
+                      if (lineParts[lineIdx]) {
+                        // Dividir la parte de esta línea por espacios para llenar los blancos
+                        answerParts = lineParts[lineIdx].split(' ').filter(w => w);
+                      }
+                    } else {
+                      // Respuesta sin "/" → única palabra/frase para el primer blanco
+                      if (lineIdx === 0) {
+                        answerParts = [currentAnswer];
+                      }
+                    }
                   }
                   
                   return (
                     <div 
-                      key={idx}
+                      key={lineIdx}
                       className={`${
                         line.speaker === 'A' 
                           ? 'bg-slate-50 border-l-4 border-slate-400 pl-4 pr-3 py-3 rounded-r-xl' 
@@ -371,20 +391,8 @@ export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({
 
       {/* Footer Navigation - SIEMPRE VISIBLE */}
       <div className="bg-white border-t border-slate-200 p-4 sm:p-6 shadow-lg shrink-0">
-        {/* ✅ BOTÓN DE PÁNICO: Solo visible en preguntas, NO en writing */}
-        {!isWritingStep && (
-          <div className="flex justify-center mb-3">
-            <button 
-              onClick={handleEarlySubmit}
-              className="text-xs font-bold text-slate-400 hover:text-rose-500 underline decoration-dotted transition-colors"
-            >
-              Es muy difícil, quiero terminar aquí 😓
-            </button>
-          </div>
-        )}
-
         {/* NAVEGACIÓN PRINCIPAL */}
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center gap-4">
           <Button
             variant="outline"
             onClick={handlePrevious}

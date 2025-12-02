@@ -5,7 +5,6 @@
  */
 
 import Groq from 'npm:groq-sdk';
-import { sendNotification, emailTemplates } from '../../../lib/notifications.ts';
 
 interface TestAnswer {
   questionId: number;
@@ -190,13 +189,15 @@ function determineLevelByPercentage(percentage: number): string {
 }
 
 /**
- * Envía las notificaciones por email
+ * Envía las notificaciones por email usando Resend API directamente
  */
 async function sendEmailNotifications(
   request: EvaluationRequest,
   result: EvaluationResult
 ): Promise<void> {
   console.log('📧 Enviando notificaciones por email...');
+  
+  const RESEND_KEY = Deno.env.get('RESEND_API_KEY') || "re_d6oDB5rh_6EHLuWjQxqzWiXtJxmjcM2kB";
 
   // PLANTILLA HTML PARA EL EMAIL
   const studentEmailHTML = `
@@ -280,13 +281,26 @@ async function sendEmailNotifications(
 
   // EMAIL AL ESTUDIANTE
   try {
-    await sendNotification({
-      to: request.studentEmail,
-      subject: `🎯 Resultados de tu Test de Nivel - Nivel ${result.level}`,
-      html: studentEmailHTML,
-      text: `Hola ${request.studentName},\n\nHas completado el Test de Nivel.\n\nNivel determinado: ${result.level}\nNota: ${result.percentage.toFixed(1)}%\n\nFeedback: ${result.feedback}\n\n¡Sigue aprendiendo en LuinGo!`
+    const emailResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json", 
+        "Authorization": `Bearer ${RESEND_KEY}` 
+      },
+      body: JSON.stringify({ 
+        from: "LuinGo <hola@luingo.es>", 
+        to: request.studentEmail, 
+        subject: `🎯 Resultados de tu Test de Nivel - Nivel ${result.level}`, 
+        html: studentEmailHTML 
+      }),
     });
-    console.log('✅ Email enviado al estudiante:', request.studentEmail);
+    
+    if (emailResponse.ok) {
+      console.log('✅ Email enviado al estudiante:', request.studentEmail);
+    } else {
+      const errorData = await emailResponse.json();
+      console.error('❌ Error de Resend (estudiante):', errorData);
+    }
   } catch (emailError) {
     console.error('❌ Error al enviar email al estudiante:', emailError);
   }
@@ -298,13 +312,26 @@ async function sendEmailNotifications(
   );
 
   try {
-    await sendNotification({
-      to: request.teacherEmail,
-      subject: `📊 Test de Nivel Completado: ${request.studentName} - Nivel ${result.level}`,
-      html: teacherEmailHTML,
-      text: `El estudiante ${request.studentName} ha completado el Test de Nivel.\n\nNivel: ${result.level}\nNota: ${result.percentage.toFixed(1)}%`
+    const teacherEmailResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json", 
+        "Authorization": `Bearer ${RESEND_KEY}` 
+      },
+      body: JSON.stringify({ 
+        from: "LuinGo <hola@luingo.es>", 
+        to: request.teacherEmail, 
+        subject: `📊 Test de Nivel Completado: ${request.studentName} - Nivel ${result.level}`, 
+        html: teacherEmailHTML 
+      }),
     });
-    console.log('✅ Email enviado al profesor:', request.teacherEmail);
+    
+    if (teacherEmailResponse.ok) {
+      console.log('✅ Email enviado al profesor:', request.teacherEmail);
+    } else {
+      const errorData = await teacherEmailResponse.json();
+      console.error('❌ Error de Resend (profesor):', errorData);
+    }
   } catch (emailError) {
     console.error('❌ Error al enviar email al profesor:', emailError);
   }
