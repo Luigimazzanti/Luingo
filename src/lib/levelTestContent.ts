@@ -20,7 +20,7 @@ export const LEVEL_TEST_DATA = {
     {
       id: 1,
       dialogue: [
-        { speaker: "A" as const, text: "¿__ eres?" },
+        { speaker: "A" as const, text: "¿___ eres?" },
       ],
       options: ["Dónde", "De dónde", "A dónde", "En dónde"],
       correctAnswer: "De dónde",
@@ -34,7 +34,7 @@ export const LEVEL_TEST_DATA = {
         },
         {
           speaker: "B" as const,
-          text: "Sí, pero no __ frío.",
+          text: "Sí, pero no ___ frío.",
         },
       ],
       options: ["es", "está", "hace", "hay"],
@@ -50,7 +50,7 @@ export const LEVEL_TEST_DATA = {
         },
         {
           speaker: "B" as const,
-          text: "Pues __ mucho salir con amigos, ir al cine.",
+          text: "Pues ___ mucho salir con amigos, ir al cine.",
         },
       ],
       options: [
@@ -71,7 +71,7 @@ export const LEVEL_TEST_DATA = {
         },
         {
           speaker: "B" as const,
-          text: "__ pizza en el congelador.",
+          text: "___ pizza en el congelador.",
         },
       ],
       options: ["Está una", "Hay una", "Es la", "Allí es"],
@@ -83,9 +83,9 @@ export const LEVEL_TEST_DATA = {
       dialogue: [
         {
           speaker: "A" as const,
-          text: "No __ __ nada tener que limpiar los cristales.",
+          text: "No ___ ___ nada tener que limpiar los cristales.",
         },
-        { speaker: "B" as const, text: "__ __ __." },
+        { speaker: "B" as const, text: "___ ___ ___." },
       ],
       options: [
         "te gusta / Yo sí",
@@ -102,7 +102,7 @@ export const LEVEL_TEST_DATA = {
         { speaker: "A" as const, text: "¿Ha llamado alguien?" },
         {
           speaker: "B" as const,
-          text: "No, no ha llamado __.",
+          text: "No, no ha llamado ___.",
         },
       ],
       options: ["alguien", "nada", "—", "nadie"],
@@ -113,7 +113,7 @@ export const LEVEL_TEST_DATA = {
       dialogue: [
         {
           speaker: "A" as const,
-          text: "¿Puedo abrir la ventana? Es que tengo __ calor.",
+          text: "¿Puedo abrir la ventana? Es que tengo ___ calor.",
         },
         {
           speaker: "B" as const,
@@ -131,7 +131,7 @@ export const LEVEL_TEST_DATA = {
           speaker: "A" as const,
           text: "Quería unos pantalones de verano.",
         },
-        { speaker: "B" as const, text: "¿Cómo __ quiere?" },
+        { speaker: "B" as const, text: "¿Cómo ___ quiere?" },
       ],
       options: ["les", "unos", "los", "ellos"],
       correctAnswer: "los",
@@ -143,7 +143,7 @@ export const LEVEL_TEST_DATA = {
           speaker: "A" as const,
           text: "¿A qué hora abren los bancos en España?",
         },
-        { speaker: "B" as const, text: "__" },
+        { speaker: "B" as const, text: "___" },
       ],
       options: ["8", "son las", "a las 8", "las 8"],
       correctAnswer: "a las 8",

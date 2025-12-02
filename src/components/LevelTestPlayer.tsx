@@ -1,28 +1,27 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { LEVEL_TEST_DATA } from '../lib/levelTestContent';
-import { ArrowLeft, ArrowRight, Save, Send, HelpCircle, CheckCircle2 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { ArrowLeft, ArrowRight, Save, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner'; // Corregido import
 import { submitTaskResult } from '../lib/moodle';
-import { projectId } from '../utils/supabase/info'; // ✅ AGREGADO
+import { projectId } from '../utils/supabase/info'; 
 
 interface LevelTestPlayerProps {
   studentName: string;
   studentId: string;
-  studentEmail: string; // ✅ NUEVO
+  studentEmail: string; 
   taskId: string;
-  initialData?: any; // ✅ NUEVO: Submission previa
+  initialData?: any; 
   onExit: () => void;
 }
 
 export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({ 
   studentName, studentId, studentEmail, taskId, initialData, onExit 
 }) => {
-  // ✅ INICIALIZACIÓN INTELIGENTE: Cargar respuestas previas si existen
+  // ✅ 1. CARGA DE RESPUESTAS PREVIAS
   const [answers, setAnswers] = useState<Record<number, string>>(() => {
     if (initialData?.answers) {
-      // Convertir array de Moodle a objeto Record
       return initialData.answers.reduce((acc: any, curr: any) => {
         acc[curr.questionId] = curr.studentAnswer;
         return acc;
@@ -33,10 +32,9 @@ export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({
 
   const [writingText, setWritingText] = useState(initialData?.textContent || '');
 
-  // ✅ CALCULAR PRIMER PASO VACÍO: Ir a la primera pregunta sin responder
+  // ✅ 2. NAVEGACIÓN: IR A LA PRIMERA SIN RESPONDER
   const [currentStep, setCurrentStep] = useState(() => {
     if (!initialData?.answers) return 0;
-    // Buscar el índice de la primera pregunta que NO está en las respuestas
     const firstUnanswered = LEVEL_TEST_DATA.questions.findIndex(q => 
       !initialData.answers.find((a: any) => a.questionId === q.id)
     );
@@ -48,297 +46,219 @@ export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({
 
   const totalSteps = LEVEL_TEST_DATA.questions.length + 1;
   const isWritingStep = currentStep === LEVEL_TEST_DATA.questions.length;
+  const currentQuestion = LEVEL_TEST_DATA.questions[currentStep];
   const progress = ((currentStep + 1) / totalSteps) * 100;
 
+  // HANDLERS
   const handleOptionSelect = (option: string) => {
-    setAnswers(prev => ({ ...prev, [LEVEL_TEST_DATA.questions[currentStep].id]: option }));
+    setAnswers(prev => ({ ...prev, [currentQuestion.id]: option }));
   };
 
   const handleDontKnow = () => {
-    setAnswers(prev => ({ ...prev, [LEVEL_TEST_DATA.questions[currentStep].id]: "NO_LO_SE" }));
-    if (currentStep < totalSteps - 1) setCurrentStep(prev => prev + 1);
+    setAnswers(prev => ({ ...prev, [currentQuestion.id]: "NO_LO_SE" }));
+    handleNext(); // Auto-avance opcional
   };
 
   const handleNext = () => {
-    if (currentStep < totalSteps - 1) {
-      setCurrentStep(prev => prev + 1);
-    }
+    if (currentStep < totalSteps - 1) setCurrentStep(prev => prev + 1);
   };
 
   const handlePrevious = () => {
-    if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
-    }
+    if (currentStep > 0) setCurrentStep(prev => prev - 1);
   };
 
   const handleSaveDraft = async () => {
     const toastId = toast.loading("Guardando progreso...");
     try {
       await submitTaskResult(
-        taskId, 
-        LEVEL_TEST_DATA.title, 
-        studentId, 
-        studentName, 
-        0, 0, // Score temporal
-        formatAnswersForMoodle(), // Guardar JSON crudo
-        writingText,
-        'draft'
+        taskId, LEVEL_TEST_DATA.title, studentId, studentName, 
+        0, 0, formatAnswersForMoodle(), writingText, 'draft'
       );
       toast.dismiss(toastId);
       toast.success("Progreso guardado");
-      onExit(); // ✅ CERRAR EL PLAYER
+      onExit(); 
     } catch (e) {
       toast.dismiss(toastId);
       toast.error("Error al guardar");
     }
   };
 
-  // ✅ NUEVO: Función "Finalizar Aquí" (Early Submit)
   const handleEarlySubmit = () => {
-    if (!confirm("¿Sientes que el nivel ya es muy difícil?\n\nNo te preocupes, evaluaremos tu nivel con lo que has hecho hasta ahora. ¿Quieres enviar el test ya?")) {
-      return;
-    }
-    handleFinish(); // Reutiliza la función de envío final
+    if (!confirm("¿Quieres finalizar el test aquí? Evaluaremos tu nivel con lo completado hasta ahora.")) return;
+    handleFinish(); 
   };
 
   const handleFinish = async () => {
-    // ✅ VALIDACIÓN FLEXIBLE: Solo requerido si estás EN la fase de writing
     if (isWritingStep && writingText.trim().length < 20) {
-      toast.warning("Por favor escribe un poco más en la redacción final.");
+      toast.warning("Por favor escribe un poco más en la redacción.");
       return;
     }
 
     setIsSubmitting(true);
-    const toastId = toast.loading("Evaluando tu nivel con IA...");
+    const toastId = toast.loading("Evaluando nivel...");
 
     try {
-      // Calcular nota bruta del test (para referencia interna)
       let rawScore = 0;
       LEVEL_TEST_DATA.questions.forEach(q => {
         if (answers[q.id] === q.correctAnswer) rawScore++;
       });
 
-      // 1. Guardar en Moodle
       await submitTaskResult(
-        taskId,
-        LEVEL_TEST_DATA.title,
-        studentId,
-        studentName,
-        rawScore,
-        LEVEL_TEST_DATA.questions.length,
-        formatAnswersForMoodle(),
-        writingText,
-        'submitted'
+        taskId, LEVEL_TEST_DATA.title, studentId, studentName,
+        rawScore, LEVEL_TEST_DATA.questions.length,
+        formatAnswersForMoodle(), writingText, 'submitted'
       );
 
-      // 2. ✅ LLAMAR AL SERVIDOR PARA EVALUACIÓN CON IA
-      try {
-        // 🔥 URL CORREGIDA: Usar projectId para construir la URL real de Supabase
-        const endpointUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/evaluate-level-test`;
-        
-        const evaluationResponse = await fetch(endpointUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            studentId,
-            studentName,
-            studentEmail, // Email del estudiante
-            teacherEmail: "profesor@luingo.es", // Email por defecto del profesor (puede personalizarse)
-            answers: formatAnswersForMoodle(),
-            writingText,
-            rawScore,
-            totalQuestions: LEVEL_TEST_DATA.questions.length
-          })
-        });
-
-        if (!evaluationResponse.ok) {
-          throw new Error('Error de conexión con IA');
-        }
-        console.log('✅ Evaluación enviada');
-      } catch (evalError) {
-        console.warn('⚠️ La evaluación IA falló, pero el test se guardó.', evalError);
-        // Continuamos aunque falle la evaluación IA
-      }
+      // Disparo silencioso a IA (Fire & Forget)
+      fetch(`https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/evaluate-level-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId, studentName, studentEmail, 
+          answers: formatAnswersForMoodle(),
+          writingText, rawScore,
+          totalQuestions: LEVEL_TEST_DATA.questions.length
+        })
+      }).catch(e => console.warn("IA Eval Error (No crítico):", e));
       
       toast.dismiss(toastId);
       setShowConfetti(true);
-      
       setTimeout(() => {
-        toast.success("¡Test completado! Recibirás tu nivel por email.");
+        toast.success("¡Test completado!");
         onExit();
       }, 3000);
 
     } catch (e) {
-      console.error(e);
-      toast.error("Error al enviar el test");
+      toast.dismiss(toastId);
+      toast.error("Error al enviar");
       setIsSubmitting(false);
     }
   };
 
   const formatAnswersForMoodle = () => {
-    return LEVEL_TEST_DATA.questions.map(q => {
-      // Reconstruir el texto de la pregunta desde el diálogo
-      const questionText = q.dialogue.map(line => line.text).join(' ');
-      
-      return {
-        questionId: q.id,
-        questionText,
-        studentAnswer: answers[q.id] || "NO_RESPONDIDO",
-        correctAnswer: q.correctAnswer,
-        isCorrect: answers[q.id] === q.correctAnswer
-      };
-    });
+    return LEVEL_TEST_DATA.questions.map(q => ({
+      questionId: q.id,
+      questionText: q.dialogue.map(l => l.text).join(' '),
+      studentAnswer: answers[q.id] || "NO_RESPONDIDO",
+      correctAnswer: q.correctAnswer,
+      isCorrect: answers[q.id] === q.correctAnswer
+    }));
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#F0F4F8] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-[#F0F4F8] flex flex-col font-sans">
       {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-[100]">
-          {[...Array(50)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute animate-bounce"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `-10%`,
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${2 + Math.random() * 2}s`
-              }}
-            >
+        <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
+          {[...Array(30)].map((_, i) => (
+            <div key={i} className="absolute animate-bounce text-2xl" 
+                 style={{ left: `${Math.random()*100}%`, top: `-5%`, animationDelay: `${Math.random()*2}s` }}>
               🎉
             </div>
           ))}
         </div>
       )}
       
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center shadow-sm shrink-0">
+      {/* HEADER */}
+      <div className="bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm shrink-0">
         <div>
-          <h1 className="text-base sm:text-xl font-black text-slate-800">{LEVEL_TEST_DATA.title}</h1>
-          <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider">
-            Pregunta {currentStep + 1} de {totalSteps}
-          </p>
+          <h1 className="text-base sm:text-lg font-black text-slate-800">{LEVEL_TEST_DATA.title}</h1>
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-bold uppercase tracking-wider">
+            <span>Pregunta {currentStep + 1}/{totalSteps}</span>
+            <span className="text-slate-300">|</span>
+            <span className="text-indigo-600">{Math.round(progress)}%</span>
+          </div>
         </div>
-        <div className="flex gap-2 sm:gap-3 items-center">
-          {!isWritingStep && (
-            <button 
-              onClick={handleEarlySubmit}
-              className="text-xs sm:text-sm text-[rgb(229,57,60)] hover:text-slate-600 font-bold transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-50"
-            >
-              <span className="hidden sm:inline">Terminar aquí</span>
-              <span className="text-base">🏳️</span>
-            </button>
-          )}
-          <Button variant="ghost" onClick={handleSaveDraft} className="text-indigo-600 font-bold text-xs sm:text-sm px-2 sm:px-4">
-            <Save className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" /> 
-            <span className="hidden sm:inline">Guardar y Salir</span>
-          </Button>
-        </div>
+        <Button variant="ghost" onClick={handleSaveDraft} className="text-indigo-600 font-bold text-xs h-8">
+          <Save className="w-4 h-4 mr-2" /> Guardar
+        </Button>
       </div>
 
-      {/* Progress Bar */}
-      <div className="h-2 bg-slate-200 w-full shrink-0">
+      <div className="h-1.5 bg-slate-100 w-full shrink-0">
         <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500" style={{ width: `${progress}%` }} />
       </div>
 
-      {/* Main Content - MEJORADO CON SCROLL INTERNO */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 flex justify-center items-start">
-        <div className="w-full max-w-3xl bg-white rounded-2xl sm:rounded-3xl shadow-xl p-4 sm:p-8 md:p-12 border-b-4 sm:border-b-8 border-indigo-100 my-2 sm:my-4">
+      {/* CONTENIDO PRINCIPAL */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex justify-center items-start">
+        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl p-6 sm:p-10 border-b-8 border-indigo-50 my-4 transition-all">
           
-          {/* FASE 1: PREGUNTAS TIPO TEST */}
           {!isWritingStep ? (
-            <div className="flex flex-col animate-fade-in space-y-6 sm:space-y-8">
-              <span className="inline-block bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-black w-fit">
-                GRAMÁTICA & VOCABULARIO
-              </span>
+            <div className="flex flex-col space-y-8">
               
-              {/* CONTEXTO SITUACIONAL (si existe) */}
-              {LEVEL_TEST_DATA.questions[currentStep].context && (
-                <div className="bg-amber-50 border-l-4 border-amber-400 p-3 sm:p-4 rounded-r-xl">
-                  <p className="text-amber-800 text-sm sm:text-base italic font-medium">
-                    📍 {LEVEL_TEST_DATA.questions[currentStep].context}
+              {/* CONTEXTO */}
+              {currentQuestion.context && (
+                <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded-r-lg inline-block w-fit">
+                  <p className="text-amber-800 text-sm font-bold italic">
+                    📍 {currentQuestion.context}
                   </p>
                 </div>
               )}
               
-              {/* DIÁLOGO CON SPEAKERS Y RESPUESTAS INTEGRADAS */}
-              <div className="space-y-3 sm:space-y-4">
-                {LEVEL_TEST_DATA.questions[currentStep].dialogue.map((line, lineIdx) => {
-                  const textWithBlanks = line.text.split('__');
-                  const currentAnswer = answers[LEVEL_TEST_DATA.questions[currentStep].id];
+              {/* --- ZONA DE DIÁLOGO (CORE FIX) --- */}
+              <div className="space-y-6">
+                {currentQuestion.dialogue.map((line, idx) => {
+                  // 1. Detectar huecos (cualquier cantidad de guiones bajos)
+                  const parts = line.text.split(/_{2,}/g);
+                  const currentAnswer = answers[currentQuestion.id];
                   
-                  // 🎯 LÓGICA CORRECTA: Dividir respuesta por líneas y luego por palabras
+                  // 2. Preparar partes de la respuesta
                   let answerParts: string[] = [];
                   if (currentAnswer && currentAnswer !== "NO_LO_SE") {
-                    if (currentAnswer.includes('/')) {
-                      // Respuesta con "/" → cada parte va en una línea diferente
-                      const lineParts = currentAnswer.split('/').map(p => p.trim());
-                      // Esta línea usa SU parte específica
-                      if (lineParts[lineIdx]) {
-                        // Dividir la parte de esta línea por espacios para llenar los blancos
-                        answerParts = lineParts[lineIdx].split(' ').filter(w => w);
-                      }
-                    } else {
-                      // Respuesta sin "/" → única palabra/frase para el primer blanco
-                      if (lineIdx === 0) {
-                        answerParts = [currentAnswer];
-                      }
-                    }
+                    // Si la respuesta tiene "/", separar partes. Si no, usar todo.
+                    answerParts = currentAnswer.includes('/') 
+                      ? currentAnswer.split('/').map(s => s.trim()) 
+                      : [currentAnswer];
                   }
-                  
+
                   return (
-                    <div 
-                      key={lineIdx}
-                      className={`${
-                        line.speaker === 'A' 
-                          ? 'bg-slate-50 border-l-4 border-slate-400 pl-4 pr-3 py-3 rounded-r-xl' 
-                          : line.speaker === 'B'
-                          ? 'bg-blue-50 border-l-4 border-blue-400 pl-4 pr-3 py-3 rounded-r-xl'
-                          : 'bg-purple-50 border-l-4 border-purple-400 pl-4 pr-3 py-3 rounded-r-xl italic'
-                      }`}
-                    >
+                    <div key={idx} className={`relative pl-4 border-l-4 ${
+                        line.speaker === 'A' ? 'border-slate-300' : 
+                        line.speaker === 'B' ? 'border-blue-300' : 'border-purple-300 italic'
+                      }`}>
+                      {/* Speaker Label */}
                       {line.speaker !== 'System' && (
-                        <span className="text-xs font-black uppercase tracking-wider opacity-60 block mb-2">
-                          {line.speaker === 'A' ? '👤 Persona A' : '💬 Persona B'}
+                        <span className="absolute -top-3 left-4 text-[10px] font-black uppercase text-slate-400 bg-white px-1">
+                          {line.speaker === 'A' ? 'Persona A' : 'Persona B'}
                         </span>
                       )}
-                      <p className="text-base sm:text-xl md:text-2xl font-medium text-slate-800 leading-relaxed">
-                        {textWithBlanks.map((part, i, arr) => (
+                      
+                      {/* Texto Fluido */}
+                      <div className="text-lg sm:text-2xl font-medium text-slate-800 leading-loose">
+                        {parts.map((part, i) => (
                           <React.Fragment key={i}>
-                            {part}
-                            {i < arr.length - 1 && (
-                              <span className="inline-flex items-baseline mx-1 sm:mx-2">
+                            {part} {/* Texto estático */}
+                            
+                            {/* Renderizar Hueco (si no es el último fragmento) */}
+                            {i < parts.length - 1 && (
+                              <span className="inline-flex mx-1.5 align-baseline relative top-0.5">
                                 {answerParts[i] ? (
-                                  // ✅ ESTADO: RESPONDIDO - Texto integrado con subrayado
-                                  <span className="text-indigo-600 font-black border-b-[6px] border-indigo-400 px-1 sm:px-2 leading-tight animate-in zoom-in-95 duration-200 text-base sm:text-xl md:text-2xl">
+                                  // ✅ ESTADO LLENO: Texto Morado + Animación
+                                  <span className="text-indigo-600 font-black border-b-[3px] border-indigo-500 px-1 animate-in zoom-in-95 duration-200">
                                     {answerParts[i]}
                                   </span>
                                 ) : (
-                                  // ❌ ESTADO: VACÍO - Línea esperando respuesta
-                                  <span className="inline-block w-20 sm:w-28 h-6 sm:h-8 border-b-[6px] border-slate-300 rounded-sm bg-slate-50/50" />
+                                  // ⬜ ESTADO VACÍO: Línea gris base (sin ancho fijo exagerado)
+                                  <span className="inline-block min-w-[50px] w-auto h-[1.2em] border-b-[3px] border-slate-200 rounded-sm bg-slate-50/50 transition-colors" />
                                 )}
                               </span>
                             )}
                           </React.Fragment>
                         ))}
-                      </p>
+                      </div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* OPCIONES DE RESPUESTA */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                {LEVEL_TEST_DATA.questions[currentStep].options.map((opt) => (
+              {/* OPCIONES */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-8">
+                {currentQuestion.options.map((opt) => (
                   <button
                     key={opt}
                     onClick={() => handleOptionSelect(opt)}
-                    className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl border-2 text-left font-bold text-base sm:text-lg transition-all ${
-                      answers[LEVEL_TEST_DATA.questions[currentStep].id] === opt
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-md ring-2 ring-indigo-200'
-                        : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50 text-slate-600'
+                    className={`p-4 rounded-xl border-2 text-left font-bold text-base transition-all active:scale-[0.98] ${
+                      answers[currentQuestion.id] === opt
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-inner ring-1 ring-indigo-500'
+                        : 'border-slate-100 bg-slate-50 hover:bg-white hover:border-indigo-200 text-slate-600'
                     }`}
                   >
                     {opt}
@@ -346,80 +266,72 @@ export const LevelTestPlayer: React.FC<LevelTestPlayerProps> = ({
                 ))}
               </div>
               
-              {/* Botón "No lo sé" - SEPARADO Y VISIBLE */}
-              <button
-                onClick={handleDontKnow}
-                className="w-full p-4 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 font-bold hover:bg-slate-50 hover:text-slate-600 transition-colors flex items-center justify-center gap-2 mt-4"
-              >
-                <HelpCircle className="w-5 h-5" />
-                No lo sé (Saltar)
+              <button onClick={handleDontKnow} className="text-slate-400 text-xs font-bold hover:text-slate-600 flex items-center justify-center gap-1 py-2">
+                <HelpCircle className="w-3 h-3" /> No lo sé (Saltar)
               </button>
             </div>
           ) : (
-            
             /* FASE 2: WRITING */
             <div className="flex flex-col animate-fade-in space-y-6">
-              <span className="inline-block bg-pink-50 text-pink-700 px-3 py-1 rounded-full text-xs font-black w-fit">
-                EXPRESIÓN ESCRITA
-              </span>
+              <div className="flex items-center gap-2 text-indigo-600">
+                <div className="p-2 bg-indigo-100 rounded-lg"><CheckCircle2 className="w-5 h-5" /></div>
+                <h2 className="font-black text-xl">Parte Final: Redacción</h2>
+              </div>
               
-              <div className="bg-[#FFFDF5] p-4 sm:p-6 rounded-xl border-2 border-[#F2E8C9] shadow-sm rotate-1 transform font-serif text-sm sm:text-lg leading-relaxed text-slate-700 max-h-[40vh] overflow-y-auto">
-                <p className="text-xs text-[#C2B59B] font-sans font-bold uppercase mb-2">Carta recibida:</p>
-                <div className="whitespace-pre-line">
-                  {LEVEL_TEST_DATA.writingTask.context}
-                </div>
+              <div className="bg-[#FFFDF5] p-5 rounded-xl border border-[#E8E0C5] shadow-sm font-serif text-slate-700 text-base leading-relaxed">
+                <p className="text-xs text-amber-800/60 font-sans font-bold uppercase mb-2">Contexto:</p>
+                {LEVEL_TEST_DATA.writingTask.context}
               </div>
 
-              <div>
-                <h3 className="font-bold text-slate-800 mb-2 text-lg sm:text-xl">Tu Turno:</h3>
-                <p className="text-slate-500 mb-4 text-sm sm:text-base">{LEVEL_TEST_DATA.writingTask.prompt}</p>
+              <div className="space-y-2">
+                <p className="font-bold text-slate-800 text-sm">Tu Respuesta:</p>
+                <Textarea 
+                  value={writingText}
+                  onChange={(e) => setWritingText(e.target.value)}
+                  className="w-full h-48 text-base p-4 bg-white border-2 border-slate-200 focus:border-indigo-500 rounded-xl resize-none shadow-sm"
+                  placeholder="Escribe aquí..."
+                />
+                <p className="text-right text-xs font-bold text-slate-400">
+                  {writingText.split(/\s+/).filter(w => w).length} palabras
+                </p>
               </div>
-              
-              <Textarea 
-                value={writingText}
-                onChange={(e) => setWritingText(e.target.value)}
-                className="w-full h-40 sm:h-48 text-sm sm:text-lg p-3 sm:p-4 bg-slate-50 border-2 border-indigo-100 focus:border-indigo-400 rounded-2xl resize-none"
-                placeholder="Hola Fuencisla..."
-              />
-              <p className="text-right text-xs font-bold text-slate-400">
-                {writingText.split(/\s+/).filter(w => w).length} palabras
-              </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Footer Navigation - SIEMPRE VISIBLE */}
-      <div className="bg-white border-t border-slate-200 p-4 sm:p-6 shadow-lg shrink-0">
-        {/* NAVEGACIÓN PRINCIPAL */}
-        <div className="flex justify-between items-center gap-4">
+      {/* FOOTER */}
+      <div className="bg-white border-t border-slate-200 p-4 shadow-up shrink-0">
+        <div className="max-w-3xl mx-auto flex justify-between items-center">
           <Button
             variant="outline"
             onClick={handlePrevious}
             disabled={currentStep === 0}
-            className="font-bold border-2 hover:bg-slate-50 disabled:opacity-30 px-4 sm:px-6 h-10 sm:h-12 rounded-xl"
+            className="border-slate-200 text-slate-600 font-bold"
           >
-            <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Anterior</span>
+            <ArrowLeft className="w-4 h-4 mr-2" /> Anterior
           </Button>
           
           {!isWritingStep ? (
-            <Button
-              onClick={handleNext}
-              disabled={!answers[LEVEL_TEST_DATA.questions[currentStep].id]}
-              className="bg-slate-700 hover:bg-slate-800 text-white font-black px-6 sm:px-10 h-10 sm:h-12 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
-            >
-              <span className="hidden sm:inline">Siguiente</span>
-              <span className="sm:hidden">Sig.</span>
-              <ArrowRight className="w-4 h-4 ml-1 sm:ml-2" />
-            </Button>
+            <div className="flex flex-col items-center">
+               <Button
+                onClick={handleNext}
+                disabled={!answers[currentQuestion.id] && answers[currentQuestion.id] !== "NO_LO_SE"}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 rounded-xl shadow-lg shadow-indigo-200 transition-all transform hover:-translate-y-0.5"
+              >
+                Siguiente <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+              <button onClick={handleEarlySubmit} className="mt-2 text-[10px] font-bold text-slate-300 hover:text-rose-400 underline decoration-dotted">
+                Finalizar ahora (estoy cansado)
+              </button>
+            </div>
           ) : (
             <Button
               onClick={handleFinish}
               disabled={isSubmitting}
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-black px-6 sm:px-12 h-10 sm:h-14 rounded-xl shadow-2xl text-sm sm:text-lg"
+              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black px-10 py-6 rounded-xl shadow-xl text-lg"
             >
-              {isSubmitting ? '⏳ Evaluando...' : '✨ FINALIZAR TEST'}
+              {isSubmitting ? 'Enviando...' : 'FINALIZAR TEST 🚀'}
             </Button>
           )}
         </div>
