@@ -773,7 +773,12 @@ export const loginToMoodle = async (
     
     // ✅ Verificar si hay error de credenciales
     if (data.error || !data.token) {
-      throw new Error(data.error || "Credenciales inválidas");
+      // Detectar código específico de cambio de contraseña en el login
+      if (data.errorcode === 'forcepasswordchangenotice') {
+          throw new Error("FORCE_PASSWORD_CHANGE");
+      }
+      // Lanzar el mensaje real que viene del servidor (o uno por defecto)
+      throw new Error(data.error || "Error de autenticación desconocido");
     }
     
     return data.token;

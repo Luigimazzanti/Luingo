@@ -20,6 +20,7 @@ import {
 import { ResourceComposer } from "./ResourceComposer";
 import { ArticleReader } from "./ArticleReader";
 import { toast } from "sonner@2.0.3";
+import { sendNotification, emailTemplates } from "../../lib/notifications"; // ✅ NUEVO
 
 interface CommunityFeedProps {
   student: any;
@@ -121,6 +122,54 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
 
     if (success) {
       toast.success("✅ Publicado correctamente");
+      
+      // ✅ NUEVO: Envío de notificaciones por email
+      if (!editingPost && scope && students.length > 0) {
+        const authorId = String(student.id);
+        
+        // Determinar destinatarios según scope
+        let recipients: any[] = [];
+        
+        if (scope.type === 'individual') {
+          // Scope individual: enviar solo al estudiante específico
+          recipients = students.filter(s => String(s.id) === String(scope.targetId) && String(s.id) !== authorId);
+        } else if (scope.type === 'level') {
+          // Scope por nivel: enviar a todos los del nivel (excepto el autor)
+          if (scope.targetId === 'ALL') {
+            recipients = students.filter(s => String(s.id) !== authorId);
+          } else {
+            recipients = students.filter(s => s.current_level_code === scope.targetId && String(s.id) !== authorId);
+          }
+        }
+        
+        // Enviar emails a los destinatarios
+        if (recipients.length > 0) {
+          toast.message(`📧 Enviando notificaciones a ${recipients.length} estudiante(s)...`);
+          
+          for (const recipient of recipients) {
+            if (recipient.email) {
+              try {
+                await sendNotification({
+                  to: recipient.email,
+                  subject: "🌍 Nuevo contenido en la Comunidad",
+                  // ✅ ORDEN CORREGIDO:
+                  // 1. Nombre del estudiante que recibe el correo (recipient.name)
+                  // 2. Nombre del autor que publicó el post (student.name, ya que 'student' es el usuario actual)
+                  // 3. Título del post (title)
+                  html: emailTemplates.newCommunityPost(
+                    recipient.name,  // Hola [NombreAlumno]
+                    student.name,    // [NombreAutor] ha compartido...
+                    title            // Título: "[TituloPost]"
+                  )
+                });
+              } catch (error) {
+                console.error(`Error enviando email a ${recipient.email}:`, error);
+              }
+            }
+          }
+        }
+      }
+      
       setShowCreate(false);
       setEditingPost(null);
       loadPosts();

@@ -167,4 +167,32 @@ export const emailTemplates = {
       </div>
     </div>
   `),
+
+  // ✅ NUEVO: Notificación de Comunidad
+  newCommunityPost: (
+    studentName: string,
+    authorName: string,
+    postTitle: string,
+  ) =>
+    baseTemplate(`
+    <div style="background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%); padding: 40px 0; text-align: center;">
+      <div style="font-size: 48px; margin-bottom: 10px;">🌍</div>
+      <h1 style="color: white; margin: 0; font-family: 'Poppins', sans-serif; font-weight: 800; font-size: 24px;">Nuevo Post en la Comunidad</h1>
+    </div>
+    <div style="padding: 40px 30px;">
+      <p style="font-size: 18px; color: #1e293b; margin-top: 0;">Hola <strong>${studentName}</strong>,</p>
+      <p style="color: #475569; line-height: 1.6;"><strong>${authorName}</strong> ha compartido un nuevo recurso que podría interesarte.</p>
+      
+      <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 20px; margin: 30px 0; border-radius: 8px;">
+        <p style="margin: 0; font-size: 12px; color: #3B82F6; font-weight: bold; text-transform: uppercase;">Título de la Publicación</p>
+        <p style="margin: 5px 0 0; color: #1e293b; font-weight: bold; font-size: 16px;">"${postTitle}"</p>
+      </div>
+
+      <div style="text-align: center; margin-top: 40px;">
+        <a href="https://luingo.es" style="background-color: #F2B705; color: #211259; text-decoration: none; padding: 16px 32px; border-radius: 50px; font-weight: 900; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(242, 183, 5, 0.3);">
+          VER PUBLICACIÓN 🚀
+        </a>
+      </div>
+    </div>
+  `),
 };

@@ -364,7 +364,7 @@ export default function App() {
         usernameInput,
         passwordInput,
       );
-      if (!token) throw new Error("Invalid login"); // Forzamos error si no hay token
+      if (!token) throw new Error("Wrong password"); // Forzamos error si no hay token
 
       setUserToken(token);
 
@@ -544,48 +544,32 @@ export default function App() {
       });
     } catch (e) {
       console.error("🚨 LOGIN ERROR:", e);
+      setLoading(false);
+
       const errorMsg =
-        e instanceof Error
-          ? e.message.toLowerCase()
-          : String(e).toLowerCase();
+        e instanceof Error ? e.message : String(e);
 
-      // 🛑 CASO 1: CONTRASEÑA O USUARIO INCORRECTOS
+      // Si es cambio de contraseña
       if (
-        errorMsg.includes("invalid login") ||
-        errorMsg.includes("credenciales") ||
-        errorMsg.includes("incorrect") ||
-        errorMsg.includes("invalidtoken")
+        errorMsg === "FORCE_PASSWORD_CHANGE" ||
+        errorMsg.includes("forcepasswordchange")
       ) {
-        setLoading(false);
-        toast.error("Datos Incorrectos", {
+        toast.warning("⚠️ Cambio de Contraseña Requerido", {
           description:
-            "El usuario o la contraseña no coinciden 🙈",
-          duration: 4000,
-          style: {
-            background: "#FEF2F2",
-            color: "#B91C1C",
-            border: "1px solid #FECACA",
-          },
+            "Por seguridad, debes cambiar tu clave en Moodle.",
+          duration: 10000,
         });
-        return;
-      }
-
-      // 🔐 CASO 2: CAMBIO DE CONTRASEÑA
-      if (
-        errorMsg.includes("forcepasswordchange") ||
-        errorMsg.includes("password change") ||
-        errorMsg === "force_password_change"
-      ) {
-        setLoading(false);
         setShowPasswordChangeRequired(true);
         return;
       }
 
-      // 🔌 CASO 3: ERROR GENÉRICO
-      setLoading(false);
-      toast.warning("Error de Conexión", {
+      // Cualquier otro error
+      toast.error("Error de Acceso", {
         description:
-          "No pudimos conectar con el Campus. Revisa tu internet.",
+          errorMsg === "Error de autenticación desconocido"
+            ? "Credenciales incorrectas o fallo de red."
+            : errorMsg,
+        duration: 5000,
       });
     } finally {
       setLoading(false);
@@ -727,6 +711,8 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
+        <Toaster position="top-center" />{" "}
+        {/* <--- AÑADIDO AQUÍ */}
         <div className="text-center space-y-4">
           <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-slate-600 font-medium">
@@ -740,6 +726,8 @@ export default function App() {
   if (connectionError) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-red-50 flex items-center justify-center p-4">
+        <Toaster position="top-center" />{" "}
+        {/* <--- AÑADIDO AQUÍ */}
         <div className="bg-white p-8 rounded-3xl shadow-xl border-b-4 border-rose-300 max-w-md text-center">
           <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">❌</span>
