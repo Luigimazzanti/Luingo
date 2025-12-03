@@ -27,11 +27,12 @@ interface LevelTestPlayerProps {
   taskId: string;
   initialData?: any;
   onExit: () => void;
+  isPublic?: boolean; // 👈 [LEAD MAGNET] Nueva prop para modo público
 }
 
 export const LevelTestPlayer: React.FC<
   LevelTestPlayerProps
-> = ({ studentName, studentId, studentEmail, teacherEmail, onExit }) => { // 👈 [NUEVO] Añadir teacherEmail aquí
+> = ({ studentName, studentId, studentEmail, teacherEmail, onExit, isPublic }) => { // 👈 [NUEVO] Añadir teacherEmail aquí
   const [answers, setAnswers] = useState<
     Record<number, string>
   >({});
@@ -149,13 +150,15 @@ export const LevelTestPlayer: React.FC<
       const data = await response.json();
       const determinedLevel = data.result?.level || "A1";
 
-      // 2. Apagar la bandera para que desaparezca del dashboard
-      await saveUserPreferences(studentId, {
-        level_code: determinedLevel,
-        pending_level_test: false, // 🚩 ESTO HACE QUE DESAPAREZCA
-        level_test_completed: true,
-        level_test_date: new Date().toISOString(),
-      });
+      // 2. Guardar preferencias SOLO si NO es público (evita guardar datos basura en BD)
+      if (!isPublic) {
+        await saveUserPreferences(studentId, {
+          level_code: determinedLevel,
+          pending_level_test: false, // 🚩 ESTO HACE QUE DESAPAREZCA
+          level_test_completed: true,
+          level_test_date: new Date().toISOString(),
+        });
+      }
 
       setStatus("success");
     } catch (e) {

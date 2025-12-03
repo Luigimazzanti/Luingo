@@ -17,6 +17,20 @@ export const sendNotification = async (params: {
 
   if (!recipients || recipients.length === 0) return;
 
+  // ✅ ANTI-SPAM: Si no viene `text` definido, generar versión texto plano
+  const plainText = text || html
+    .replace(/<style[^>]*>.*?<\/style>/gi, '') // Eliminar estilos inline
+    .replace(/<script[^>]*>.*?<\/script>/gi, '') // Eliminar scripts
+    .replace(/<[^>]+>/g, '') // Eliminar todas las etiquetas HTML
+    .replace(/&nbsp;/g, ' ') // Reemplazar espacios no rompibles
+    .replace(/&amp;/g, '&') // Reemplazar entidades HTML
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ') // Normalizar espacios múltiples
+    .trim();
+
   try {
     // Fire and forget: No esperamos respuesta para no bloquear la UI
     fetch(
@@ -31,7 +45,7 @@ export const sendNotification = async (params: {
           to: recipients[0],
           subject,
           html,
-          text,
+          text: plainText, // ✅ AHORA SIEMPRE SE ENVÍA
         }), // Resend solo acepta un destinatario por request
       },
     ).catch((err) =>
@@ -193,6 +207,41 @@ export const emailTemplates = {
           VER PUBLICACIÓN 🚀
         </a>
       </div>
+    </div>
+  `),
+
+  // ✅ LEAD MAGNET: Invitación al Test de Nivel Público
+  invite: (email: string) =>
+    baseTemplate(`
+    <div style="background: linear-gradient(135deg, #6344A6 0%, #8B6BC7 100%); padding: 40px 0; text-align: center;">
+      <div style="font-size: 48px; margin-bottom: 10px;">🎯</div>
+      <h1 style="color: white; margin: 0; font-family: 'Poppins', sans-serif; font-weight: 800; font-size: 24px;">Test de Nivel de Español</h1>
+    </div>
+    <div style="padding: 40px 30px;">
+      <p style="font-size: 18px; color: #1e293b; margin-top: 0;">¡Hola!</p>
+      <p style="color: #475569; line-height: 1.6; font-size: 16px;">
+        Has sido invitado a realizar el <strong>Test de Nivel de Español</strong> en LuinGo. 
+        Descubre tu nivel actual totalmente gratis y recibe un análisis detallado de tus habilidades.
+      </p>
+      
+      <div style="background: #F3F0F9; border: 2px dashed #6344A6; padding: 25px; margin: 30px 0; border-radius: 12px; text-align: center;">
+        <p style="margin: 0; color: #6344A6; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+          ✨ 100% Gratuito • Sin Registro
+        </p>
+        <p style="margin: 10px 0 0; color: #475569; font-size: 14px;">
+          Solo necesitas 15-20 minutos
+        </p>
+      </div>
+
+      <div style="text-align: center; margin-top: 40px;">
+        <a href="https://luingo.es/?action=open_test" style="background-color: #F2B705; color: #211259; text-decoration: none; padding: 18px 36px; border-radius: 50px; font-weight: 900; font-size: 18px; display: inline-block; box-shadow: 0 6px 20px rgba(242, 183, 5, 0.4);">
+          HACER TEST 🚀
+        </a>
+      </div>
+
+      <p style="color: #94a3b8; font-size: 12px; text-align: center; margin-top: 30px;">
+        Invitado por un alumno de LuinGo
+      </p>
     </div>
   `),
 };

@@ -13,6 +13,7 @@ import { PDFAnnotator } from "./components/PDFAnnotator";
 import { ExercisePlayer } from "./components/ExercisePlayer";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ForgotPasswordModal } from "./components/ForgotPasswordModal";
+import { PublicLevelTestModal } from "./components/PublicLevelTestModal"; // 👈 [LEAD MAGNET] NUEVO IMPORT
 import {
   getSiteInfo,
   createMoodleTask,
@@ -202,6 +203,9 @@ export default function App() {
   // ✅ [INYECCIÓN 1] Estado para el email del profesor
   const [teacherEmail, setTeacherEmail] = useState<string>("");
 
+  // ✅ [LEAD MAGNET] Estado para el test público
+  const [showPublicTest, setShowPublicTest] = useState(false);
+
   const loadSubmissions = async () => {
     try {
       console.log("🔄 Recargando submissions...");
@@ -347,6 +351,24 @@ export default function App() {
     };
     restoreSession();
   }, []);
+
+  // ✅ DEEP LINKING: Detectar parámetro URL para abrir Test Público automáticamente
+  // Efecto para detectar invitación por URL
+  useEffect(() => {
+    // Solo ejecutar si la carga inicial ha terminado
+    if (!loading) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("action") === "open_test") {
+        console.log("🔗 Enlace de invitación detectado. Abriendo test...");
+        // Pequeño delay para asegurar que la UI de Login ya está montada
+        setTimeout(() => {
+          setShowPublicTest(true);
+          // Opcional: Limpiar la URL para que no se reabra al refrescar
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }, 500);
+      }
+    }
+  }, [loading]); // <--- IMPORTANTE: Dependencia 'loading' añadida
 
   // ========== LOGIN ESTRATÉGICO ==========
   const handleRealLogin = async () => {
@@ -834,11 +856,26 @@ export default function App() {
               Conectado a Moodle • Sistema de Gamificación
               Activo 🎮
             </p>
+            {/* ✅ [LEAD MAGNET] Botón para Test Público */}
+            <div className="mt-2 flex justify-center">
+              <button
+                onClick={() => setShowPublicTest(true)}
+                className="text-xs font-bold text-indigo-500 hover:text-indigo-700 hover:underline transition-all uppercase tracking-widest"
+              >
+                ¿No tienes cuenta? Haz un Test de Nivel
+              </button>
+            </div>
           </div>
           <ForgotPasswordModal
             isOpen={showForgotModal}
             onClose={() => setShowForgotModal(false)}
             initialValue={usernameInput}
+          />
+
+          {/* ✅ [LEAD MAGNET] Renderizado del Modal Nuevo */}
+          <PublicLevelTestModal
+            isOpen={showPublicTest}
+            onClose={() => setShowPublicTest(false)}
           />
         </div>
       </div>
@@ -1344,6 +1381,45 @@ export default function App() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* ✅ [LEAD MAGNET] Modal de Prueba de Nivel Público */}
+        <PublicLevelTestModal
+          isOpen={currentUser?.pending_level_test || false}
+          onClose={() => {
+            if (currentUser) {
+              const updatedUser = {
+                ...currentUser,
+                pending_level_test: false,
+              };
+              setCurrentUser(updatedUser);
+              if (currentUser.role === "student")
+                setStudents((prev) =>
+                  prev.map((s) =>
+                    s.id === currentUser.id
+                      ? { ...s, ...updatedUser }
+                      : s,
+                  ),
+                );
+            }
+          }}
+          onTestCompleted={(newLevel) => {
+            if (currentUser) {
+              const updatedUser = {
+                ...currentUser,
+                current_level_code: newLevel,
+              };
+              setCurrentUser(updatedUser);
+              if (currentUser.role === "student")
+                setStudents((prev) =>
+                  prev.map((s) =>
+                    s.id === currentUser.id
+                      ? { ...s, ...updatedUser }
+                      : s,
+                  ),
+                );
+            }
+          }}
+        />
       </main>
     </div>
   );
