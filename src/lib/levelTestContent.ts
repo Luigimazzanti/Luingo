@@ -143,8 +143,8 @@ export const LEVEL_TEST_DATA = {
         },
         { speaker: "B" as const, text: "___" },
       ],
-      options: ["8", "son las", "a las 8", "las 8"],
-      correctAnswer: "a las 8",
+      options: ["8", "Son las", "A las 8", "Las 8"],
+      correctAnswer: "A las 8",
     },
     {
       id: 10,
@@ -155,7 +155,7 @@ export const LEVEL_TEST_DATA = {
         },
       ],
       options: [
-        "Nos acuestamos",
+        "nos acuestamos",
         "nos acostamos",
         "se acostan",
         "acostarse",
@@ -315,7 +315,7 @@ export const LEVEL_TEST_DATA = {
           text: "Pues porque lo necesito __ trabajar en Latinoamérica.",
         },
       ],
-      options: ["por", "a", "para", "en", "porque"],
+      options: ["por", "a", "para", "en"],
       correctAnswer: "para",
     },
     {
@@ -726,12 +726,12 @@ export const LEVEL_TEST_DATA = {
         },
       ],
       options: [
-        "estaba … me puse",
-        "estaba … dejé de",
-        "llevaba … dejé de",
-        "llevaba … me puse a",
+        "estaba / me puse",
+        "estaba / dejé de",
+        "llevaba / dejé de",
+        "llevaba / me puse a",
       ],
-      correctAnswer: "llevaba … me puse a",
+      correctAnswer: "llevaba / me puse a",
     },
     {
       id: 48,
@@ -782,14 +782,18 @@ export const LEVEL_TEST_DATA = {
           speaker: "B" as const,
           text: "¿Te han contado lo último?",
         },
+        {
+          speaker: "System" as const,
+          text: '¿Qué significa "se mete en líos"? __',
+        },
       ],
       options: [
-        "se carga de trabajo",
-        "se enamora",
-        "se complica la vida",
-        "siempre llega tarde",
+        "Se carga de trabajo",
+        "Se enamora de todos",
+        "Entra en situaciones complicadas",
+        "Siempre llega tarde al trabajo",
       ],
-      correctAnswer: "se complica la vida",
+      correctAnswer: "Entra en situaciones complicadas",
     },
 
     // --- NIVEL B2-C1 (Intermedio-Alto / Avanzado) ---
@@ -958,7 +962,7 @@ export const LEVEL_TEST_DATA = {
         "de que sea  / se hará",
         "de ser / se haga",
         "de ser / se hará",
-        "de que sea / se hará",
+        "de que sea / se haga",
       ],
       correctAnswer: "de que sea / se haga",
     },
@@ -975,7 +979,7 @@ export const LEVEL_TEST_DATA = {
         },
         {
           speaker: "System" as const,
-          text: '¿Qué significa "por si las moscas"?',
+          text: '¿Qué significa "por si las moscas"? __',
         },
       ],
       options: [
@@ -995,7 +999,7 @@ export const LEVEL_TEST_DATA = {
         },
         {
           speaker: "System" as const,
-          text: '¿Qué significa "está a dos velas"?',
+          text: '¿Qué significa "está a dos velas"? __',
         },
       ],
       options: [
@@ -1078,14 +1082,14 @@ export const LEVEL_TEST_DATA = {
         },
         {
           speaker: "System" as const,
-          text: '¿Qué significa "Me sacas de quicio"?',
+          text: '¿Qué significa "Me sacan de quicio"? __',
         },
       ],
       options: [
         "Me encantan",
         "No soporto",
         "Me revuelven",
-        "Me vuelven loco",
+        "Me asustan",
       ],
       correctAnswer: "No soporto",
     },
@@ -1120,8 +1124,8 @@ export const LEVEL_TEST_DATA = {
         },
       ],
       options: [
-        "de que sea … se haga",
-        "de ser … se haga",
+        "Inclusive no",
+        "A pesar así nunca",
         "Por supuesto de que no",
         "Conque no",
       ],
