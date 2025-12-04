@@ -6,7 +6,7 @@ import {
 // ========== CONFIGURACIÓN ==========
 // ✅ FIX: URL base limpia (sin /webservice/rest/server.php)
 const MOODLE_URL = "https://luingo.moodiy.com";
-const MOODLE_TOKEN = "602611eb8bce8f225f5c7959b166ee7f"; // Token maestro (fallback)
+const MOODLE_TOKEN = "690afe88e79938955bc0aa0b4372659a"; // Token maestro (fallback)
 
 const TASKS_FORUM_ID = 4;
 const SUBMISSIONS_FORUM_ID = 7;
@@ -18,12 +18,12 @@ let userMoodleToken: string | null = null;
 // Funciones para gestionar el token del usuario
 export const setUserToken = (token: string) => {
   userMoodleToken = token;
-  localStorage.setItem('moodle_user_token', token);
+  localStorage.setItem("moodle_user_token", token);
 };
 
 export const getUserToken = (): string | null => {
   if (userMoodleToken) return userMoodleToken;
-  const stored = localStorage.getItem('moodle_user_token');
+  const stored = localStorage.getItem("moodle_user_token");
   if (stored) {
     userMoodleToken = stored;
     return stored;
@@ -33,7 +33,7 @@ export const getUserToken = (): string | null => {
 
 export const clearUserToken = () => {
   userMoodleToken = null;
-  localStorage.removeItem('moodle_user_token');
+  localStorage.removeItem("moodle_user_token");
 };
 
 interface MoodleParams {
@@ -58,11 +58,15 @@ const safeDate = (timestamp: any): string => {
 const callMoodle = async (
   functionName: string,
   params: MoodleParams = {},
+  useMasterToken: boolean = false, // 👈 1. NUEVO PARÁMETRO
 ) => {
   const proxyUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ebbb5c67/moodle-proxy`;
 
-  // ✅ PRIORIDAD: Token de usuario > Token maestro
-  const activeToken = getUserToken() || MOODLE_TOKEN;
+  // ✅ 2. LÓGICA DE TOKEN MEJORADA:
+  // Si pedimos Master, usamos MOODLE_TOKEN directo. Si no, intentamos usuario o fallback a Master.
+  const activeToken = useMasterToken
+    ? MOODLE_TOKEN
+    : getUserToken() || MOODLE_TOKEN;
 
   try {
     const response = await fetch(proxyUrl, {
@@ -81,42 +85,48 @@ const callMoodle = async (
     const text = await response.text();
     try {
       const data = JSON.parse(text);
-      
-      // ✅ FIX: Detección estricta de error por código, no por búsqueda de texto
-      // Solo verificamos si Moodle devuelve un errorcode específico de cambio de contraseña
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        if (data.errorcode === 'forcepasswordchangenotice' || data.exception === 'moodle_exception') {
-          // Solo si es realmente un error de contraseña
-          if (data.errorcode === 'forcepasswordchangenotice') {
-            console.error(`🔐 DETECTADO: Moodle requiere cambio de contraseña real en ${functionName}`);
-            console.error("Error code:", data.errorcode, "Message:", data.message);
+
+      // ✅ FIX: Detección estricta de error por código
+      if (
+        data &&
+        typeof data === "object" &&
+        !Array.isArray(data)
+      ) {
+        if (
+          data.errorcode === "forcepasswordchangenotice" ||
+          data.exception === "moodle_exception"
+        ) {
+          if (data.errorcode === "forcepasswordchangenotice") {
+            console.error(
+              `🔐 DETECTADO: Moodle requiere cambio de contraseña real en ${functionName}`,
+            );
             throw new Error("FORCE_PASSWORD_CHANGE");
           }
         }
       }
-      
+
       if (data.exception || data.errorcode) {
-        // ✅ Log de warnings normales (otros errores)
         console.warn(
           `⚠️ Moodle Warning (${functionName}):`,
           data.message,
         );
-        
         if (data.errorcode === "accessdenied") return null;
       }
       return data;
     } catch (e) {
-      // Re-lanzar el error de cambio de contraseña
-      if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") {
+      if (
+        e instanceof Error &&
+        e.message === "FORCE_PASSWORD_CHANGE"
+      )
         throw e;
-      }
       return null;
     }
   } catch (error) {
-    // ✅ TAMBIÉN PROPAGAR AQUÍ
-    if (error instanceof Error && error.message === "FORCE_PASSWORD_CHANGE") {
+    if (
+      error instanceof Error &&
+      error.message === "FORCE_PASSWORD_CHANGE"
+    )
       throw error;
-    }
     return null;
   }
 };
@@ -205,23 +215,33 @@ export const updateMoodleTask = async (
   });
 };
 const smartDelete = async (discussionId: string | number) => {
-  const cleanId = String(discussionId).replace(/\D/g, "");
+  const cleanId = String(discussionId).replace(/\\D/g, "");
+  // 👇 USAR TRUE AQUÍ
   const resDisc = await callMoodle(
     "mod_forum_delete_discussion",
     { discussionid: cleanId },
+    true,
   );
   if (resDisc && !resDisc.exception) return true;
+
   const postsData = await callMoodle(
     "mod_forum_get_discussion_posts",
     { discussionid: cleanId },
+    true, // 👇 USAR TRUE AQUÍ
   );
+
   if (postsData?.posts?.length) {
     const parentPost = postsData.posts.sort(
       (a: any, b: any) => a.id - b.id,
     )[0];
-    const resPost = await callMoodle("mod_forum_delete_post", {
-      postid: parentPost.id,
-    });
+    // 👇 USAR TRUE AQUÍ
+    const resPost = await callMoodle(
+      "mod_forum_delete_post",
+      {
+        postid: parentPost.id,
+      },
+      true,
+    );
     return resPost && resPost.status === true;
   }
   return false;
@@ -451,9 +471,15 @@ export const deleteMoodlePost = async (
   discussionId?: string | number,
 ) => {
   const cleanId = String(postId).replace(/\D/g, "");
-  const res = await callMoodle("mod_forum_delete_post", {
-    postid: cleanId,
-  });
+  // 👇 USAR TRUE AQUÍ (Token Maestro para asegurar borrado)
+  const res = await callMoodle(
+    "mod_forum_delete_post",
+    {
+      postid: cleanId,
+    },
+    true,
+  );
+
   if (res?.status) return true;
   if (discussionId) return await smartDelete(discussionId);
   return false;
@@ -490,7 +516,10 @@ export const getCommunityPosts = async () => {
         .split("<span")[0]
         .replace(/<[^>]*>?/gm, ""),
       targetLevel: meta?.level || "ALL",
-      scope: meta?.scope || { type: 'level', targetId: meta?.level || 'ALL' }, // ✅ Scope incluido
+      scope: meta?.scope || {
+        type: "level",
+        targetId: meta?.level || "ALL",
+      }, // ✅ Scope incluido
       likes: likesArray, // ✅ Usamos la variable segura
       date: safeDate(disc.created),
       commentsCount: disc.numreplies || 0,
@@ -502,12 +531,18 @@ export const createCommunityPost = async (
   title: string,
   blocks: any[],
   level: string,
-  scope?: any // ✅ Nuevo parámetro opcional
+  scope?: any, // ✅ Nuevo parámetro opcional
 ) => {
   // Guardamos el scope dentro de los metadatos
-  const meta = { level, type: "mixed", blocks, likes: [], scope };
+  const meta = {
+    level,
+    type: "mixed",
+    blocks,
+    likes: [],
+    scope,
+  };
   const message = `Post...<br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
-  
+
   return (
     await callMoodle("mod_forum_add_discussion", {
       forumid: COMMUNITY_FORUM_ID,
@@ -548,13 +583,16 @@ export const toggleCommunityLike = async (
   const newLikes = currentLikes.includes(String(userId))
     ? currentLikes.filter((id: string) => id !== String(userId))
     : [...currentLikes, String(userId)];
+
   const meta = {
     level: post.targetLevel,
     type: "mixed",
     blocks: post.blocks,
     likes: newLikes,
+    scope: post.scope, // ✅ MANTENER SCOPE SI EXISTE
   };
-  // ✅ FIX: Reconstruir la vista previa HTML para no romper el post en Moodle Web
+
+  // ✅ FIX: Reconstruir la vista previa HTML
   let htmlPreview = '<div class="luingo-post">';
   if (Array.isArray(post.blocks)) {
     post.blocks.forEach((b: any) => {
@@ -567,10 +605,14 @@ export const toggleCommunityLike = async (
 
   const message = `${htmlPreview}<br/><br/><span style="display:none;">[LUINGO_DATA]${JSON.stringify(meta)}[/LUINGO_DATA]</span>`;
   let targetId = String(post.postId).replace(/\D/g, "");
+
+  // 👇 AQUÍ ESTÁ LA SOLUCIÓN DEL LIKE: Pasamos 'true' al final
   const result = await callMoodle(
     "mod_forum_update_discussion_post",
     { postid: targetId, subject: post.title, message },
+    true,
   );
+
   return (
     result?.status === true ||
     result?.status === "true" ||
@@ -770,17 +812,19 @@ export const loginToMoodle = async (
       }),
     });
     const data = await response.json();
-    
+
     // ✅ Verificar si hay error de credenciales
     if (data.error || !data.token) {
       // Detectar código específico de cambio de contraseña en el login
-      if (data.errorcode === 'forcepasswordchangenotice') {
-          throw new Error("FORCE_PASSWORD_CHANGE");
+      if (data.errorcode === "forcepasswordchangenotice") {
+        throw new Error("FORCE_PASSWORD_CHANGE");
       }
       // Lanzar el mensaje real que viene del servidor (o uno por defecto)
-      throw new Error(data.error || "Error de autenticación desconocido");
+      throw new Error(
+        data.error || "Error de autenticación desconocido",
+      );
     }
-    
+
     return data.token;
   } catch (error) {
     console.error("Login error:", error);
@@ -803,17 +847,19 @@ export const getMe = async (userToken: string) => {
       settings: { url: MOODLE_URL, token: userToken }, // Usamos el token DEL USUARIO
     }),
   });
-  
+
   const data = await response.json();
-  
+
   // ✅ DETECTAR ERROR DE CAMBIO DE CONTRASEÑA FORZADO
   if (data.exception || data.errorcode) {
-    if (data.errorcode === "forcepasswordchangenotice" || 
-        data.message?.includes("forcepasswordchangenotice")) {
+    if (
+      data.errorcode === "forcepasswordchangenotice" ||
+      data.message?.includes("forcepasswordchangenotice")
+    ) {
       throw new Error("FORCE_PASSWORD_CHANGE");
     }
   }
-  
+
   return data;
 };
 
