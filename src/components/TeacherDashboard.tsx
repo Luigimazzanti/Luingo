@@ -16,6 +16,7 @@ import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ 
 import { AssignLevelTestModal } from './AssignLevelTestModal'; // ✅ NUEVO: Modal de Test de Nivel
 
 interface TeacherDashboardProps {
+  courseCode: string; // 👈 NUEVO
   classroom: Classroom;
   students: Student[];
   tasks: Task[];
@@ -30,6 +31,7 @@ interface TeacherDashboardProps {
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
+  courseCode, // 👈 Recibir prop
   classroom,
   students,
   tasks,
@@ -441,6 +443,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               student={currentUser} // ✅ Pasamos currentUser para que el profesor pueda firmar sus comentarios
               isTeacher={true}
               students={students} // ✅ Pasamos la lista de estudiantes para el selector
+              courseCode={courseCode} // 👈 AQUÍ
             />
           )}
         </div>

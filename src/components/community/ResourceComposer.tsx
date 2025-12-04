@@ -6,6 +6,7 @@ import { Image, Youtube, Mic, Type, X, MonitorPlay, UploadCloud, AlertCircle } f
 import { toast } from 'sonner@2.0.3';
 
 interface ResourceComposerProps {
+  courseCode: string; // 👈 NUEVO
   initialData?: { title: string, blocks: any[], level: string }; // ✅ CAMBIADO: blocks en lugar de content
   onPublish: (title: string, blocks: any[], level: string, scope?: any) => void; // ✅ CAMBIADO: Agregado scope
   onCancel: () => void;
@@ -14,6 +15,7 @@ interface ResourceComposerProps {
 }
 
 export const ResourceComposer: React.FC<ResourceComposerProps> = ({ 
+  courseCode, // 👈 Recibir prop
   initialData, 
   onPublish, 
   onCancel,
@@ -89,20 +91,26 @@ export const ResourceComposer: React.FC<ResourceComposerProps> = ({
 
     // ✅ Construcción del Scope (Igual que en Tareas)
     let finalScope = { type: 'level', targetId: 'ALL' }; // Default Público
+    let suffix = 'ALL'; // Por defecto
     
     if (userRole === 'teacher') {
         if (assignMode === 'individual') {
             if (!selectedStudentId) return toast.error("Selecciona un estudiante");
             finalScope = { type: 'individual', targetId: selectedStudentId };
+            suffix = selectedStudentId; // Ej: "154"
         } else {
             finalScope = { type: 'level', targetId: selectedLevel };
+            suffix = selectedLevel; // Ej: "A1" o "ALL"
         }
     }
 
-    console.log("📤 Publicando bloques puros con scope:", validBlocks, finalScope);
+    // 👉 CREAR LA ETIQUETA CON NAMESPACING (Ej: "CE1-A1" o "CE1-154")
+    const namespacedTag = `${courseCode}-${suffix}`;
+
+    console.log("📤 Publicando bloques puros con scope:", validBlocks, finalScope, "Tag:", namespacedTag);
     
-    // Pasamos el scope explícito a la función padre
-    onPublish(title, validBlocks, finalScope.targetId, finalScope);
+    // Pasamos la etiqueta namespaced como 'level' y el scope para lógica interna
+    onPublish(title, validBlocks, namespacedTag, finalScope);
   };
 
   return (

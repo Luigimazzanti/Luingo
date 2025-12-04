@@ -255,3 +255,15 @@ export const LUINGO_LEVELS = [
   { level: 7, min_xp: 5001, max_xp: 99999, label: 'Leyenda LuinGo', icon: '👑', color: 'from-yellow-400 to-amber-600' },
 ];
 export const XP_VALUES = {};
+
+// NUEVO: Configuración de Trofeos (Jungle Theme)
+export const TROPHY_LEVELS = [
+  { threshold: 25, label: 'Hormiga Obrera', icon: '🐜', color: 'bg-stone-100 text-stone-600', description: 'El inicio del trabajo duro' },
+  { threshold: 35, label: 'Rana Curiosa', icon: '🐸', color: 'bg-green-100 text-green-600', description: 'Dando los primeros saltos' },
+  { threshold: 55, label: 'Loro Parlanchín', icon: '🦜', color: 'bg-red-100 text-red-600', description: '¡Ya empiezas a hablar!' },
+  { threshold: 85, label: 'Tucán Colorido', icon: '🥘', color: 'bg-orange-100 text-orange-600', description: 'Volando alto con estilo' },
+  { threshold: 125, label: 'Mono Ágil', icon: '🐵', color: 'bg-amber-100 text-amber-600', description: 'Ágil y divertido' },
+  { threshold: 175, label: 'Jaguar Veloz', icon: '🐆', color: 'bg-yellow-100 text-yellow-700', description: 'Nadie te alcanza' },
+  { threshold: 235, label: 'Gorila Fuerte', icon: '🦍', color: 'bg-slate-200 text-slate-700', description: 'Fuerza bruta de conocimiento' },
+  { threshold: 300, label: 'Rey León', icon: '🦁', color: 'bg-purple-100 text-purple-700', description: 'Dominas la jungla del español' },
+];

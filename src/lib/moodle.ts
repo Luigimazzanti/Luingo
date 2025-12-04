@@ -6,7 +6,7 @@ import {
 // ========== CONFIGURACIÓN ==========
 // ✅ FIX: URL base limpia (sin /webservice/rest/server.php)
 const MOODLE_URL = "https://luingo.moodiy.com";
-const MOODLE_TOKEN = "690afe88e79938955bc0aa0b4372659a"; // Token maestro (fallback)
+const MOODLE_TOKEN = "f29c80d7841d958f0c890f00338665b8"; // Token maestro (fallback)
 
 const TASKS_FORUM_ID = 4;
 const SUBMISSIONS_FORUM_ID = 7;

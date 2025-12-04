@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react'; // 👈 Añadir useMemo
 import { Student, Task, Submission } from '../types';
 import { TaskCard } from './TaskCard';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'; // 👈 NUEVO IMPORT
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -12,7 +13,9 @@ import {
   Flame,
   MessageSquare,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Clock,
+  FileText
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { CommunityFeed } from './community/CommunityFeed';
@@ -20,8 +23,10 @@ import { TextAnnotator } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
 import { LevelTestCard } from './LevelTestCard'; // ✅ NUEVO
 import { LevelTestPlayer } from './LevelTestPlayer'; // ✅ NUEVO
+import { ImageWithFallback } from './figma/ImageWithFallback'; // 👈 NUEVO IMPORT PARA IMÁGENES
 
 interface StudentDashboardProps {
+  courseCode: string; // 👈 NUEVO
   student: Student;
   tasks: Task[];
   submissions: Submission[];
@@ -31,13 +36,48 @@ interface StudentDashboardProps {
 }
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ 
+  courseCode, // 👈 Recibir prop
   student, tasks = [], submissions = [], teacherEmail, onSelectTask, onLogout // 👈 [NUEVO] Añadir teacherEmail
 }) => {
   const [activeTab, setActiveTab] = useState<'tasks' | 'portfolio' | 'community' | 'achievements'>('tasks');
-  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  // ✅ CAMBIO: Ahora guardamos un ARRAY de intentos para ver el historial completo
+  const [selectedAttempts, setSelectedAttempts] = useState<Submission[] | null>(null);
   
   // ✅ NUEVO: Estado para el Level Test Player
   const [activeLevelTest, setActiveLevelTest] = useState<Task | null>(null);
+
+  // ✅ CÁLCULO DE XP INTELIGENTE (POR CURSO Y CON REGLAS)
+  const courseXP = useMemo(() => {
+    if (!tasks || !submissions) return 0;
+
+    // 1. Obtener IDs de las tareas de ESTE curso (ya vienen filtradas desde App.tsx)
+    const courseTaskIds = new Set(tasks.map(t => t.id));
+
+    // 2. Agrupar intentos por tarea
+    const attemptsByTask: Record<string, number[]> = {};
+    
+    submissions.forEach(sub => {
+      // Solo contamos intentos de tareas de este curso
+      if (courseTaskIds.has(sub.task_id)) {
+         if (!attemptsByTask[sub.task_id]) attemptsByTask[sub.task_id] = [];
+         // Guardamos la nota (si no tiene nota aún, es 0)
+         attemptsByTask[sub.task_id].push(sub.grade || 0);
+      }
+    });
+
+    // 3. Aplicar Reglas de Negocio
+    let points = 0;
+    Object.values(attemptsByTask).forEach(grades => {
+       // A. Promediar intentos
+       const average = grades.reduce((a, b) => a + b, 0) / grades.length;
+       
+       // B. Asignar XP según nota promedio
+       // Regla: 0 a 5.99 -> 2 XP | 6 a 10 -> 5 XP
+       points += (average < 6) ? 2 : 5;
+    });
+
+    return points;
+  }, [tasks, submissions]);
 
   // --- PROTECCIÓN CONTRA CRASH ---
   if (!student) {
@@ -61,32 +101,33 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return sub ? (sub.status || 'submitted') : 'assigned';
   };
 
-  // ✅ FILTRO VISIBILIDAD (LÓGICA SCOPE ROBUSTA)
+  // ✅ FILTRO VISIBILIDAD (LÓGICA SCOPE ROBUSTA + NAMESPACING)
   const visibleTasks = tasks.filter(t => {
+    // Si la tarea ya viene filtrada por curso desde App.tsx, aquí afinamos por usuario.
     const scope = t.content_data?.assignment_scope;
-    // Fallback si la tarea es vieja y no tiene scope
-    const legacyLevel = t.level_tag || t.content_data?.level || 'A1';
     
+    // Recuperar la parte final de la etiqueta (Quitamos "CE1-")
+    let suffix = 'ALL';
+    const tag = t.level_tag || t.content_data?.level || '';
+    if (tag.includes('-')) {
+        suffix = tag.split('-')[1]; // "A1" o "12345"
+    }
+
     const myId = String(student.id);
     const myLevel = student.current_level_code || 'A1';
 
-    // CASO 1: Tarea Individual (Prioridad)
+    // CASO 1: Asignación Individual (Comprobamos si el sufijo es MI ID)
     if (scope?.type === 'individual') {
-       return String(scope.targetId) === myId;
+       return suffix === myId || String(scope.targetId) === myId;
     }
 
-    // CASO 2: Tarea Por Nivel
+    // CASO 2: Asignación por Nivel (Comprobamos si el sufijo es MI NIVEL)
     if (scope?.type === 'level') {
-       return String(scope.targetId) === String(myLevel);
+       return suffix === 'ALL' || suffix === myLevel;
     }
 
-    // CASO 3: Tarea Antigua (Sin Scope moderno)
-    // Si no tiene scope, confiamos en la etiqueta de nivel simple
-    if (!scope) {
-        return legacyLevel === myLevel;
-    }
-    
-    return false;
+    // Fallback para tareas antiguas sin scope
+    return suffix === 'ALL' || suffix === myLevel;
   });
 
   const pendingTasks = visibleTasks.filter(t => {
@@ -124,12 +165,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return status === 'submitted' || status === 'graded';
   });
 
+  // ✅ NUEVA FUNCIÓN: Obtener todos los intentos para el resumen
   const openSummary = (task: Task) => {
-    const sub = submissions
+    const attempts = submissions
       .filter(s => s.task_id === task.id && String(s.student_id) === String(student.id))
-      .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())[0];
+      // Ordenar cronológicamente (Intento 1, 2, 3...)
+      .sort((a, b) => new Date(a.submitted_at || '').getTime() - new Date(b.submitted_at || '').getTime());
     
-    if (sub) setSelectedSubmission(sub);
+    if (attempts.length > 0) setSelectedAttempts(attempts);
   };
 
   // --- COMPONENTE NAV DOCK (DISEÑO MODERNO) ---
@@ -185,7 +228,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-full font-bold text-xs border border-indigo-200 shadow-sm whitespace-nowrap">
               <Zap className="w-3.5 h-3.5 fill-indigo-500 text-indigo-500" /> 
-              <span>{student.xp_points} XP</span>
+              <span>{courseXP} XP</span> {/* 👈 USAMOS LA VARIABLE CALCULADA */}
             </div>
           </div>
         </div>
@@ -277,18 +320,77 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           )}
           
           {activeTab === 'achievements' && (
-            <div className="animate-in fade-in zoom-in duration-500 text-center py-10">
-              <div className="inline-block p-6 rounded-3xl bg-gradient-to-br from-amber-100 to-orange-50 border-4 border-white shadow-xl mb-6">
-                <Trophy className="w-16 h-16 text-amber-500" />
+            <div className="animate-in fade-in zoom-in duration-500 py-6">
+              
+              <div className="text-center mb-10">
+                <h2 className="text-3xl font-black text-slate-800 mb-2">🏆 Sala de Trofeos</h2>
+                <p className="text-slate-500 font-medium">
+                  Tu evolución en este curso: <span className="text-indigo-600 font-bold">{courseXP} XP</span>
+                </p>
               </div>
-              <h2 className="text-2xl font-black text-slate-800">Sala de Trofeos</h2>
-              <p className="text-slate-400 mt-2">Próximamente podrás ver tus medallas aquí.</p>
+
+              {/* GRID DE IMÁGENES DE LA JUNGLA */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                {[
+                  // ✅ ACTUALIZADO: Usamos las imágenes personalizadas del usuario desde ImgBB
+                  { th: 25, label: 'Hormiga Obrera', img: 'https://i.ibb.co/gZ0zY1Gm/trophy1.png', color: 'bg-stone-100' },
+                  { th: 35, label: 'Rana Curiosa', img: 'https://i.ibb.co/4wCtPzng/trophy2.png', color: 'bg-emerald-100' },
+                  { th: 55, label: 'Loro Parlanchín', img: 'https://i.ibb.co/jZ8hRVDc/trophy3.png', color: 'bg-red-100' },
+                  { th: 85, label: 'Tucán Colorido', img: 'https://i.ibb.co/spD4JSCb/trophy4.png', color: 'bg-orange-100' },
+                  { th: 125, label: 'Mono Ágil', img: 'https://i.ibb.co/9mcM14DJ/trophy5.png', color: 'bg-amber-100' },
+                  { th: 175, label: 'Jaguar Veloz', img: 'https://i.ibb.co/tMCc0PL9/trophy6.png', color: 'bg-yellow-100' },
+                  { th: 235, label: 'Gorila Fuerte', img: 'https://i.ibb.co/Gf8d6CJQ/trophy7.png', color: 'bg-slate-200' },
+                  { th: 300, label: 'Rey León', img: 'https://i.ibb.co/1thgYP0M/trophy8.png', color: 'bg-purple-100' },
+                ].map((trophy, idx) => {
+                  const isUnlocked = courseXP >= trophy.th;
+                  return (
+                    <div 
+                      key={idx} 
+                      className={cn(
+                        "aspect-square rounded-3xl p-4 flex flex-col items-center justify-center text-center border-4 transition-all duration-500 relative overflow-hidden group", 
+                        isUnlocked 
+                          ? "bg-white border-white shadow-xl hover:-translate-y-2" 
+                          : "bg-slate-50 border-transparent opacity-50 grayscale"
+                      )}
+                    >
+                      {/* Fondo sutil de color al desbloquear */}
+                      {isUnlocked && <div className={cn("absolute inset-0 opacity-20 transition-opacity group-hover:opacity-30", trophy.color)} />}
+                      
+                      {/* ✅ CONTENEDOR DE IMAGEN CONTROLADO */}
+                      <div className={cn("mb-3 transition-transform relative z-10", isUnlocked ? "scale-105 group-hover:scale-110 drop-shadow-md" : "scale-90 opacity-50")}>
+                        {isUnlocked ? (
+                          // Renderiza la imagen real
+                          <ImageWithFallback 
+                            src={trophy.img} 
+                            alt={trophy.label} 
+                            className="w-20 h-20 md:w-24 md:h-24 object-cover rounded-full mx-auto" 
+                          />
+                        ) : (
+                          // Renderiza el candado si está bloqueado
+                          <span className="text-5xl md:text-6xl">🔒</span>
+                        )}
+                      </div>
+
+                      <div className="relative z-10">
+                        <h3 className={cn("font-black text-sm leading-tight mb-1", isUnlocked ? "text-slate-800" : "text-slate-400")}>
+                          {trophy.label}
+                        </h3>
+                        {isUnlocked ? (
+                          <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">CONSEGUIDO</span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-slate-400">{trophy.th} XP</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           {activeTab === 'community' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CommunityFeed student={student} />
+              <CommunityFeed student={student} courseCode={courseCode} />
             </div>
           )}
         </div>
@@ -314,170 +416,153 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         />
       )}
 
-      {/* VISOR DE DETALLES (RESUMEN) */}
-      <Dialog open={!!selectedSubmission} onOpenChange={(o) => !o && setSelectedSubmission(null)}>
+      {/* ✅ VISOR DE DETALLES CON PESTAÑAS (TABS) */}
+      <Dialog open={!!selectedAttempts} onOpenChange={(o) => !o && setSelectedAttempts(null)}>
         <DialogContent className="!max-w-[100vw] !w-screen !h-screen !p-0 !m-0 !rounded-none border-none flex flex-col bg-slate-50">
-          {/* El contenido interno debe poder hacer scroll */}
           <div className="flex-1 overflow-y-auto">
             <DialogHeader className="p-6 bg-white border-b border-slate-100 sticky top-0 z-50 shadow-sm">
-            <div className="flex justify-between items-start gap-4">
-              <div className="flex-1">
-                <DialogTitle className="text-xl font-black text-slate-800">{selectedSubmission?.task_title}</DialogTitle>
-                <DialogDescription className="text-xs text-slate-500 mt-1">
-                  Intento realizado el {new Date(selectedSubmission?.submitted_at || '').toLocaleDateString()}
+                {/* Título de la tarea (común para todos los intentos) */}
+                <DialogTitle className="text-xl font-black text-slate-800">
+                    {selectedAttempts?.[0]?.task_title}
+                </DialogTitle>
+                <DialogDescription>
+                    Revisa el historial completo de tus intentos y calificaciones.
                 </DialogDescription>
-              </div>
-              <div className={cn(
-                "px-3 py-1 rounded-lg font-black text-sm shrink-0",
-                (selectedSubmission?.grade ?? 0) >= 5 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-              )}>
-                Nota: {(selectedSubmission?.grade || 0).toFixed(1)}
-              </div>
-            </div>
-          </DialogHeader>
+            </DialogHeader>
           
-          <div className="p-6 space-y-6">
-            {/* ✅ RENDERIZADO CONDICIONAL: PDF vs WRITING vs QUIZ (Feedback incluido en cada caso) */}
-            {(() => {
-              // Encontrar la tarea relacionada
-              const relatedTask = tasks.find(t => t.id === selectedSubmission?.task_id);
-              const isPdfTask = relatedTask?.content_data?.type === 'document';
-
-              // CASO 1: Tarea de Documento PDF
-              if (isPdfTask && relatedTask?.content_data?.pdf_url) {
-                const studentAnnotations = selectedSubmission?.answers || [];
-                const teacherAnnotations = selectedSubmission?.teacher_annotations || [];
-                const allAnnotations = [...studentAnnotations, ...teacherAnnotations];
-
-                return (
-                  <>
-                    {/* ✅ NUEVO: Comentario del profesor ANTES del PDF */}
-                    {selectedSubmission?.teacher_feedback && (
-                      <div className="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex gap-3">
-                        <div className="text-2xl">👨‍🏫</div>
-                        <div>
-                          <h4 className="font-bold text-indigo-900 text-xs uppercase mb-1">Feedback del Profesor</h4>
-                          <p className="text-slate-700 text-sm font-medium leading-relaxed">
-                            {selectedSubmission.teacher_feedback}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ✅ FIX: Contenedor del PDF con z-0 para crear nuevo stacking context */}
-                    <div className="bg-white p-0 rounded-2xl border-2 border-indigo-100 shadow-sm overflow-hidden relative z-0">
-                      <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4 text-indigo-600"/>
-                        <h4 className="font-black text-indigo-900 text-xs uppercase tracking-wider">Documento PDF Corregido</h4>
-                      </div>
-                      <div className="h-[500px] relative z-0">
-                        <PDFAnnotator
-                          mode="student"
-                          pdfUrl={relatedTask.content_data.pdf_url}
-                          initialAnnotations={allAnnotations}
-                          readOnly={true}
-                        />
-                      </div>
-                    </div>
-                  </>
-                );
-              }
-
-              // CASO 2: Tarea de Redacción (WRITING)
-              if (selectedSubmission?.textContent && selectedSubmission.textContent.length > 0) {
-                return (
-                  <>
-                    {/* ✅ NUEVO: Comentario del profesor ANTES de la redacción */}
-                    {selectedSubmission?.teacher_feedback && (
-                      <div className="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex gap-3">
-                        <div className="text-2xl">👨‍🏫</div>
-                        <div>
-                          <h4 className="font-bold text-indigo-900 text-xs uppercase mb-1">Feedback del Profesor</h4>
-                          <p className="text-slate-700 text-sm font-medium leading-relaxed">
-                            {selectedSubmission.teacher_feedback}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="bg-white p-0 rounded-2xl border-2 border-indigo-100 shadow-sm overflow-hidden">
-                      <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4 text-indigo-600"/>
-                        <h4 className="font-black text-indigo-900 text-xs uppercase tracking-wider">Tu Redacción Corregida</h4>
-                      </div>
-                      <div className="p-4">
-                        <TextAnnotator 
-                          text={selectedSubmission.textContent} 
-                          annotations={selectedSubmission.corrections || []} 
-                          onAddAnnotation={()=>{}} 
-                          onRemoveAnnotation={()=>{}} 
-                          readOnly={true} 
-                        />
-                      </div>
-                    </div>
-                  </>
-                );
-              }
-
-              // CASO 3: Tarea de Cuestionario (QUIZ)
-              if (selectedSubmission?.answers && selectedSubmission.answers.length > 0) {
-                return (
-                  <>
-                    {/* ✅ NUEVO: Comentario del profesor ANTES del quiz */}
-                    {selectedSubmission?.teacher_feedback && (
-                      <div className="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex gap-3">
-                        <div className="text-2xl">👨‍🏫</div>
-                        <div>
-                          <h4 className="font-bold text-indigo-900 text-xs uppercase mb-1">Feedback del Profesor</h4>
-                          <p className="text-slate-700 text-sm font-medium leading-relaxed">
-                            {selectedSubmission.teacher_feedback}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {selectedSubmission.answers.map((ans: any, i: number) => (
-                      <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                        <p className="font-bold text-slate-700 text-sm mb-3 flex gap-2">
-                          <span className="bg-slate-100 text-slate-500 w-6 h-6 rounded flex items-center justify-center text-xs shrink-0">{i+1}</span>
-                          {ans.questionText || "Pregunta"}
-                        </p>
-                        <div className="space-y-3">
-                          <div className={cn(
-                            "p-3 rounded-xl text-sm border-l-4",
-                            ans.isCorrect ? 'bg-emerald-50 border-emerald-400 text-emerald-900' : 'bg-rose-50 border-rose-400 text-rose-900'
-                          )}>
-                            <div className="flex items-center gap-2 mb-1 font-black text-[10px] opacity-60 uppercase">
-                              {ans.isCorrect ? <CheckCircle2 className="w-3 h-3"/> : <XCircle className="w-3 h-3"/>}
-                              Tu Respuesta:
-                            </div>
-                            <div className="font-medium">{String(ans.studentAnswer || '---')}</div>
-                          </div>
-                          {!ans.isCorrect && ans.correctAnswer && (
-                            <div className="p-3 rounded-xl text-sm bg-slate-50 border-l-4 border-slate-300 text-slate-600">
-                              <span className="font-black text-[10px] opacity-60 uppercase block mb-1">Solución Correcta:</span>
-                              <div className="font-medium">{String(ans.correctAnswer)}</div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+            <div className="p-6">
+              {selectedAttempts && (
+                <Tabs defaultValue={`attempt-${selectedAttempts.length - 1}`}>
+                  <TabsList className="w-full justify-start overflow-x-auto mb-6 p-1 bg-slate-200/50 rounded-xl">
+                    {selectedAttempts.map((_, i) => (
+                      <TabsTrigger 
+                        key={i} 
+                        value={`attempt-${i}`}
+                        className="rounded-lg px-4 font-bold data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm"
+                      >
+                        Intento {i + 1}
+                      </TabsTrigger>
                     ))}
-                  </>
-                );
-              }
+                  </TabsList>
 
-              // CASO 4: Sin contenido
-              return (
-                <div className="text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
-                  No hay detalles de respuestas guardados para este intento.
-                </div>
-              );
-            })()}
+                  {selectedAttempts.map((att, i) => {
+                    const relatedTask = tasks.find(t => t.id === att.task_id);
+                    const isPdfTask = relatedTask?.content_data?.type === 'document';
+
+                    return (
+                        <TabsContent key={i} value={`attempt-${i}`} className="space-y-6">
+                            
+                            {/* Tarjeta de Resumen del Intento */}
+                            <div className="bg-white p-5 rounded-2xl border-2 border-slate-100 shadow-sm flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-slate-100 p-2 rounded-xl text-slate-500">
+                                        <Clock className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-400 uppercase">Fecha de Entrega</p>
+                                        <p className="text-sm font-bold text-slate-700">{new Date(att.submitted_at || '').toLocaleString()}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-bold text-slate-400 uppercase mb-1">Calificación</p>
+                                    <div className={cn(
+                                        "px-4 py-1.5 rounded-xl font-black text-lg inline-block shadow-sm border",
+                                        (att.grade ?? 0) >= 5 
+                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                                            : 'bg-rose-50 text-rose-600 border-rose-100'
+                                    )}>
+                                        {(att.grade || 0).toFixed(1)}/10
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Feedback del Profesor */}
+                            {att.teacher_feedback && (
+                                <div className="bg-indigo-50 p-5 rounded-2xl border-2 border-indigo-100 flex gap-4 items-start">
+                                    <div className="bg-white p-2 rounded-full shadow-sm text-2xl">👨‍🏫</div>
+                                    <div className="flex-1">
+                                        <h4 className="font-bold text-indigo-900 text-xs uppercase mb-1">Comentario del Profesor</h4>
+                                        <p className="text-slate-700 text-sm font-medium leading-relaxed">
+                                            {att.teacher_feedback}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* --- CONTENIDO ESPECÍFICO --- */}
+                            
+                            {/* CASO 1: PDF */}
+                            {isPdfTask && relatedTask?.content_data?.pdf_url && (
+                                <div className="bg-white rounded-2xl border-2 border-slate-200 overflow-hidden h-[500px]">
+                                    <PDFAnnotator
+                                        mode="student"
+                                        pdfUrl={relatedTask.content_data.pdf_url}
+                                        initialAnnotations={[...(att.answers || []), ...(att.teacher_annotations || [])]}
+                                        readOnly={true}
+                                    />
+                                </div>
+                            )}
+
+                            {/* CASO 2: Redacción */}
+                            {att.textContent && att.textContent.length > 0 && (
+                                <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-sm">
+                                    <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-4 pb-4 border-b border-slate-100">
+                                        <FileText className="w-4 h-4 text-indigo-500" /> Tu Redacción
+                                    </h4>
+                                    <TextAnnotator 
+                                        text={att.textContent} 
+                                        annotations={att.corrections || []} 
+                                        onAddAnnotation={()=>{}} 
+                                        onRemoveAnnotation={()=>{}} 
+                                        readOnly={true} 
+                                    />
+                                </div>
+                            )}
+
+                            {/* CASO 3: Quiz (Respuestas detalladas) */}
+                            {att.answers && att.answers.length > 0 && !isPdfTask && (
+                                <div className="space-y-3">
+                                    <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-2">
+                                        <CheckCircle2 className="w-4 h-4 text-indigo-500" /> Respuestas Detalladas
+                                    </h4>
+                                    {att.answers.map((ans: any, k: number) => (
+                                        <div key={k} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                            <p className="font-bold text-slate-700 text-sm mb-3 flex gap-2">
+                                                <span className="bg-slate-100 text-slate-500 w-6 h-6 rounded flex items-center justify-center text-xs shrink-0">{k+1}</span>
+                                                {ans.questionText || "Pregunta"}
+                                            </p>
+                                            <div className="space-y-3">
+                                                <div className={cn(
+                                                    "p-3 rounded-xl text-sm border-l-4",
+                                                    ans.isCorrect ? 'bg-emerald-50 border-emerald-400 text-emerald-900' : 'bg-rose-50 border-rose-400 text-rose-900'
+                                                )}>
+                                                    <div className="flex items-center gap-2 mb-1 font-black text-[10px] opacity-60 uppercase">
+                                                        {ans.isCorrect ? <CheckCircle2 className="w-3 h-3"/> : <XCircle className="w-3 h-3"/>}
+                                                        Tu Respuesta:
+                                                    </div>
+                                                    <div className="font-medium">{String(ans.studentAnswer || '---')}</div>
+                                                </div>
+                                                {!ans.isCorrect && ans.correctAnswer && (
+                                                    <div className="p-3 rounded-xl text-sm bg-slate-50 border-l-4 border-slate-300 text-slate-600">
+                                                        <span className="font-black text-[10px] opacity-60 uppercase block mb-1">Solución Correcta:</span>
+                                                        <div className="font-medium">{String(ans.correctAnswer)}</div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </TabsContent>
+                    );
+                  })}
+                </Tabs>
+              )}
             </div>
             
-            <div className="p-4 bg-white border-t border-slate-100 flex justify-end">
-              <Button onClick={() => setSelectedSubmission(null)} variant="outline" className="border-slate-200">
-                Cerrar
+            <div className="p-4 bg-white border-t border-slate-100 flex justify-end sticky bottom-0 z-50">
+              <Button onClick={() => setSelectedAttempts(null)} className="font-bold px-8 rounded-xl bg-slate-900 text-white hover:bg-slate-800">
+                Cerrar Resumen
               </Button>
             </div>
           </div>

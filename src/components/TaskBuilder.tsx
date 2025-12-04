@@ -325,7 +325,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     }
   };
 
-  // ========== ✅ GENERACIÓN IA (GROQ SECURE) ==========
+  // ========== ✅ GENERACIÓN IA (GROQ SECURE - POLÍGLOTA) ==========
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) {
       toast.error("Escribe un tema para generar");
@@ -342,34 +342,43 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     setIsGenerating(true);
     
     try {
+      // MODIFICACIÓN: Prompt Políglota Inteligente
       const systemPrompt = `
-        Actúa como un experto profesor de Español (ELE).
-        Crea una actividad educativa en formato JSON estricto.
+        Actúa como un experto profesor de idiomas políglota.
         
-        Tema: "${aiPrompt}"
+        TU MISIÓN:
+        Analiza el "Tema" que te dará el usuario y DETECTA EL IDIOMA OBJETIVO.
+        Genera una actividad educativa JSON completa EN ESE IDIOMA DETECTADO.
+        
+        EJEMPLOS DE COMPORTAMIENTO:
+        - Si el tema es "Past Simple" -> Genera TODO (Título, Preguntas, Explicaciones) en INGLÉS.
+        - Si el tema es "I Verbi" -> Genera TODO en ITALIANO.
+        - Si el tema es "Subjuntivo" -> Genera TODO en ESPAÑOL.
+        - Si el tema es "Les Couleurs" -> Genera TODO en FRANCÉS.
+        
+        REGLAS ESTRICTAS:
+        1. El Título, Descripción, Preguntas, Opciones y Explicaciones deben estar en el idioma que se está enseñando.
+        2. Genera preguntas variadas: choice, true_false, fill_blank, open.
+        3. Para "choice": mínimo 2 opciones, máximo 4.
+        4. Para "true_false": opciones fijas traducidas al idioma destino (ej: "True/False" o "Vero/Falso").
+        5. Responde ÚNICAMENTE el JSON.
+        
+        Tema del usuario: "${aiPrompt}"
         Nivel: ${aiLevel}
         Dificultad: ${aiDifficulty}
         Cantidad de preguntas: ${aiNumQuestions}
         
-        REGLAS ESTRICTAS:
-        1. Genera preguntas variadas: choice (opción múltiple), true_false (verdadero/falso), fill_blank (completar), open (abierta).
-        2. Para "choice": mínimo 2 opciones, máximo 4.
-        3. Para "true_false": opciones fijas ["Verdadero", "Falso"].
-        4. Para "fill_blank" y "open": correct_answer puede ser texto libre.
-        5. TODAS las preguntas DEBEN tener un campo "explanation" educativo.
-        6. Responde ÚNICAMENTE el JSON, sin texto adicional.
-        
         FORMATO JSON EXACTO:
         {
-          "title": "Título de la actividad",
-          "description": "Instrucciones claras para el alumno",
+          "title": "Título en el idioma detectado",
+          "description": "Instrucciones en el idioma detectado",
           "questions": [
             {
               "type": "choice",
-              "question_text": "¿Pregunta aquí?",
-              "options": ["Opción A", "Opción B", "Opción C"],
+              "question_text": "¿Pregunta en el idioma detectado?",
+              "options": ["Opción A", "Opción B"],
               "correct_answer": "Opción A",
-              "explanation": "Explicación educativa de por qué es correcta"
+              "explanation": "Explicación breve en el idioma detectado"
             }
           ]
         }
@@ -411,7 +420,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         }))
       );
 
-      toast.success("✨ ¡Contenido generado con éxito!");
+      toast.success("✨ ¡Contenido generado en el idioma detectado!");
       setShowAiModal(false);
       setAiPrompt('');
       
@@ -419,7 +428,6 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       console.error("Groq Error:", error);
       toast.error(`❌ Error: ${error instanceof Error ? error.message : "Fallo de conexión"}`);
       
-      // Si el error es de autenticación, abrir modal para corregir
       if (String(error).includes("401") || String(error).includes("key") || String(error).includes("Invalid API")) {
         toast.error("⚠️ API Key inválida o revocada");
         setShowKeyModal(true);

@@ -214,6 +214,7 @@ export default function App() {
       if (currentUser?.role === "teacher") {
         setRealSubmissions(updatedSubs);
       } else if (currentUser) {
+        // Filtrar mis entregas
         const mySubs = updatedSubs.filter(
           (s: any) =>
             String(s.student_id) === String(currentUser.id) ||
@@ -221,11 +222,38 @@ export default function App() {
         );
         setRealSubmissions(mySubs);
 
-        const xp = mySubs.length * 15;
-        const level = calculateLevelFromXP(xp);
+        // 🔥 NUEVA LÓGICA DE XP (Promedio de intentos)
+        // 1. Agrupar por Tarea
+        const tasksAttempts: Record<string, number[]> = {};
+        mySubs.forEach((sub: any) => {
+           // Usamos task_id para agrupar. Si el profe borró la tarea, ignoramos.
+           if (!tasksAttempts[sub.task_id]) tasksAttempts[sub.task_id] = [];
+           // Guardamos la nota (0-10)
+           tasksAttempts[sub.task_id].push(sub.grade || 0);
+        });
+
+        // 2. Calcular XP basado en promedios
+        let totalXP = 0;
+        Object.values(tasksAttempts).forEach((grades) => {
+           // Calcular promedio de intentos
+           const average = grades.reduce((a, b) => a + b, 0) / grades.length;
+           
+           // Regla de Negocio:
+           // 0 a 5.99 -> 2 XP
+           // 6 a 10   -> 5 XP
+           if (average < 6) {
+              totalXP += 2;
+           } else {
+              totalXP += 5;
+           }
+        });
+
+        // 3. Recalcular Nivel LuinGo basado en XP
+        const level = calculateLevelFromXP(totalXP);
+        
         setCurrentUser({
           ...currentUser,
-          xp_points: xp,
+          xp_points: totalXP, // ✅ XP REAL CALCULADO
           level: level,
         });
       }
@@ -478,13 +506,16 @@ export default function App() {
       // 7. CARGA DE DATOS (ESTRATEGIA SEGURA)
       console.log("📚 Cargando contenido...");
 
-      // CURSOS: Si es estudiante, SOLO carga SUS cursos (evita error de permisos)
+      // CURSOS: Lógica de permisos corregida
       try {
         let moodleCourses = [];
-        if (finalRole === "student") {
-          moodleCourses = await getUserCourses(meData.userid); // ✅ SEGURO PARA ALUMNOS
+        
+        // CORRECCIÓN: Si es alumno O si es profesor pero NO es admin del sitio, 
+        // usamos getUserCourses (mis cursos) en lugar de getCourses (todos los cursos).
+        if (finalRole === "student" || !meData.userissiteadmin) {
+          moodleCourses = await getUserCourses(meData.userid); // ✅ SEGURO PARA PROFES NO ADMINS
         } else {
-          moodleCourses = await getCourses(); // ✅ SOLO PROFES
+          moodleCourses = await getCourses(); // ✅ SOLO PARA SUPER ADMINS
         }
 
         if (Array.isArray(moodleCourses)) {
@@ -492,7 +523,10 @@ export default function App() {
             (c: any) =>
               c.id !== 1 &&
               c.shortname !== "LuinGo" &&
-              c.format !== "site",
+              c.format !== "site" &&
+              // 👇 AQUÍ ESTÁ EL TRUCO: Ocultamos por nombre o ID
+              c.fullname !== "Campus Virtual Global" && 
+              c.shortname !== "campus_global" // (Opcional: si le pusiste este nombre corto)
           );
           setCourses(cleanCourses);
 
@@ -671,6 +705,34 @@ export default function App() {
 
   const handleSaveNewTask = async (taskData: any) => {
     try {
+      // 1. OBTENER EL CÓDIGO DEL CURSO ACTUAL (Namespace)
+      const currentCourse = courses.find(c => String(c.id) === selectedClassId);
+      const coursePrefix = currentCourse ? currentCourse.shortname : 'GLOBAL';
+      
+      // 2. DETERMINAR EL SUFIJO (¿Es para Nivel o para Persona?)
+      let suffix = 'ALL';
+      const scope = taskData.content_data?.assignment_scope;
+
+      if (scope?.type === 'individual') {
+         // Si es individual, el sufijo es el ID del estudiante (Ej: "154")
+         suffix = scope.targetId; 
+      } else if (scope?.type === 'level') {
+         // Si es por nivel, el sufijo es el nivel (Ej: "A1")
+         suffix = scope.targetId || taskData.level_tag || 'ALL';
+      }
+
+      // 3. CREAR LA ETIQUETA FINAL (Ej: "CE1-154" o "CE1-A1")
+      const namespacedTag = `${coursePrefix}-${suffix}`;
+
+      // 4. INYECTAR LA ETIQUETA EN LOS DATOS
+      taskData.level_tag = namespacedTag;
+      if (taskData.content_data) {
+        taskData.content_data.level = namespacedTag;
+        // OJO: En el scope interno NO cambiamos el ID, solo la etiqueta externa
+        // Mantenemos scope.targetId original para lógica interna si es necesario
+      }
+
+      // 5. GUARDAR (Igual que antes)
       if (taskToEdit)
         await updateMoodleTask(
           taskToEdit.postId || taskToEdit.id,
@@ -684,15 +746,15 @@ export default function App() {
           taskData.description,
           taskData.content_data,
         );
-      toast.success(
-        taskToEdit ? "Tarea actualizada" : "Tarea creada",
-      );
+        
+      toast.success(taskToEdit ? "Tarea actualizada" : "Tarea creada");
       setShowTaskBuilder(false);
       setTaskToEdit(null);
       setTaskBuilderMode("create");
       setStartBuilderWithAI(false);
-      setTasks(await getMoodleTasks());
+      setTasks(await getMoodleTasks()); 
     } catch (error) {
+      console.error(error);
       toast.error("Error al guardar tarea");
     }
   };
@@ -973,8 +1035,15 @@ export default function App() {
             <>
               <TeacherDashboard
                 classroom={classroom}
+                // 👇 NUEVA PROP: Pasamos el código del curso
+                courseCode={courses.find(c => String(c.id) === selectedClassId)?.shortname || 'GLOBAL'}
                 students={students}
-                tasks={tasks}
+                tasks={tasks.filter(t => {
+                    const currentCourse = courses.find(c => String(c.id) === selectedClassId);
+                    const prefix = currentCourse ? currentCourse.shortname : 'GLOBAL';
+                    // Filtramos todo lo que no empiece por "CE1-"
+                    return !t.level_tag || t.level_tag.startsWith(prefix + '-');
+                })}
                 currentUser={currentUser}
                 submissions={realSubmissions}
                 onSelectStudent={handleSelectStudent}
@@ -1055,7 +1124,13 @@ export default function App() {
                   xp_points: 0,
                 } as any)
               }
-              tasks={tasks}
+              // 👇 NUEVA PROP
+              courseCode={courses.find(c => String(c.id) === selectedClassId)?.shortname || 'GLOBAL'}
+              tasks={tasks.filter(t => {
+                  const currentCourse = courses.find(c => String(c.id) === selectedClassId);
+                  const prefix = currentCourse ? currentCourse.shortname : 'GLOBAL';
+                  return !t.level_tag || t.level_tag.startsWith(prefix + '-');
+              })}
               submissions={realSubmissions}
               teacherEmail={teacherEmail} // 👈 [INYECCIÓN 3] Pasamos el email del profesor aquí
               onLogout={handleLogout}
