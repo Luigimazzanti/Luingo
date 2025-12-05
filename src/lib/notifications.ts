@@ -244,4 +244,79 @@ export const emailTemplates = {
       </p>
     </div>
   `),
+
+  // ✅ [NUEVO] TROFEO DESBLOQUEADO 🏆
+  trophyUnlocked: (studentName: string, trophyName: string, trophyImage: string, xp: number) =>
+    baseTemplate(`
+    <div style="background: linear-gradient(135deg, #F59E0B 0%, #F97316 100%); padding: 50px 0; text-align: center; position: relative; overflow: hidden;">
+      <div style="position: absolute; top: -50px; left: -50px; width: 200px; height: 200px; background: rgba(255,255,255,0.1); border-radius: 50%; filter: blur(40px);"></div>
+      <div style="position: absolute; bottom: -50px; right: -50px; width: 250px; height: 250px; background: rgba(255,255,255,0.1); border-radius: 50%; filter: blur(50px);"></div>
+      <div style="font-size: 64px; margin-bottom: 10px; animation: bounce 2s infinite;">🏆</div>
+      <h1 style="color: white; margin: 0; font-family: 'Poppins', sans-serif; font-weight: 900; font-size: 32px; text-shadow: 0 4px 10px rgba(0,0,0,0.2);">¡Woot woot!</h1>
+      <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 10px 0 0; font-weight: 600;">Nuevo Trofeo Desbloqueado</p>
+    </div>
+    <div style="padding: 50px 30px; text-align: center;">
+      <p style="font-size: 20px; color: #1e293b; margin-top: 0; font-weight: 600;">Hola <strong style="color: #6344A6;">${studentName}</strong>,</p>
+      <p style="color: #475569; line-height: 1.7; font-size: 16px; margin: 20px 0;">
+        ¡Lo has logrado! 🎉 Tu esfuerzo y dedicación han dado frutos. Acabas de ganar el trofeo <strong>${trophyName}</strong>.
+      </p>
+
+      <!-- Imagen del Trofeo Centrada y Destacada -->
+      <div style="margin: 40px 0; display: flex; justify-content: center;">
+        <div style="background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); padding: 30px; border-radius: 20px; box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3); border: 4px solid #F59E0B; display: inline-block;">
+          <img src="${trophyImage}" alt="${trophyName}" style="width: 150px; height: 150px; object-fit: cover; border-radius: 50%; box-shadow: 0 8px 25px rgba(0,0,0,0.15);" />
+          <p style="margin: 20px 0 0; color: #92400E; font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;">${trophyName}</p>
+        </div>
+      </div>
+
+      <div style="background: #F3F0F9; border: 2px solid #6344A6; padding: 25px; margin: 30px auto; border-radius: 16px; max-width: 350px;">
+        <p style="margin: 0; color: #6344A6; font-weight: bold; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Tu Progreso Actual</p>
+        <p style="margin: 10px 0 0; color: #211259; font-size: 42px; font-weight: 900;">${xp} <span style="font-size: 18px; color: #6344A6;">XP</span></p>
+        <p style="margin: 5px 0 0; color: #64748b; font-size: 14px;">¡Mira qué bien se ve en tu perfil!</p>
+      </div>
+
+      <p style="color: #475569; font-size: 15px; margin-top: 30px; line-height: 1.6;">
+        Sigue así y desbloquea los próximos niveles. ¡Cada trofeo te acerca más a la maestría! 💪
+      </p>
+
+      <div style="margin-top: 40px;">
+        <a href="https://luingo.es" style="background-color: #6344A6; color: white; text-decoration: none; padding: 18px 40px; border-radius: 50px; font-weight: 900; font-size: 17px; display: inline-block; box-shadow: 0 6px 20px rgba(99, 68, 166, 0.4); transition: transform 0.2s;">
+          VER MI SALA DE TROFEOS 🏆
+        </a>
+      </div>
+    </div>
+  `),
+};
+
+// ✅ [NUEVO] FUNCIÓN DE ENVÍO DE NOTIFICACIÓN DE TROFEO
+export const sendTrophyEmailNotification = async (
+  studentEmail: string,
+  studentName: string,
+  trophyName: string,
+  trophyImagePath: string, // Ejemplo: "/assets/trophies/trofeo_3.png"
+  currentXP: number
+) => {
+  if (!studentEmail || studentEmail.includes("sin-email")) {
+    console.warn("⚠️ No se puede enviar email de trofeo: email no válido");
+    return;
+  }
+
+  // Convertir ruta local a URL completa (Asumiendo dominio de producción)
+  const fullImageUrl = `https://luingo.es${trophyImagePath}`;
+
+  const subject = `¡Woot woot! 🏆 ¡Nuevo Trofeo Desbloqueado en LuinGo!`;
+  const html = emailTemplates.trophyUnlocked(
+    studentName,
+    trophyName,
+    fullImageUrl,
+    currentXP
+  );
+
+  await sendNotification({
+    to: studentEmail,
+    subject,
+    html,
+  });
+
+  console.log(`✅ Email de trofeo enviado a ${studentEmail}`);
 };

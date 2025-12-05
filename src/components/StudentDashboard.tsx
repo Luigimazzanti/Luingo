@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'; // 👈 Añadir useMemo
+import React, { useState, useMemo, useEffect } from 'react'; // 👈 Añadir useEffect
 import { Student, Task, Submission } from '../types';
 import { TaskCard } from './TaskCard';
 import { Button } from './ui/button';
@@ -24,6 +24,7 @@ import { PDFAnnotator } from './PDFAnnotator';
 import { LevelTestCard } from './LevelTestCard'; // ✅ NUEVO
 import { LevelTestPlayer } from './LevelTestPlayer'; // ✅ NUEVO
 import { ImageWithFallback } from './figma/ImageWithFallback'; // 👈 NUEVO IMPORT PARA IMÁGENES
+import { sendTrophyEmailNotification } from '../lib/notifications'; // 👈 [NUEVO] IMPORT DEL SISTEMA DE EMAILS
 
 interface StudentDashboardProps {
   courseCode: string; // 👈 NUEVO
@@ -164,6 +165,56 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     const status = getTaskStatus(t.id);
     return status === 'submitted' || status === 'graded';
   });
+
+  // ✅ [NUEVO] TRIGGER DE NOTIFICACIÓN POR TROFEO DESBLOQUEADO 🏆
+  // Este efecto monitorea el XP y detecta cuando se desbloquea un nuevo trofeo
+  useEffect(() => {
+    // Lista de trofeos (misma estructura que el render)
+    const TROPHIES = [
+      { th: 25, label: 'Hormiga Obrera', img: '/assets/trophies/trofeo_1.png' },
+      { th: 35, label: 'Rana Curiosa', img: '/assets/trophies/trofeo_2.png' },
+      { th: 55, label: 'Loro Parlanchín', img: '/assets/trophies/trofeo_3.png' },
+      { th: 85, label: 'Tucán Colorido', img: '/assets/trophies/trofeo_4.png' },
+      { th: 125, label: 'Mono Ágil', img: '/assets/trophies/trofeo_5.png' },
+      { th: 175, label: 'Jaguar Veloz', img: '/assets/trophies/trofeo_6.png' },
+      { th: 235, label: 'Gorila Fuerte', img: '/assets/trophies/trofeo_7.png' },
+      { th: 300, label: 'Rey León', img: '/assets/trophies/trofeo_8.png' },
+    ];
+
+    // Clave única por estudiante y curso para evitar duplicados entre cursos
+    const storageKey = `luingo_trophies_${student.id}_${courseCode}`;
+    
+    // Obtener trofeos ya desbloqueados guardados en localStorage
+    const unlockedTrophies = JSON.parse(localStorage.getItem(storageKey) || '[]') as number[];
+
+    // Detectar qué trofeos están desbloqueados ahora según el XP actual
+    const currentlyUnlocked = TROPHIES.filter(t => courseXP >= t.th).map(t => t.th);
+
+    // Comparar: ¿Hay algún trofeo nuevo que no estaba antes?
+    const newTrophies = currentlyUnlocked.filter(threshold => !unlockedTrophies.includes(threshold));
+
+    // Si hay trofeos nuevos, enviar email por cada uno y actualizar localStorage
+    if (newTrophies.length > 0) {
+      newTrophies.forEach(threshold => {
+        const trophy = TROPHIES.find(t => t.th === threshold);
+        if (trophy) {
+          console.log(`🏆 ¡Nuevo trofeo desbloqueado! ${trophy.label} (${threshold} XP)`);
+          
+          // Enviar email de notificación (Fire and forget)
+          sendTrophyEmailNotification(
+            student.email,
+            student.name,
+            trophy.label,
+            trophy.img,
+            courseXP
+          ).catch(err => console.warn('⚠️ Fallo al enviar email de trofeo:', err));
+        }
+      });
+
+      // Actualizar localStorage para marcar estos trofeos como ya notificados
+      localStorage.setItem(storageKey, JSON.stringify(currentlyUnlocked));
+    }
+  }, [courseXP, student.id, student.email, student.name, courseCode]); // Se ejecuta cuando cambia el XP
 
   // ✅ NUEVA FUNCIÓN: Obtener todos los intentos para el resumen
   const openSummary = (task: Task) => {
@@ -332,15 +383,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               {/* GRID DE IMÁGENES DE LA JUNGLA */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                 {[
-                  // ✅ ACTUALIZADO: Usamos las imágenes personalizadas del usuario desde ImgBB
-                  { th: 25, label: 'Hormiga Obrera', img: 'https://i.ibb.co/gZ0zY1Gm/trophy1.png', color: 'bg-stone-100' },
-                  { th: 35, label: 'Rana Curiosa', img: 'https://i.ibb.co/4wCtPzng/trophy2.png', color: 'bg-emerald-100' },
-                  { th: 55, label: 'Loro Parlanchín', img: 'https://i.ibb.co/jZ8hRVDc/trophy3.png', color: 'bg-red-100' },
-                  { th: 85, label: 'Tucán Colorido', img: 'https://i.ibb.co/spD4JSCb/trophy4.png', color: 'bg-orange-100' },
-                  { th: 125, label: 'Mono Ágil', img: 'https://i.ibb.co/9mcM14DJ/trophy5.png', color: 'bg-amber-100' },
-                  { th: 175, label: 'Jaguar Veloz', img: 'https://i.ibb.co/tMCc0PL9/trophy6.png', color: 'bg-yellow-100' },
-                  { th: 235, label: 'Gorila Fuerte', img: 'https://i.ibb.co/Gf8d6CJQ/trophy7.png', color: 'bg-slate-200' },
-                  { th: 300, label: 'Rey León', img: 'https://i.ibb.co/1thgYP0M/trophy8.png', color: 'bg-purple-100' },
+                  // ✅ [ASSETS LOCALES] Usamos imágenes desde /assets/trophies/
+                  { th: 25, label: 'Hormiga Obrera', img: '/assets/trophies/trofeo_1.png', color: 'bg-stone-100' },
+                  { th: 35, label: 'Rana Curiosa', img: '/assets/trophies/trofeo_2.png', color: 'bg-emerald-100' },
+                  { th: 55, label: 'Loro Parlanchín', img: '/assets/trophies/trofeo_3.png', color: 'bg-red-100' },
+                  { th: 85, label: 'Tucán Colorido', img: '/assets/trophies/trofeo_4.png', color: 'bg-orange-100' },
+                  { th: 125, label: 'Mono Ágil', img: '/assets/trophies/trofeo_5.png', color: 'bg-amber-100' },
+                  { th: 175, label: 'Jaguar Veloz', img: '/assets/trophies/trofeo_6.png', color: 'bg-yellow-100' },
+                  { th: 235, label: 'Gorila Fuerte', img: '/assets/trophies/trofeo_7.png', color: 'bg-slate-200' },
+                  { th: 300, label: 'Rey León', img: '/assets/trophies/trofeo_8.png', color: 'bg-purple-100' },
                 ].map((trophy, idx) => {
                   const isUnlocked = courseXP >= trophy.th;
                   return (

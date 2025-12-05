@@ -9,10 +9,12 @@ interface ClassSelectionProps {
   courses: any[];
   onSelectClass: (courseId: string) => void;
   onCreateClass?: (name: string) => void;
-  onLogout: () => void; // ✅ Nueva prop
+  onLogout: () => void;
+  role: 'teacher' | 'student'; // 👈 [MEJORA] Recibimos el rol
+  userName: string;            // 👈 [MEJORA] Recibimos el nombre para personalizar más
 }
 
-export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelectClass, onCreateClass, onLogout }) => {
+export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelectClass, onCreateClass, onLogout, role, userName }) => {
   const [showCreateDialog, setShowCreateDialog] = React.useState(false);
   const [newClassName, setNewClassName] = React.useState('');
   
@@ -24,32 +26,33 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
     const fetchStats = async () => {
       const stats: any = {};
       
+      // Ejecutamos en paralelo para mayor velocidad
       await Promise.all(courses.map(async (course) => {
         try {
+          // Pequeña optimización: Si es profe, cargamos stats. Si es alumno, quizás no sea tan crítico ver avatars de otros, 
+          // pero lo dejamos para mantener la estética social.
           const users = await getEnrolledUsers(course.id);
           
           if (Array.isArray(users)) {
-            // 1. Filtrar estudiantes (excluir admins/profes con ID bajo si es necesario)
+            // Filtrar estudiantes (excluir admins/profes con ID bajo si es necesario)
             const students = users.filter((u: any) => u.id > 2);
             
-            // 2. Tomar los primeros 3 para la vista previa
+            // Tomar los primeros 3 para la vista previa
             const previewStudents = students.slice(0, 3);
 
-            // 3. 🔥 MAGIA: Buscar el avatar personalizado de cada uno en paralelo
+            // Buscar el avatar personalizado de cada uno en paralelo
             const realAvatars = await Promise.all(previewStudents.map(async (s: any) => {
                 try {
-                    // Consultar preferencia guardada (donde vive el avatar de DiceBear)
                     const prefs = await getUserPreferences(s.id);
-                    // Retornar avatar personalizado O el de Moodle como fallback
                     return prefs?.avatar_url || s.profileimageurl;
                 } catch (e) {
-                    return s.profileimageurl; // Fallback en caso de error
+                    return s.profileimageurl;
                 }
             }));
 
             stats[course.id] = {
               count: students.length,
-              avatars: realAvatars // ✅ Usamos las URLs resueltas
+              avatars: realAvatars
             };
           }
         } catch (e) { console.error(e); }
@@ -61,7 +64,6 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
     if (courses.length > 0) fetchStats();
   }, [courses]);
   
-  // Function to assign random styles to courses since Moodle doesn't provide them
   const getCourseStyle = (id: number) => {
     const styles = [
         { theme: 'bg-emerald-100', border: 'border-emerald-200', text: 'text-emerald-800', icon: '🥑' },
@@ -95,7 +97,6 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 relative">
-      {/* ✅ BOTÓN SALIR (Esquina Superior Derecha) */}
       <div className="absolute top-6 right-6">
           <Button variant="ghost" onClick={onLogout} className="text-slate-400 hover:text-rose-500 gap-2">
             <LogOut className="w-5 h-5" /> <span className="font-bold">Salir</span>
@@ -106,7 +107,13 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-800">Mis Clases</h1>
-            <p className="text-slate-500 font-bold">Hola Profe, ¿dónde vamos a enseñar hoy?</p>
+            {/* ✅ [MEJORA] Texto condicional según rol */}
+            <p className="text-slate-500 font-bold">
+              {role === 'teacher' 
+                ? `Hola Profe ${userName}, ¿dónde vamos a enseñar hoy?`
+                : `Hola ${userName}, ¿dónde vamos a aprender hoy?`
+              }
+            </p>
           </div>
         </div>
 
@@ -126,7 +133,6 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
                   <h3 className="text-xl font-black text-slate-800 mb-2 line-clamp-2">{course.fullname}</h3>
                   
                   <div className="mt-auto space-y-4 relative">
-                      {/* Avatares Reales */}
                       <div className="flex items-center justify-between">
                           <div className="flex -space-x-2">
                               {stats.avatars.length > 0 ? (
@@ -153,46 +159,50 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
             );
           })}
         </div>
-
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Crear Nueva Clase</DialogTitle>
-              <DialogDescription>
-                Ingresa el nombre de la nueva clase que deseas crear.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col space-y-4">
-              <Input
-                id="name"
-                placeholder="Nombre de la clase"
-                value={newClassName}
-                onChange={(e) => setNewClassName(e.target.value)}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" onClick={() => setShowCreateDialog(false)}>
-                Cancelar
-              </Button>
-              <Button type="button" onClick={handleCreateClass}>
-                Crear
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        
+        {/* Solo el profesor puede ver el diálogo de crear clase, aunque si no pasas onCreateClass tampoco se muestra */}
+        {role === 'teacher' && (
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                <DialogTitle>Crear Nueva Clase</DialogTitle>
+                <DialogDescription>
+                    Ingresa el nombre de la nueva clase que deseas crear.
+                </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col space-y-4">
+                <Input
+                    id="name"
+                    placeholder="Nombre de la clase"
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
+                />
+                </div>
+                <DialogFooter>
+                <Button type="button" onClick={() => setShowCreateDialog(false)}>
+                    Cancelar
+                </Button>
+                <Button type="button" onClick={handleCreateClass}>
+                    Crear
+                </Button>
+                </DialogFooter>
+            </DialogContent>
+            </Dialog>
+        )}
       </div>
 
-      {/* ✅ BOTÓN FLOTANTE FAB (Esquina Inferior Derecha) */}
-      <button
-        onClick={() => setShowCreateDialog(true)}
-        className="fixed bottom-8 right-8 w-16 h-16 bg-slate-800 hover:bg-indigo-600 text-white rounded-full shadow-2xl hover:shadow-3xl hover:scale-110 transition-all duration-300 flex items-center justify-center group z-50"
-        title="Nueva Clase"
-      >
-        <Plus className="w-7 h-7" />
-        <span className="absolute right-20 bg-slate-800 text-white px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-          Nueva Clase
-        </span>
-      </button>
+      {role === 'teacher' && (
+          <button
+            onClick={() => setShowCreateDialog(true)}
+            className="fixed bottom-8 right-8 w-16 h-16 bg-slate-800 hover:bg-indigo-600 text-white rounded-full shadow-2xl hover:shadow-3xl hover:scale-110 transition-all duration-300 flex items-center justify-center group z-50"
+            title="Nueva Clase"
+          >
+            <Plus className="w-7 h-7" />
+            <span className="absolute right-20 bg-slate-800 text-white px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              Nueva Clase
+            </span>
+          </button>
+      )}
     </div>
   );
 };

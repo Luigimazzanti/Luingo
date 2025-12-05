@@ -278,6 +278,11 @@ export default function App() {
     }
   };
 
+  // ✅ [SEO] CONFIGURACIÓN DEL TÍTULO DE LA PESTAÑA
+  useEffect(() => {
+    document.title = "LuinGo | Campus Virtual";
+  }, []);
+
   // ✅ FIX QUIRÚRGICO: Restaurar sesión para evitar logout repentino
   useEffect(() => {
     const restoreSession = async () => {
@@ -398,7 +403,7 @@ export default function App() {
     }
   }, [loading]); // <--- IMPORTANTE: Dependencia 'loading' añadida
 
-  // ========== LOGIN ESTRATÉGICO ==========
+  // ========== LOGIN ESTRATÉGICO Y RÁPIDO ==========
   const handleRealLogin = async () => {
     if (!usernameInput || !passwordInput) {
       toast.error("Faltan datos", {
@@ -414,7 +419,7 @@ export default function App() {
         usernameInput,
         passwordInput,
       );
-      if (!token) throw new Error("Wrong password"); // Forzamos error si no hay token
+      if (!token) throw new Error("Wrong password");
 
       setUserToken(token);
 
@@ -423,66 +428,37 @@ export default function App() {
       try {
         meData = await getMe(token);
       } catch (e) {
-        if (
-          e instanceof Error &&
-          e.message === "FORCE_PASSWORD_CHANGE"
-        )
-          throw e;
+        if (e instanceof Error && e.message === "FORCE_PASSWORD_CHANGE") throw e;
         throw new Error("No se pudo cargar el perfil");
       }
 
-      if (!meData || !meData.userid)
-        throw new Error("No se pudo cargar el perfil");
+      if (!meData || !meData.userid) throw new Error("No se pudo cargar el perfil");
 
-      // 3. DATOS DE CONTACTO (Sin romper si falla)
+      // 3. OPTIMIZACIÓN: Detección de email (evitamos llamar a getUserByUsername si ya lo tenemos)
       let realEmail = meData.email;
-      try {
-        const fullProfile =
-          await getUserByUsername(usernameInput);
-        if (fullProfile?.email) realEmail = fullProfile.email;
-      } catch (e) {
-        console.warn("⚠️ Usando email básico");
+      if (!realEmail || realEmail.includes("nomail")) {
+           try {
+              const fullProfile = await getUserByUsername(usernameInput);
+              if (fullProfile?.email) realEmail = fullProfile.email;
+           } catch (e) { console.warn("⚠️ Usando email básico"); }
       }
 
-      // 4. DETECCIÓN DE ROL SEGURA
-      let finalRole: "teacher" | "student" = "student";
-      if (meData.userissiteadmin) {
-        finalRole = "teacher";
-      } else {
-        // Intentamos ver si es profe en algún curso
-        try {
-          const myCourses = await getUserCourses(meData.userid);
-          if (myCourses?.length > 0) {
-            // Check rápido de roles en el primer curso para no hacer N llamadas
-            const profile = await getMyCourseProfile(
-              meData.userid,
-              myCourses[0].id,
-            );
-            if (
-              profile?.roles?.some((r: any) =>
-                [
-                  "editingteacher",
-                  "teacher",
-                  "manager",
-                ].includes(r.shortname),
-              )
-            ) {
-              finalRole = "teacher";
-            }
-          }
-        } catch (e) {
-          console.warn("No se pudo verificar rol extendido");
-        }
-      }
+      // 4. DETECCIÓN DE ROL RÁPIDA (Sin bloquear esperando cursos profundos)
+      let finalRole: "teacher" | "student" = meData.userissiteadmin ? "teacher" : "student";
+      
+      // 5. CARGA PARALELA (Cursos + Preferencias) - CLAVE PARA LA VELOCIDAD 🚀
+      // Lanzamos las peticiones al mismo tiempo en lugar de una por una
+      const [userPrefs, moodleCourses] = await Promise.all([
+          getUserPreferences(meData.userid).catch(() => null),
+          (finalRole === "student" || !meData.userissiteadmin) 
+             ? getUserCourses(meData.userid).catch(() => []) 
+             : getCourses().catch(() => [])
+      ]);
 
-      // 5. PREFERENCIAS
-      let userPrefs = null;
-      let savedLevel = "A1";
-      try {
-        userPrefs = await getUserPreferences(meData.userid);
-        savedLevel = userPrefs?.level_code || "A1";
-      } catch (e) {
-        console.warn("Prefs error");
+      // Verificar rol de profesor en cursos si no es admin (lógica rápida)
+      if (finalRole === "student" && moodleCourses && moodleCourses.length > 0) {
+          // No hacemos llamada de red extra aquí, asumimos estudiante por defecto
+          // y si necesitamos permisos especiales los cargaremos en el dashboard
       }
 
       // 6. CONSTRUCCIÓN DE USUARIO
@@ -491,142 +467,77 @@ export default function App() {
         email: realEmail || `${usernameInput}@sin-email.com`,
         name: meData.fullname,
         role: finalRole,
-        avatar_url:
-          userPrefs?.avatar_url || meData.userpictureurl,
-        current_level_code: savedLevel,
-        // 👇 ESTA LÍNEA ES LA CLAVE. SI FALTA, EL DASHBOARD NO SE ENTERA
-        pending_level_test:
-          userPrefs?.pending_level_test || false,
+        avatar_url: userPrefs?.avatar_url || meData.userpictureurl,
+        current_level_code: userPrefs?.level_code || "A1",
+        pending_level_test: userPrefs?.pending_level_test || false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
       setCurrentUser(userProfile);
 
-      // 7. CARGA DE DATOS (ESTRATEGIA SEGURA)
-      console.log("📚 Cargando contenido...");
-
-      // CURSOS: Lógica de permisos corregida
-      try {
-        let moodleCourses = [];
-        
-        // CORRECCIÓN: Si es alumno O si es profesor pero NO es admin del sitio, 
-        // usamos getUserCourses (mis cursos) en lugar de getCourses (todos los cursos).
-        if (finalRole === "student" || !meData.userissiteadmin) {
-          moodleCourses = await getUserCourses(meData.userid); // ✅ SEGURO PARA PROFES NO ADMINS
-        } else {
-          moodleCourses = await getCourses(); // ✅ SOLO PARA SUPER ADMINS
-        }
-
-        if (Array.isArray(moodleCourses)) {
+      // 7. PROCESAMIENTO DE CURSOS (Rápido)
+      if (Array.isArray(moodleCourses)) {
           const cleanCourses = moodleCourses.filter(
             (c: any) =>
               c.id !== 1 &&
               c.shortname !== "LuinGo" &&
               c.format !== "site" &&
-              // 👇 AQUÍ ESTÁ EL TRUCO: Ocultamos por nombre o ID
               c.fullname !== "Campus Virtual Global" && 
-              c.shortname !== "campus_global" // (Opcional: si le pusiste este nombre corto)
+              c.shortname !== "campus_global"
           );
           setCourses(cleanCourses);
 
-          // ✅ [INYECCIÓN 2] Buscar Email del Profesor en el primer curso
-          if (cleanCourses.length > 0) {
+          // ⚡ CARGA EN SEGUNDO PLANO (Background) ⚡
+          // No usamos 'await' aquí para no bloquear la UI. 
+          // Buscamos el email del profe mientras el usuario ya está viendo sus clases.
+          if (cleanCourses.length > 0 && finalRole === 'student') {
             getEnrolledUsers(cleanCourses[0].id)
               .then((users) => {
                 if (Array.isArray(users)) {
-                  // Buscamos a alguien con rol de profesor
                   const teacher = users.find((u: any) =>
-                    u.roles?.some(
-                      (r: any) =>
-                        r.shortname === "editingteacher" ||
-                        r.shortname === "teacher",
-                    ),
+                    u.roles?.some((r: any) => r.shortname === "editingteacher" || r.shortname === "teacher")
                   );
-                  if (teacher?.email) {
-                    console.log(
-                      "✅ Email del profesor encontrado:",
-                      teacher.email,
-                    );
-                    setTeacherEmail(teacher.email);
-                  }
+                  if (teacher?.email) setTeacherEmail(teacher.email);
                 }
-              })
-              .catch((e) =>
-                console.warn(
-                  "No se pudo obtener email del profe (no crítico)",
-                ),
-              );
+              }).catch(() => {});
           }
-        }
-      } catch (e) {
-        console.warn("Error cargando cursos", e);
       }
 
-      // TAREAS Y ENTREGAS
-      try {
-        const [tasksData, subsData] = await Promise.all([
+      // 8. ⚡ CARGA DE TAREAS Y ENTREGAS EN SEGUNDO PLANO ⚡
+      // ¡ELIMINAMOS EL AWAIT QUE BLOQUEABA TODO!
+      // Lanzamos la promesa y dejamos que React actualice el estado cuando termine.
+      Promise.all([
           getMoodleTasks(),
-          getMoodleSubmissions(),
-        ]);
+          getMoodleSubmissions()
+      ]).then(([tasksData, subsData]) => {
+          console.log("📦 Contenido secundario cargado en background");
+          setTasks(tasksData || []);
+          if (finalRole === "teacher") {
+            setRealSubmissions(subsData || []);
+          } else {
+            const mySubs = (subsData || []).filter((s: any) => String(s.student_id) === String(userProfile.id));
+            setRealSubmissions(mySubs);
+            // Actualizar datos del estudiante una vez lleguen las tareas
+            setStudents(prev => prev.length > 0 ? [{...prev[0], completed_tasks: mySubs.length, total_tasks: tasksData?.length || 0}] : []);
+          }
+      }).catch(e => console.warn("Background load warning", e));
 
-        setTasks(tasksData || []);
+      // 🎉 LISTO: Desbloqueamos la UI inmediatamente
+      toast.success(`¡Hola ${meData.firstname}!`, { description: "Bienvenido a LuinGo 🚀" });
 
-        if (finalRole === "teacher") {
-          setRealSubmissions(subsData || []);
-        } else {
-          const mySubs = (subsData || []).filter(
-            (s: any) =>
-              String(s.student_id) === String(userProfile.id),
-          );
-          setRealSubmissions(mySubs);
-          setStudents([
-            {
-              ...userProfile,
-              level: 1,
-              xp_points: mySubs.length * 50,
-              completed_tasks: mySubs.length,
-              total_tasks: tasksData?.length || 0,
-              materials_viewed: [],
-            } as Student,
-          ]);
-        }
-      } catch (e) {
-        console.warn("Error cargando contenido secundario");
-      }
-
-      toast.success(`¡Hola ${meData.firstname}!`, {
-        description: "Bienvenido a LuinGo 🚀",
-      });
     } catch (e) {
       console.error("🚨 LOGIN ERROR:", e);
-      setLoading(false);
+      const errorMsg = e instanceof Error ? e.message : String(e);
 
-      const errorMsg =
-        e instanceof Error ? e.message : String(e);
-
-      // Si es cambio de contraseña
-      if (
-        errorMsg === "FORCE_PASSWORD_CHANGE" ||
-        errorMsg.includes("forcepasswordchange")
-      ) {
-        toast.warning("⚠️ Cambio de Contraseña Requerido", {
-          description:
-            "Por seguridad, debes cambiar tu clave en Moodle.",
-          duration: 10000,
-        });
+      if (errorMsg === "FORCE_PASSWORD_CHANGE" || errorMsg.includes("forcepasswordchange")) {
+        toast.warning("⚠️ Cambio de Contraseña Requerido", { description: "Por seguridad, debes cambiar tu clave en Moodle.", duration: 10000 });
         setShowPasswordChangeRequired(true);
+        setLoading(false);
         return;
       }
 
-      // Cualquier otro error
-      toast.error("Error de Acceso", {
-        description:
-          errorMsg === "Error de autenticación desconocido"
-            ? "Credenciales incorrectas o fallo de red."
-            : errorMsg,
-        duration: 5000,
-      });
+      toast.error("Error de Acceso", { description: "Credenciales incorrectas o fallo de red.", duration: 5000 });
     } finally {
       setLoading(false);
     }
@@ -1027,6 +938,8 @@ export default function App() {
             onSelectClass={handleSelectClass}
             onCreateClass={handleCreateClass}
             onLogout={handleLogout}
+            role={currentUser.role} // 👈 Pasamos el rol correcto
+            userName={currentUser.name.split(" ")[0]} // 👈 Pasamos el primer nombre para un saludo amigable
           />
         )}
 
