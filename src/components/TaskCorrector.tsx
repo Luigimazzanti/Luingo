@@ -110,25 +110,35 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
               📄 Redacción
             </h3>
             <span className="bg-slate-100 text-slate-500 text-xs font-bold px-2 py-1 rounded">
-              {submission.textContent?.split(/\\s+/).length || 0} palabras
+              {submission.textContent?.split(/\s+/).length || 0} palabras
             </span>
           </div>
 
-          {/* 👇 REPRODUCTOR DE AUDIO CON EMBED DE VOCAROO */}
-          {renderAudioPlayer(submission.textContent || '')}
+          {/* 👇 REPRODUCTOR DE AUDIO (Si detectamos enlace) */}
+          {(() => {
+             const player = renderAudioPlayer(submission.textContent || '');
+             // Si hay reproductor, lo mostramos
+             if (player) return player;
+             return null;
+          })()}
 
-          {isWriting ? (
+          {/* CONTENIDO TEXTUAL (Ocultar si es solo el link de audio para no duplicar) */}
+          {isWriting && !renderAudioPlayer(submission.textContent || '') ? (
             <TextAnnotator 
-              // 🔥 LA CLAVE MÁGICA: Forzar renderizado si cambian los datos
               key={JSON.stringify(corrections)}
-              
               text={submission.textContent || ''} 
               annotations={corrections}
               onAddAnnotation={handleAddAnnotation}
               onUpdateAnnotation={handleUpdateAnnotation}
               onRemoveAnnotation={handleRemoveAnnotation}
             />
+          ) : isWriting && renderAudioPlayer(submission.textContent || '') ? (
+             // Si es audio, mostramos el texto (link) pequeño y discreto por si acaso, o nada.
+             <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-400 font-mono break-all">
+                Link original: {submission.textContent}
+             </div>
           ) : (
+            // Si es Quiz (respuestas)
             <div className="space-y-4">
                 {submission.answers?.map((ans:any, i:number) => (
                     <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
