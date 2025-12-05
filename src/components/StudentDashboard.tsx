@@ -140,17 +140,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       return false; 
     }
 
-    // 2. CUESTIONARIOS (FIX: Respetar Intentos Múltiples)
-    // Si es tipo form/quiz, verificamos intentos PRIMERO.
-    if (t.content_data?.type === 'form' || t.content_data?.type === 'quiz' || !t.content_data?.type) {
+    // 2. CUESTIONARIOS Y AUDIOS (Lógica de intentos)
+    if (['form', 'quiz', 'audio'].includes(t.content_data?.type || '')) {
        const attempts = getAttemptsCount(t.id);
-       const max = t.content_data?.max_attempts ?? 3;
+       const max = t.content_data?.max_attempts ?? (t.content_data?.type === 'audio' ? 2 : 3);
        
-       // Si ya llegó al límite, se oculta.
        if (attempts >= max) return false;
-
-       // Si NO ha llegado al límite, se muestra SIEMPRE (aunque esté submitted)
-       // Esto permite hacer el intento 2, 3, etc.
        return true;
     }
     
@@ -215,6 +210,32 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       localStorage.setItem(storageKey, JSON.stringify(currentlyUnlocked));
     }
   }, [courseXP, student.id, student.email, student.name, courseCode]); // Se ejecuta cuando cambia el XP
+
+  // ✅ CÁLCULO DE LAS 6 HABILIDADES (VERSIÓN PRO)
+  const skillsStats = useMemo(() => {
+    // 1. Calcular nota promedio real (0-10)
+    const validGrades = submissions
+      .map(s => (s.grade && s.grade > 0) ? s.grade : 0)
+      .filter(g => g > 0);
+
+    const avg = validGrades.length > 0 
+      ? validGrades.reduce((acc, curr) => acc + curr, 0) / validGrades.length 
+      : 0;
+
+    // 2. Calcular porcentaje base (0-100%)
+    // Fórmula: (Nota Promedio * 10) + (Bonus por cantidad de misiones)
+    const basePercent = Math.min(100, Math.round((avg * 10) + (submissions.length * 1.5)));
+
+    // 3. Retornar las 6 Habilidades sincronizadas
+    return [
+      { label: 'Gramática', icon: '🧩', percent: basePercent },
+      { label: 'Vocabulario', icon: '🗣️', percent: basePercent },
+      { label: 'Comprensión Oral', icon: '🎧', percent: basePercent },
+      { label: 'Comprensión Lectora', icon: '📖', percent: basePercent },
+      { label: 'Expresión Oral', icon: '🎙️', percent: basePercent },
+      { label: 'Cultura', icon: '🌍', percent: basePercent },
+    ];
+  }, [submissions]);
 
   // ✅ NUEVA FUNCIÓN: Obtener todos los intentos para el resumen
   const openSummary = (task: Task) => {
@@ -371,70 +392,120 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           )}
           
           {activeTab === 'achievements' && (
-            <div className="animate-in fade-in zoom-in duration-500 py-6">
+            <div className="animate-in fade-in zoom-in duration-500 py-4">
               
-              <div className="text-center mb-10">
-                <h2 className="text-3xl font-black text-slate-800 mb-2">🏆 Sala de Trofeos</h2>
-                <p className="text-slate-500 font-medium">
-                  Tu evolución en este curso: <span className="text-indigo-600 font-bold">{courseXP} XP</span>
-                </p>
-              </div>
-
-              {/* GRID DE IMÁGENES DE LA JUNGLA */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                {[
-                  // ✅ [ASSETS LOCALES] Usamos imágenes desde /assets/trophies/
-                  { th: 25, label: 'Hormiga Obrera', img: '/assets/trophies/trofeo_1.png', color: 'bg-stone-100' },
-                  { th: 35, label: 'Rana Curiosa', img: '/assets/trophies/trofeo_2.png', color: 'bg-emerald-100' },
-                  { th: 55, label: 'Loro Parlanchín', img: '/assets/trophies/trofeo_3.png', color: 'bg-red-100' },
-                  { th: 85, label: 'Tucán Colorido', img: '/assets/trophies/trofeo_4.png', color: 'bg-orange-100' },
-                  { th: 125, label: 'Mono Ágil', img: '/assets/trophies/trofeo_5.png', color: 'bg-amber-100' },
-                  { th: 175, label: 'Jaguar Veloz', img: '/assets/trophies/trofeo_6.png', color: 'bg-yellow-100' },
-                  { th: 235, label: 'Gorila Fuerte', img: '/assets/trophies/trofeo_7.png', color: 'bg-slate-200' },
-                  { th: 300, label: 'Rey León', img: '/assets/trophies/trofeo_8.png', color: 'bg-purple-100' },
-                ].map((trophy, idx) => {
-                  const isUnlocked = courseXP >= trophy.th;
-                  return (
-                    <div 
-                      key={idx} 
-                      className={cn(
-                        "aspect-square rounded-3xl p-4 flex flex-col items-center justify-center text-center border-4 transition-all duration-500 relative overflow-hidden group", 
-                        isUnlocked 
-                          ? "bg-white border-white shadow-xl hover:-translate-y-2" 
-                          : "bg-slate-50 border-transparent opacity-50 grayscale"
-                      )}
-                    >
-                      {/* Fondo sutil de color al desbloquear */}
-                      {isUnlocked && <div className={cn("absolute inset-0 opacity-20 transition-opacity group-hover:opacity-30", trophy.color)} />}
-                      
-                      {/* ✅ CONTENEDOR DE IMAGEN CONTROLADO */}
-                      <div className={cn("mb-3 transition-transform relative z-10", isUnlocked ? "scale-105 group-hover:scale-110 drop-shadow-md" : "scale-90 opacity-50")}>
-                        {isUnlocked ? (
-                          // Renderiza la imagen real
-                          <ImageWithFallback 
-                            src={trophy.img} 
-                            alt={trophy.label} 
-                            className="w-20 h-20 md:w-24 md:h-24 object-cover rounded-full mx-auto" 
-                          />
-                        ) : (
-                          // Renderiza el candado si está bloqueado
-                          <span className="text-5xl md:text-6xl">🔒</span>
-                        )}
-                      </div>
-
-                      <div className="relative z-10">
-                        <h3 className={cn("font-black text-sm leading-tight mb-1", isUnlocked ? "text-slate-800" : "text-slate-400")}>
-                          {trophy.label}
-                        </h3>
-                        {isUnlocked ? (
-                          <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">CONSEGUIDO</span>
-                        ) : (
-                          <span className="text-[9px] font-bold text-slate-400">{trophy.th} XP</span>
-                        )}
-                      </div>
+              <div className="flex flex-col md:flex-row gap-6 items-start">
+                
+                {/* COLUMNA 1: TROFEOS (Se lleva el 70% del espacio) */}
+                <div className="flex-1 w-full">
+                    <div className="mb-6">
+                        <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                            🏆 Sala de Trofeos
+                        </h2>
+                        <p className="text-slate-500 text-sm font-medium">Colecciona todos los emblemas.</p>
                     </div>
-                  );
-                })}
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {[
+                          { th: 25, label: 'Hormiga Obrera', img: '/assets/trophies/trofeo_1.png', color: 'bg-stone-100' },
+                          { th: 35, label: 'Rana Curiosa', img: '/assets/trophies/trofeo_2.png', color: 'bg-emerald-100' },
+                          { th: 55, label: 'Loro Parlanchín', img: '/assets/trophies/trofeo_3.png', color: 'bg-red-100' },
+                          { th: 85, label: 'Tucán Colorido', img: '/assets/trophies/trofeo_4.png', color: 'bg-orange-100' },
+                          { th: 125, label: 'Mono Ágil', img: '/assets/trophies/trofeo_5.png', color: 'bg-amber-100' },
+                          { th: 175, label: 'Jaguar Veloz', img: '/assets/trophies/trofeo_6.png', color: 'bg-yellow-100' },
+                          { th: 235, label: 'Gorila Fuerte', img: '/assets/trophies/trofeo_7.png', color: 'bg-slate-200' },
+                          { th: 300, label: 'Rey León', img: '/assets/trophies/trofeo_8.png', color: 'bg-purple-100' },
+                        ].map((trophy, idx) => {
+                          const isUnlocked = courseXP >= trophy.th;
+                          return (
+                            <div 
+                              key={idx} 
+                              className={cn(
+                                "aspect-square rounded-2xl p-3 flex flex-col items-center justify-center text-center border-2 transition-all duration-500 relative overflow-hidden group", 
+                                isUnlocked 
+                                  ? "bg-white border-white shadow-lg hover:-translate-y-1" 
+                                  : "bg-slate-50 border-transparent opacity-60 grayscale"
+                              )}
+                            >
+                              {/* Imagen del Trofeo */}
+                              <div className={cn("mb-2 transition-transform relative z-10", isUnlocked ? "scale-105 group-hover:scale-110 drop-shadow-md" : "scale-90 opacity-50")}>
+                                {isUnlocked ? (
+                                  <ImageWithFallback src={trophy.img} alt={trophy.label} className="w-16 h-16 object-cover rounded-full mx-auto" />
+                                ) : (
+                                  <span className="text-4xl">🔒</span>
+                                )}
+                              </div>
+                              <h3 className="font-bold text-xs leading-tight mb-1 truncate relative z-10 w-full text-slate-700">
+                                {trophy.label}
+                              </h3>
+                              <span className="text-[9px] font-bold text-slate-400 block relative z-10">{isUnlocked ? 'CONSEGUIDO' : `${trophy.th} XP`}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                </div>
+
+                {/* COLUMNA 2: HABILIDADES (Panel Lateral Fijo) */}
+                <div className="w-full md:w-72 shrink-0 space-y-5">
+                    
+                    {/* Tarjeta de Resumen XP */}
+                    <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10"><Trophy className="w-24 h-24" /></div>
+                        <div className="relative z-10">
+                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-wider mb-1">Nivel Actual</p>
+                            <h3 className="text-3xl font-black mb-4">{courseXP} XP</h3>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-xs font-medium text-indigo-100">
+                                    <span>Misiones</span>
+                                    <span className="text-white font-bold">{submissions.length}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs font-medium text-indigo-100">
+                                    <span>Trofeos</span>
+                                    <span className="text-white font-bold">
+                                        {[25,35,55,85,125,175,235,300].filter(th => courseXP >= th).length} / 8
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ✅ TARJETA DE HABILIDADES (VERSIÓN PRO 6 ICONOS) */}
+                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
+                        <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-xs uppercase tracking-wider">
+                            <Zap className="w-4 h-4 text-amber-500" /> Habilidades
+                        </h3>
+                        
+                        {/* Grid de 6 Habilidades */}
+                        <div className="grid grid-cols-2 gap-3">
+                            {skillsStats.map((skill, i) => (
+                                <div key={i} className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                    <div className="flex justify-between items-center mb-1.5">
+                                        <span className="text-lg">{skill.icon}</span>
+                                        <span className="text-[10px] font-black text-slate-600">{skill.percent}%</span>
+                                    </div>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase leading-tight mb-1.5">
+                                        {skill.label}
+                                    </p>
+                                    {/* Mini Barra de Progreso */}
+                                    <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-indigo-500 rounded-full transition-all duration-1000" 
+                                            style={{ width: `${skill.percent}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-slate-50 text-center">
+                            <p className="text-[10px] font-bold text-indigo-500 bg-indigo-50 inline-block px-3 py-1 rounded-full">
+                                ¡Completa misiones (nota 5+) para subir nivel!
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+
               </div>
             </div>
           )}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'; // 👈 AÑADIDO useMemo
 import { Student, Submission, Task } from '../types';
-import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle, Trash2, BookOpen, Check, Edit2, Save, Leaf, Clock, Loader2 } from 'lucide-react'; // 👈 AÑADIDO Clock y Loader2
+import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle, Trash2, BookOpen, Check, Edit2, Save, Leaf, Clock, Loader2, Target, ChevronDown, ChevronUp } from 'lucide-react'; // 👈 AÑADIDO FLECHAS
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'; // 👈 NUEVO
@@ -12,6 +12,16 @@ import { toast } from 'sonner@2.0.3';
 import { TextAnnotator } from './TextAnnotator';
 import { PDFAnnotator } from './PDFAnnotator';
 import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ AGREGADO: Sistema de notificaciones
+
+// ✅ CONFIGURACIÓN VISUAL DE HABILIDADES
+const SKILL_METRICS = [
+  { id: 'grammar', label: 'Gramática', icon: '🧩', color: 'text-indigo-600', bar: 'bg-indigo-500' },
+  { id: 'vocabulary', label: 'Vocabulario', icon: '🗣️', color: 'text-emerald-600', bar: 'bg-emerald-500' },
+  { id: 'listening', label: 'Comprensión Oral', icon: '🎧', color: 'text-rose-600', bar: 'bg-rose-500' },
+  { id: 'reading', label: 'Comprensión Lectora', icon: '📖', color: 'text-cyan-600', bar: 'bg-cyan-500' },
+  { id: 'speaking', label: 'Expresión Oral', icon: '🎙️', color: 'text-amber-600', bar: 'bg-amber-500' },
+  { id: 'culture', label: 'Cultura', icon: '🌍', color: 'text-purple-600', bar: 'bg-purple-500' },
+];
 
 interface StudentPassportProps {
   student: Student;
@@ -47,6 +57,17 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
   // ✅ NUEVO: Estados para gestión de nivel
   const [isEditingLevel, setIsEditingLevel] = useState(false);
   const [tempLevel, setTempLevel] = useState(student.current_level_code);
+
+  // ✅ ESTADO PARA COLAPSAR HABILIDADES EN MÓVIL
+  // Iniciamos en true, pero el useEffect lo ajustará si la pantalla es pequeña
+  const [showSkills, setShowSkills] = useState(true);
+
+  useEffect(() => {
+    // Si la pantalla es menor a 768px (móvil), empezamos colapsados para ahorrar espacio
+    if (window.innerWidth < 768) {
+      setShowSkills(false);
+    }
+  }, []);
 
   // ✅ NUEVO: Función para guardar el nivel definitivo
   const handleLevelUpdate = async (newLevel: string) => {
@@ -361,6 +382,55 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
     return levels.find(l => calculatedXP >= l.th) || levels[levels.length - 1];
   }, [calculatedXP]);
 
+  // ✅ 3. CÁLCULO DE HABILIDADES (Regla: Nota >= 5 suma +1 punto)
+  const skillsBreakdown = useMemo(() => {
+    // Configuración visual
+    const metrics = [
+      { id: 'grammar', label: 'Gramática', icon: '🧩', color: 'text-indigo-600', bar: 'bg-indigo-500' },
+      { id: 'vocabulary', label: 'Vocabulario', icon: '🗣️', color: 'text-emerald-600', bar: 'bg-emerald-500' },
+      { id: 'listening', label: 'Comprensión Oral', icon: '🎧', color: 'text-rose-600', bar: 'bg-rose-500' },
+      { id: 'reading', label: 'Comprensión Lectora', icon: '📖', color: 'text-cyan-600', bar: 'bg-cyan-500' },
+      { id: 'speaking', label: 'Expresión Oral', icon: '🎙️', color: 'text-amber-600', bar: 'bg-amber-500' },
+      { id: 'culture', label: 'Cultura', icon: '🌍', color: 'text-purple-600', bar: 'bg-purple-500' },
+    ];
+
+    // Inicializar contadores
+    const stats: Record<string, number> = {};
+    metrics.forEach(m => stats[m.id] = 0);
+
+    // Procesar cada intento aprobado
+    submissions.forEach(sub => {
+       // 1. Obtener nota (0-10)
+       const grade = sub.grade || (sub.score ? (sub.score / (sub.total || 1)) * 10 : 0);
+       
+       // 2. SOLO SUMA SI APRUEBA (>= 5)
+       if (grade >= 5) {
+         const task = tasks.find(t => t.id === sub.task_id);
+         const tags = task?.content_data?.tags || [];
+         
+         // 3. Sumar +1 a cada etiqueta que tenga la tarea
+         tags.forEach((tagId: string) => {
+           if (stats[tagId] !== undefined) {
+             // Tope máximo de 100 puntos
+             stats[tagId] = Math.min(100, stats[tagId] + 1);
+           }
+         });
+       }
+    });
+
+    // Mapear a visual
+    return metrics.map(m => {
+      const points = stats[m.id];
+      const isGold = points >= 100; // 🏆 ESTADO DORADO
+
+      return {
+        ...m,
+        points, // Valor real (0-100)
+        isGold
+      };
+    });
+  }, [submissions, tasks]);
+
   // --- CÁLCULO DE PROMEDIO (LÓGICA UNIFICADA) ---
   const validGrades = submissions
     .map(s => (s.grade && s.grade > 0) ? s.grade : 0)
@@ -405,7 +475,7 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
       
       {/* 1. HEADER DE FONDO (Color de Marca Fijo) */}
       <div className="h-32 shrink-0 w-full bg-[#6344A6] relative"> {/* 👈 COLOR FIJO */}
-         <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+         <div className="absolute inset-0 bg-gradient-to-br from-[#211259] via-[#6344A6] to-[#8B5FBF] opacity-80"></div>
          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
             <div className="bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white shadow-sm">
                 <span className="font-black text-[10px] uppercase tracking-widest">Pasaporte Oficial</span>
@@ -502,20 +572,90 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
 
             {/* SECCIONES INFERIORES */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
-                {/* Habilidades */}
+                {/* ✅ SECCIÓN DE HABILIDADES (COLAPSABLE EN MÓVIL) */}
                 <div className="md:col-span-1">
-                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 h-full">
-                        <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-xs uppercase tracking-wider"><Zap className="w-4 h-4 text-amber-500" /> Habilidades</h3>
-                        <div className="space-y-4">
-                            <SkillBar label="Vocabulario" percent={vocabScore} color="bg-emerald-500" />
-                            <SkillBar label="Gramática" percent={grammarScore} color="bg-blue-500" />
-                        </div>
+                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 h-full transition-all overflow-hidden">
+                        {/* HEADER INTERACTIVO */}
+                        <button 
+                            onClick={() => setShowSkills(!showSkills)}
+                            className="w-full flex items-center justify-between group focus:outline-none"
+                        >
+                            <h3 className="font-bold text-slate-700 flex items-center gap-2 text-xs uppercase tracking-wider">
+                                <Target className="w-4 h-4 text-indigo-500" /> 
+                                Habilidades
+                            </h3>
+                            {/* Icono de flecha que rota */}
+                            <div className={`p-1 rounded-full hover:bg-slate-100 text-slate-400 transition-all ${showSkills ? 'rotate-180' : ''}`}>
+                                <ChevronDown className="w-4 h-4" />
+                            </div>
+                        </button>
+                        
+                        {/* CONTENIDO DESPLEGABLE */}
+                        {showSkills && (
+                            <div className="space-y-5 mt-5 animate-in fade-in zoom-in-95 duration-300 origin-top">
+                                {skillsBreakdown.map((skill) => (
+                                    <div key={skill.id} className="group">
+                                        <div className="flex justify-between items-end mb-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={cn("text-lg transition-transform", skill.isGold ? "scale-110 drop-shadow-sm" : "opacity-80 group-hover:scale-110")}>
+                                                    {skill.icon}
+                                                </span>
+                                                <span className={cn("text-xs font-black uppercase tracking-wide", skill.isGold ? "text-amber-500" : "text-slate-500")}>
+                                                    {skill.label}
+                                                </span>
+                                            </div>
+                                            <span className={cn("text-xs font-black", skill.isGold ? "text-amber-500" : skill.color)}>
+                                                {skill.points}%
+                                            </span>
+                                        </div>
+                                        
+                                        {/* Barra de Progreso */}
+                                        <div className={cn("h-2.5 w-full rounded-full overflow-hidden", skill.isGold ? "bg-amber-100" : "bg-slate-100")}>
+                                            <div 
+                                                className={cn(
+                                                    "h-full rounded-full transition-all duration-1000 relative", 
+                                                    skill.isGold ? "bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 animate-pulse" : skill.bar
+                                                )} 
+                                                style={{ width: `${skill.points}%` }}
+                                            >
+                                                {skill.isGold && (
+                                                    <div className="absolute inset-0 bg-white/30 animate-[shimmer_2s_infinite]"/>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {skillsBreakdown.every(s => s.points === 0) && (
+                                    <p className="text-center text-[10px] text-slate-400 italic mt-6 bg-slate-50 py-2 rounded-xl">
+                                        ¡Completa misiones (nota 5+) para subir nivel!
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* Resumen Compacto cuando está cerrado (Opcional, para que no quede vacío) */}
+                        {!showSkills && (
+                            <div className="mt-3">
+                                <div className="flex justify-evenly gap-1 pb-2 opacity-60">
+                                    {skillsBreakdown.map(skill => (
+                                        <div key={skill.id} className="flex-1 flex flex-col items-center">
+                                            <span className="text-base">{skill.icon}</span>
+                                            <div className={`h-1 w-6 rounded-full mt-1 ${skill.bar}`} style={{width: '20px'}}></div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-center text-[10px] text-slate-400 italic bg-slate-50 py-2 rounded-xl">
+                                    ¡Completa misiones (nota 5+) para subir nivel!
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {/* Historial Interactivo */}
                 <div className="md:col-span-2">
-                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
+                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 h-full">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider"><Calendar className="w-4 h-4 text-indigo-500" /> Historial</h3>
                             <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">{submissions.length} Total</span>

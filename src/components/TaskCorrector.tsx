@@ -81,6 +81,17 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
               {submission.textContent?.split(/\s+/).length || 0} palabras
             </span>
           </div>
+
+          {/* Si es una tarea de audio, mostrar el link como reproductor o enlace */}
+          {submission.textContent && submission.textContent.includes('http') && (
+            <div className="bg-rose-50 p-4 rounded-xl border border-rose-200 mb-4">
+              <p className="text-xs font-black text-rose-800 uppercase mb-2">🎙️ Grabación del Alumno</p>
+              <a href={submission.textContent} target="_blank" rel="noreferrer" className="text-indigo-600 font-bold underline break-all text-sm hover:text-indigo-800">
+                {submission.textContent}
+              </a>
+            </div>
+          )}
+
           {isWriting ? (
             <TextAnnotator 
               // 🔥 LA CLAVE MÁGICA: Forzar renderizado si cambian los datos

@@ -10,6 +10,7 @@ import { NotificationBell } from "./components/NotificationBell";
 import { StudentDashboard } from "./components/StudentDashboard";
 import { TaskBuilder } from "./components/TaskBuilder";
 import { PDFAnnotator } from "./components/PDFAnnotator";
+import { AudioTaskPlayer } from "./components/AudioTaskPlayer";
 import { ExercisePlayer } from "./components/ExercisePlayer";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ForgotPasswordModal } from "./components/ForgotPasswordModal";
@@ -145,6 +146,7 @@ export default function App() {
     | "pdf-viewer"
     | "writing"
     | "pdf-annotator"
+    | "audio-player"
   >("home");
 
   const [selectedStudentId, setSelectedStudentId] = useState<
@@ -1017,6 +1019,8 @@ export default function App() {
               <TeacherDashboard
                 classroom={classroom}
                 students={students}
+                // 👇 AÑADIR ESTA LÍNEA: courseCode para namespacing
+                courseCode={courses.find(c => String(c.id) === selectedClassId)?.shortname || 'GLOBAL'}
                 // ✅ FILTRO 1: Solo pasar tareas de ESTE curso (Prefijo CE1-, ING-, etc)
                 tasks={tasks.filter(t => {
                     const currentCourse = courses.find(c => String(c.id) === selectedClassId);
@@ -1123,6 +1127,8 @@ export default function App() {
                   xp_points: 0,
                 } as any)
               }
+              // 👇 AÑADIR ESTA LÍNEA: courseCode para namespacing
+              courseCode={courses.find(c => String(c.id) === selectedClassId)?.shortname || 'GLOBAL'}
               // ✅ FILTRO 5 (ESTUDIANTE): Solo tareas de este curso
               tasks={tasks.filter(t => {
                   const currentCourse = courses.find(c => String(c.id) === selectedClassId);
@@ -1155,6 +1161,9 @@ export default function App() {
                 ) {
                   setSelectedTask(task);
                   setView("pdf-annotator");
+                } else if (task.content_data?.type === "audio") {
+                  setSelectedTask(task);
+                  setView("audio-player");
                 } else {
                   const exercise: Exercise = {
                     title: task.title,
@@ -1222,6 +1231,40 @@ export default function App() {
               }}
             />
           )}
+
+        {/* ✅ VISOR DE TAREA DE AUDIO */}
+        {view === "audio-player" && selectedTask && (
+          <AudioTaskPlayer
+            task={selectedTask}
+            onExit={() => {
+              setSelectedTask(null);
+              setView("dashboard");
+            }}
+            onComplete={async (score, answers, audioLink) => {
+              toast.loading("Enviando audio-misión...");
+              if (currentUser) {
+                await submitTaskResult(
+                  selectedTask.id,
+                  selectedTask.title,
+                  currentUser.id,
+                  currentUser.name,
+                  score,
+                  // Si tiene preguntas, el total es su cantidad. Si no, ponemos 10 simbólico.
+                  (selectedTask.content_data.questions?.length || 10),
+                  answers,
+                  audioLink, // 👈 Pasamos el link como 'textContent' para que se guarde
+                  "submitted"
+                );
+                await loadSubmissions(); // Recargar XP y todo
+                toast.dismiss();
+                toast.success("🎙️ ¡Misión completada!");
+              }
+              setSelectedTask(null);
+              setView("dashboard");
+            }}
+          />
+        )}
+
         {view === "exercise" && activeExercise && (
           <ExercisePlayer
             exercise={activeExercise}
