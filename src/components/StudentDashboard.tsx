@@ -513,24 +513,39 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             <div 
                               key={idx} 
                               className={cn(
-                                "aspect-square rounded-2xl p-3 flex flex-col items-center justify-center text-center border-2 transition-all duration-500 relative overflow-hidden group", 
+                                "aspect-square rounded-2xl p-3 flex flex-col items-center justify-end text-center border-2 transition-all duration-500 relative overflow-hidden group", 
                                 isUnlocked 
                                   ? "bg-white border-white shadow-lg hover:-translate-y-1" 
                                   : "bg-slate-50 border-transparent opacity-60 grayscale"
                               )}
                             >
-                              {/* Imagen del Trofeo */}
-                              <div className={cn("mb-2 transition-transform relative z-10", isUnlocked ? "scale-105 group-hover:scale-110 drop-shadow-md" : "scale-90 opacity-50")}>
-                                {isUnlocked ? (
-                                  <ImageWithFallback src={trophy.img} alt={trophy.label} className="w-16 h-16 object-cover rounded-full mx-auto" />
-                                ) : (
-                                  <span className="text-4xl">🔒</span>
-                                )}
-                              </div>
-                              <h3 className="font-bold text-xs leading-tight mb-1 truncate relative z-10 w-full text-slate-700">
+                              {/* Imagen del Trofeo como Background */}
+                              {isUnlocked ? (
+                                <div className="absolute inset-0 z-0">
+                                  <ImageWithFallback 
+                                    src={trophy.img} 
+                                    alt={trophy.label} 
+                                    className="w-full h-full object-cover" 
+                                  />
+                                </div>
+                              ) : (
+                                <div className="absolute inset-0 z-0 flex items-center justify-center">
+                                  <span className="text-4xl opacity-50">🔒</span>
+                                </div>
+                              )}
+                              
+                              {/* Overlay oscuro sutil para mejorar legibilidad */}
+                              {isUnlocked && (
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-[1] rounded-2xl" />
+                              )}
+                              
+                              {/* Textos con sombra paralela */}
+                              <h3 className="font-bold text-xs leading-tight mb-1 relative z-10 w-full text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                                 {trophy.label}
                               </h3>
-                              <span className="text-[9px] font-bold text-slate-400 block relative z-10">{isUnlocked ? 'CONSEGUIDO' : `${trophy.th} XP`}</span>
+                              <span className="text-[9px] font-bold block relative z-10 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                                {isUnlocked ? 'CONSEGUIDO' : `${trophy.th} XP`}
+                              </span>
                             </div>
                           );
                         })}

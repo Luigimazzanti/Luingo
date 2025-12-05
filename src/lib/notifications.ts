@@ -248,21 +248,20 @@ export const emailTemplates = {
   // ✅ [NUEVO] TROFEO DESBLOQUEADO 🏆
   trophyUnlocked: (studentName: string, trophyName: string, trophyImage: string, xp: number) =>
     baseTemplate(`
-    <div style="background: linear-gradient(135deg, #F59E0B 0%, #F97316 100%); padding: 50px 0; text-align: center; position: relative; overflow: hidden;">
+    <div style="background: linear-gradient(135deg, #F59E0B 0%, #F97316 100%); padding: 25px 0; text-align: center; position: relative; overflow: hidden;">
       <div style="position: absolute; top: -50px; left: -50px; width: 200px; height: 200px; background: rgba(255,255,255,0.1); border-radius: 50%; filter: blur(40px);"></div>
       <div style="position: absolute; bottom: -50px; right: -50px; width: 250px; height: 250px; background: rgba(255,255,255,0.1); border-radius: 50%; filter: blur(50px);"></div>
       <div style="font-size: 64px; margin-bottom: 10px; animation: bounce 2s infinite;">🏆</div>
       <h1 style="color: white; margin: 0; font-family: 'Poppins', sans-serif; font-weight: 900; font-size: 32px; text-shadow: 0 4px 10px rgba(0,0,0,0.2);">¡Woot woot!</h1>
       <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 10px 0 0; font-weight: 600;">Nuevo Trofeo Desbloqueado</p>
     </div>
-    <div style="padding: 50px 30px; text-align: center;">
+    <div style="padding: 25px 30px; text-align: center;">
       <p style="font-size: 20px; color: #1e293b; margin-top: 0; font-weight: 600;">Hola <strong style="color: #6344A6;">${studentName}</strong>,</p>
       <p style="color: #475569; line-height: 1.7; font-size: 16px; margin: 20px 0;">
         ¡Lo has logrado! 🎉 Tu esfuerzo y dedicación han dado frutos. Acabas de ganar el trofeo <strong>${trophyName}</strong>.
       </p>
 
-      <!-- Imagen del Trofeo Centrada y Destacada -->
-      <div style="margin: 40px 0; display: flex; justify-content: center;">
+      <div style="margin: 20px 0; display: flex; justify-content: center;">
         <div style="background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); padding: 30px; border-radius: 20px; box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3); border: 4px solid #F59E0B; display: inline-block;">
           <img src="${trophyImage}" alt="${trophyName}" style="width: 150px; height: 150px; object-fit: cover; border-radius: 50%; box-shadow: 0 8px 25px rgba(0,0,0,0.15);" />
           <p style="margin: 20px 0 0; color: #92400E; font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;">${trophyName}</p>
