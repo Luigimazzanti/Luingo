@@ -301,14 +301,43 @@ export default function App() {
               meData.userid,
             );
 
-            // 3. Reconstruir usuario
+            // 3. ✅ [DETECCIÓN INTELIGENTE DE ROL EN RESTAURACIÓN] 🚀
+            let finalRole: "teacher" | "student" = "student";
+            
+            if (meData.userissiteadmin) {
+              finalRole = "teacher";
+            } else {
+              // Escanear cursos para detectar rol de profesor
+              try {
+                const myCourses = await getUserCourses(meData.userid);
+                if (myCourses && myCourses.length > 0) {
+                  const coursesToCheck = myCourses.slice(0, 3);
+                  
+                  for (const course of coursesToCheck) {
+                    try {
+                      const profile = await getMyCourseProfile(meData.userid, course.id);
+                      if (profile?.roles?.some((r: any) => 
+                        ["editingteacher", "teacher", "manager"].includes(r.shortname)
+                      )) {
+                        finalRole = "teacher";
+                        break;
+                      }
+                    } catch (e) {
+                      console.warn(`⚠️ No se pudo verificar rol en curso ${course.id} (restauración)`);
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn("⚠️ No se pudieron cargar cursos para verificar rol (restauración)");
+              }
+            }
+
+            // 4. Reconstruir usuario
             const restoredUser: any = {
               id: String(meData.userid),
               name: meData.fullname,
               email: meData.email,
-              role: meData.userissiteadmin
-                ? "teacher"
-                : "student",
+              role: finalRole, // ✅ Rol inteligentemente detectado
               avatar_url:
                 userPrefs?.avatar_url || meData.userpictureurl,
               current_level_code: userPrefs?.level_code || "A1",
@@ -319,9 +348,9 @@ export default function App() {
             };
             setCurrentUser(restoredUser);
 
-            // 4. Cargar datos y BUSCAR EMAIL DEL PROFESOR
-            if (!meData.userissiteadmin) {
-              // Solo si es alumno
+            // 5. Cargar datos según el rol detectado
+            if (finalRole === "student") {
+              // Lógica de estudiante
               const courses = await getUserCourses(
                 meData.userid,
               );
@@ -359,8 +388,11 @@ export default function App() {
               );
               setRealSubmissions(mySubs);
             } else {
-              // Lógica profesor
-              setCourses(await getCourses());
+              // Lógica profesor (obtener cursos según permisos)
+              const courses = meData.userissiteadmin 
+                ? await getCourses() 
+                : await getUserCourses(meData.userid);
+              setCourses(courses || []);
               const [t, s] = await Promise.all([
                 getMoodleTasks(),
                 getMoodleSubmissions(),
@@ -403,27 +435,22 @@ export default function App() {
     }
   }, [loading]); // <--- IMPORTANTE: Dependencia 'loading' añadida
 
-  // ========== LOGIN ESTRATÉGICO Y RÁPIDO ==========
+  // ========== LOGIN HÍBRIDO (Velocidad + Precisión de Rol) ==========
   const handleRealLogin = async () => {
     if (!usernameInput || !passwordInput) {
-      toast.error("Faltan datos", {
-        description: "Por favor ingresa usuario y contraseña",
-      });
+      toast.error("Faltan datos", { description: "Por favor ingresa usuario y contraseña" });
       return;
     }
     setLoading(true);
 
     try {
-      // 1. AUTENTICACIÓN
-      const token = await loginToMoodle(
-        usernameInput,
-        passwordInput,
-      );
+      // 1. AUTENTICACIÓN (Rápida)
+      const token = await loginToMoodle(usernameInput, passwordInput);
       if (!token) throw new Error("Wrong password");
 
       setUserToken(token);
 
-      // 2. PERFIL BÁSICO
+      // 2. OBTENER PERFIL BÁSICO
       let meData;
       try {
         meData = await getMe(token);
@@ -434,39 +461,78 @@ export default function App() {
 
       if (!meData || !meData.userid) throw new Error("No se pudo cargar el perfil");
 
-      // 3. OPTIMIZACIÓN: Detección de email (evitamos llamar a getUserByUsername si ya lo tenemos)
+      // ✅ CORRECCIÓN DE USUARIO: Usamos el username real de Moodle (ej. 'juan.perez')
+      // en lugar de lo que escribiste en el input (ej. 'Juan.Perez' o email).
+      const realUsername = meData.username || usernameInput;
+
+      // 3. DETECCIÓN DE ROL INTELIGENTE 🧠
+      // Aquí es donde invertimos un poco de tiempo para asegurar la identidad correcta.
+      let finalRole: "teacher" | "student" = meData.userissiteadmin ? "teacher" : "student";
+      let moodleCourses: any[] = [];
+
+      try {
+        // Traemos los cursos
+        moodleCourses = await getUserCourses(meData.userid);
+        
+        // Si NO es Super Admin, investigamos si es Profe en algún curso REAL.
+        if (finalRole !== "teacher" && moodleCourses && moodleCourses.length > 0) {
+           
+           // A. LA REGLA DE ORO: Filtramos cursos "basura" o administrativos
+           const academicCourses = moodleCourses.filter((c: any) => 
+              c.id !== 1 && 
+              c.shortname !== "LuinGo" && 
+              c.format !== "site" && 
+              // Bloqueamos variantes de nombre para asegurar
+              !c.fullname.toUpperCase().includes("CAMPUS VIRTUAL") &&
+              !c.fullname.toUpperCase().includes("CAMPOS VIRTUAL") &&
+              c.shortname !== "campus_global"
+           );
+
+           // B. ESCANEO PARALELO (Rápido)
+           // Solo revisamos los primeros 10 cursos académicos para no perder tiempo.
+           if (academicCourses.length > 0) {
+               console.log("🕵️‍♂️ Verificando roles en cursos académicos...");
+               const coursesToCheck = academicCourses.slice(0, 10);
+               
+               // Promise.all hace que las 10 peticiones ocurran A LA VEZ (tarda lo que tarda 1 sola)
+               const profiles = await Promise.all(
+                  coursesToCheck.map(c => getMyCourseProfile(meData.userid, c.id).catch(e => null))
+               );
+
+               // C. DECISIÓN FINAL
+               // Si tiene CUALQUIER rol de autoridad en un curso académico -> ES PROFESOR
+               const isRealTeacher = profiles.some(p => 
+                  p?.roles?.some((r: any) => 
+                    ['editingteacher', 'teacher', 'manager', 'coursecreator'].includes(r.shortname)
+                  )
+               );
+
+               if (isRealTeacher) {
+                  finalRole = "teacher";
+               }
+           }
+        }
+      } catch (e) {
+        console.warn("Error verificando roles, manteniendo rol por defecto", e);
+      }
+
+      // 4. EMAIL Y PREFERENCIAS
       let realEmail = meData.email;
       if (!realEmail || realEmail.includes("nomail")) {
            try {
-              const fullProfile = await getUserByUsername(usernameInput);
+              const fullProfile = await getUserByUsername(realUsername);
               if (fullProfile?.email) realEmail = fullProfile.email;
-           } catch (e) { console.warn("⚠️ Usando email básico"); }
+           } catch (e) { console.warn("Usando email básico"); }
       }
 
-      // 4. DETECCIÓN DE ROL RÁPIDA (Sin bloquear esperando cursos profundos)
-      let finalRole: "teacher" | "student" = meData.userissiteadmin ? "teacher" : "student";
-      
-      // 5. CARGA PARALELA (Cursos + Preferencias) - CLAVE PARA LA VELOCIDAD 🚀
-      // Lanzamos las peticiones al mismo tiempo en lugar de una por una
-      const [userPrefs, moodleCourses] = await Promise.all([
-          getUserPreferences(meData.userid).catch(() => null),
-          (finalRole === "student" || !meData.userissiteadmin) 
-             ? getUserCourses(meData.userid).catch(() => []) 
-             : getCourses().catch(() => [])
-      ]);
+      const userPrefs = await getUserPreferences(meData.userid).catch(() => null);
 
-      // Verificar rol de profesor en cursos si no es admin (lógica rápida)
-      if (finalRole === "student" && moodleCourses && moodleCourses.length > 0) {
-          // No hacemos llamada de red extra aquí, asumimos estudiante por defecto
-          // y si necesitamos permisos especiales los cargaremos en el dashboard
-      }
-
-      // 6. CONSTRUCCIÓN DE USUARIO
+      // 5. CREAR USUARIO (CON ROL CONFIRMADO)
       const userProfile: any = {
         id: String(meData.userid),
-        email: realEmail || `${usernameInput}@sin-email.com`,
+        email: realEmail || `${realUsername}@sin-email.com`,
         name: meData.fullname,
-        role: finalRole,
+        role: finalRole, // 👈 ROL CORRECTO
         avatar_url: userPrefs?.avatar_url || meData.userpictureurl,
         current_level_code: userPrefs?.level_code || "A1",
         pending_level_test: userPrefs?.pending_level_test || false,
@@ -476,23 +542,23 @@ export default function App() {
 
       setCurrentUser(userProfile);
 
-      // 7. PROCESAMIENTO DE CURSOS (Rápido)
+      // 6. PREPARAR CURSOS PARA MOSTRAR
       if (Array.isArray(moodleCourses)) {
-          const cleanCourses = moodleCourses.filter(
+          // Filtramos también la vista visual para que no salga el Campus Virtual
+          const displayCourses = moodleCourses.filter(
             (c: any) =>
               c.id !== 1 &&
               c.shortname !== "LuinGo" &&
               c.format !== "site" &&
-              c.fullname !== "Campus Virtual Global" && 
+              !c.fullname.toUpperCase().includes("CAMPUS VIRTUAL") &&
+              !c.fullname.toUpperCase().includes("CAMPOS VIRTUAL") &&
               c.shortname !== "campus_global"
           );
-          setCourses(cleanCourses);
+          setCourses(displayCourses);
 
-          // ⚡ CARGA EN SEGUNDO PLANO (Background) ⚡
-          // No usamos 'await' aquí para no bloquear la UI. 
-          // Buscamos el email del profe mientras el usuario ya está viendo sus clases.
-          if (cleanCourses.length > 0 && finalRole === 'student') {
-            getEnrolledUsers(cleanCourses[0].id)
+          // Si resulta ser estudiante, buscamos el email de su profesor en background
+          if (displayCourses.length > 0 && finalRole === 'student') {
+            getEnrolledUsers(displayCourses[0].id)
               .then((users) => {
                 if (Array.isArray(users)) {
                   const teacher = users.find((u: any) =>
@@ -504,27 +570,27 @@ export default function App() {
           }
       }
 
-      // 8. ⚡ CARGA DE TAREAS Y ENTREGAS EN SEGUNDO PLANO ⚡
-      // ¡ELIMINAMOS EL AWAIT QUE BLOQUEABA TODO!
-      // Lanzamos la promesa y dejamos que React actualice el estado cuando termine.
+      // ⚡ 7. LA CLAVE DE LA VELOCIDAD: CARGA EN SEGUNDO PLANO ⚡
+      // Ya te dejamos entrar (setCurrentUser arriba), ahora cargamos "el peso" sin bloquearte.
       Promise.all([
           getMoodleTasks(),
           getMoodleSubmissions()
       ]).then(([tasksData, subsData]) => {
-          console.log("📦 Contenido secundario cargado en background");
+          console.log("📦 Contenido cargado en segundo plano");
           setTasks(tasksData || []);
           if (finalRole === "teacher") {
             setRealSubmissions(subsData || []);
           } else {
             const mySubs = (subsData || []).filter((s: any) => String(s.student_id) === String(userProfile.id));
             setRealSubmissions(mySubs);
-            // Actualizar datos del estudiante una vez lleguen las tareas
             setStudents(prev => prev.length > 0 ? [{...prev[0], completed_tasks: mySubs.length, total_tasks: tasksData?.length || 0}] : []);
           }
-      }).catch(e => console.warn("Background load warning", e));
+      }).catch(e => console.warn("Background load info:", e));
 
-      // 🎉 LISTO: Desbloqueamos la UI inmediatamente
-      toast.success(`¡Hola ${meData.firstname}!`, { description: "Bienvenido a LuinGo 🚀" });
+      // 🎉 ¡ADENTRO!
+      toast.success(`¡Hola ${meData.firstname}!`, { 
+          description: `Sesión iniciada como ${finalRole === 'teacher' ? 'Profesor' : 'Estudiante'}` 
+      });
 
     } catch (e) {
       console.error("🚨 LOGIN ERROR:", e);
