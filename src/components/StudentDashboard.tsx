@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  FileText
+  FileText,
+  Mic
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { CommunityFeed } from './community/CommunityFeed';
@@ -245,6 +246,28 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       .sort((a, b) => new Date(a.submitted_at || '').getTime() - new Date(b.submitted_at || '').getTime());
     
     if (attempts.length > 0) setSelectedAttempts(attempts);
+  };
+
+  // ✅ DETECTOR DE AUDIO MEJORADO
+  const renderAudioPlayer = (text: string) => {
+    if (!text) return null;
+    const vocarooMatch = text.match(/https?:\/\/(?:www\.)?(?:vocaroo\.com|voca\.ro)\/([\w-]+)/); // 👈 Regex corregido
+    if (vocarooMatch) {
+      const id = vocarooMatch[1];
+      return (
+        <div className="bg-rose-50 p-4 rounded-2xl border-2 border-rose-100 shadow-sm mb-4">
+           <div className="flex items-center gap-2 mb-3 text-rose-800 font-bold text-xs uppercase tracking-wider">
+              <Mic className="w-4 h-4" /> Audio del Alumno
+           </div>
+           <iframe 
+             width="100%" height="60" 
+             src={`https://vocaroo.com/embed/${id}?autoplay=0`}
+             frameBorder="0" className="rounded-lg shadow-sm bg-white" title="Vocaroo Audio"
+           />
+        </div>
+      );
+    }
+    return null;
   };
 
   // --- COMPONENTE NAV DOCK (DISEÑO MODERNO) ---
@@ -627,18 +650,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                             {/* CASO 2: Redacción */}
                             {att.textContent && att.textContent.length > 0 && (
-                                <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-sm">
-                                    <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-4 pb-4 border-b border-slate-100">
-                                        <FileText className="w-4 h-4 text-indigo-500" /> Tu Redacción
-                                    </h4>
-                                    <TextAnnotator 
-                                        text={att.textContent} 
-                                        annotations={att.corrections || []} 
-                                        onAddAnnotation={()=>{}} 
-                                        onRemoveAnnotation={()=>{}} 
-                                        readOnly={true} 
-                                    />
-                                </div>
+                                // ✅ LÓGICA EXCLUSIVA AQUÍ TAMBIÉN
+                                renderAudioPlayer(att.textContent) || (
+                                  <div className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-sm">
+                                      <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-4 pb-4 border-b border-slate-100">
+                                          <FileText className="w-4 h-4 text-indigo-500" /> Tu Redacción
+                                      </h4>
+                                      <TextAnnotator 
+                                          text={att.textContent} 
+                                          annotations={att.corrections || []} 
+                                          onAddAnnotation={()=>{}} 
+                                          onRemoveAnnotation={()=>{}} 
+                                          readOnly={true} 
+                                      />
+                                  </div>
+                                )
                             )}
 
                             {/* CASO 3: Quiz (Respuestas detalladas) */}
@@ -675,6 +701,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                     ))}
                                 </div>
                             )}
+
+                            {/* CASO 4: Audio */}
+                            {att.textContent && renderAudioPlayer(att.textContent)}
                         </TabsContent>
                     );
                   })}

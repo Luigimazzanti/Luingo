@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'; // 👈 AÑADIDO useMemo
 import { Student, Submission, Task } from '../types';
-import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle, Trash2, BookOpen, Check, Edit2, Save, Leaf, Clock, Loader2, Target, ChevronDown, ChevronUp } from 'lucide-react'; // 👈 AÑADIDO FLECHAS
+import { Star, Zap, Trophy, Calendar, CheckCircle2, X, Medal, Eye, XCircle, Trash2, BookOpen, Check, Edit2, Save, Leaf, Clock, Loader2, Target, ChevronDown, ChevronUp, Mic, FileText } from 'lucide-react'; // 👈 AÑADIDO Mic, FileText
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'; // 👈 NUEVO
@@ -470,6 +470,28 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
 
   const visibleGroups = showAllHistory ? groupedSubmissions : groupedSubmissions.slice(0, historyLimit);
 
+  // ✅ DETECTOR DE AUDIO MEJORADO
+  const renderAudioPlayer = (text: string) => {
+    if (!text) return null;
+    const vocarooMatch = text.match(/https?:\/\/(?:www\.)?(?:vocaroo\.com|voca\.ro)\/([\w-]+)/); // 👈 Regex corregido
+    if (vocarooMatch) {
+      const id = vocarooMatch[1];
+      return (
+        <div className="bg-rose-50 p-4 rounded-2xl border-2 border-rose-100 shadow-sm mb-4">
+           <div className="flex items-center gap-2 mb-3 text-rose-800 font-bold text-xs uppercase tracking-wider">
+              <Mic className="w-4 h-4" /> Audio del Alumno
+           </div>
+           <iframe 
+             width="100%" height="60" 
+             src={`https://vocaroo.com/embed/${id}?autoplay=0`}
+             frameBorder="0" className="rounded-lg shadow-sm bg-white" title="Vocaroo Audio"
+           />
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="h-full w-full bg-[#F0F4F8] flex flex-col overflow-hidden relative">
       
@@ -797,15 +819,15 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                                     />
                                 </div>
                             ) : att.textContent ? (
-                                <div className="bg-white p-6 rounded-2xl border-2 border-slate-200">
-                                    <TextAnnotator 
-                                        text={att.textContent} 
-                                        annotations={att.corrections || []} 
-                                        onAddAnnotation={()=>{}} 
-                                        onRemoveAnnotation={()=>{}} 
-                                        readOnly={true} 
-                                    />
-                                </div>
+                                // ✅ LÓGICA EXCLUSIVA AQUÍ TAMBIÉN
+                                renderAudioPlayer(att.textContent) || (
+                                  <div className="bg-white p-6 rounded-2xl border-2 border-slate-200">
+                                      <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-4 pb-4 border-b border-slate-100">
+                                          <FileText className="w-4 h-4 text-indigo-500" /> Tu Redacción
+                                      </h4>
+                                      <TextAnnotator text={att.textContent} annotations={att.corrections || []} onAddAnnotation={()=>{}} onRemoveAnnotation={()=>{}} readOnly={true} />
+                                  </div>
+                                )
                             ) : (
                                 <div className="space-y-3">
                                     {att.answers?.map((ans: any, k: number) => (

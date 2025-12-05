@@ -56,37 +56,34 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
     onSaveCorrection(numGrade, feedback, corrections);
   };
 
-  // ✅ DETECTOR DE AUDIO (Vocaroo Embedder)
+  // ✅ DETECTOR DE AUDIO MEJORADO (Soporta voca.ro y vocaroo.com)
   const renderAudioPlayer = (text: string) => {
     if (!text) return null;
-    
-    // ✅ FIX: Detectar tanto 'vocaroo.com' como el corto 'voca.ro'
     const vocarooMatch = text.match(/https?:\/\/(?:www\.)?(?:vocaroo\.com|voca\.ro)\/([\w-]+)/);
     
     if (vocarooMatch) {
       const id = vocarooMatch[1];
       return (
-        <div className="mb-6 bg-rose-50 p-4 rounded-2xl border-2 border-rose-100 shadow-sm animate-in fade-in slide-in-from-top-2">
+        <div className="mb-6 bg-rose-50 p-4 rounded-2xl border-2 border-rose-100 shadow-sm">
            <div className="flex items-center gap-2 mb-3 text-rose-800 font-bold text-xs uppercase tracking-wider">
               <Mic className="w-4 h-4" /> Grabación del Alumno
            </div>
-           {/* Embed oficial de Vocaroo */}
            <iframe 
-             width="100%" 
-             height="60" 
+             width="100%" height="60" 
              src={`https://vocaroo.com/embed/${id}?autoplay=0`}
-             frameBorder="0"
-             className="rounded-lg shadow-sm bg-white"
-             title="Vocaroo Audio"
+             frameBorder="0" className="rounded-lg shadow-sm bg-white" title="Vocaroo Audio"
            />
            <a href={text} target="_blank" rel="noreferrer" className="text-[10px] text-rose-400 font-bold mt-2 block hover:underline text-right">
-              Abrir enlace original ↗
+              Enlace original: {text}
            </a>
         </div>
       );
     }
     return null;
   };
+
+  // Detectamos si hay audio ANTES de renderizar para decidir qué mostrar
+  const audioPlayerNode = renderAudioPlayer(submission.textContent || '');
 
   return (
     <div className="min-h-screen bg-white flex flex-col pb-20">
@@ -103,27 +100,28 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
 
       <div className="flex-1 w-full max-w-5xl mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8">
         
-        {/* SECCIÓN 1: TEXTO DEL ALUMNO */}
+        {/* SECCIÓN 1: CONTENIDO INTELIGENTE */}
         <div className="flex-1 lg:order-1">
           <div className="flex items-center justify-between mb-4">
+            {/* ✅ TÍTULO DINÁMICO: Si es audio dice "Grabación", si no "Redacción" */}
             <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
-              📄 Redacción
+              {audioPlayerNode ? (
+                 <>🎙️ Grabación de Audio</>
+              ) : (
+                 <>📄 Redacción</>
+              )}
             </h3>
-            <span className="bg-slate-100 text-slate-500 text-xs font-bold px-2 py-1 rounded">
-              {submission.textContent?.split(/\s+/).length || 0} palabras
-            </span>
+            {isWriting && !audioPlayerNode && (
+                <span className="bg-slate-100 text-slate-500 text-xs font-bold px-2 py-1 rounded">
+                  {submission.textContent?.split(/\s+/).length || 0} palabras
+                </span>
+            )}
           </div>
 
-          {/* 👇 REPRODUCTOR DE AUDIO (Si detectamos enlace) */}
-          {(() => {
-             const player = renderAudioPlayer(submission.textContent || '');
-             // Si hay reproductor, lo mostramos
-             if (player) return player;
-             return null;
-          })()}
-
-          {/* CONTENIDO TEXTUAL (Ocultar si es solo el link de audio para no duplicar) */}
-          {isWriting && !renderAudioPlayer(submission.textContent || '') ? (
+          {/* ✅ LÓGICA EXCLUSIVA: O MUESTRA AUDIO, O MUESTRA TEXTO (Nunca ambos) */}
+          {audioPlayerNode ? (
+             audioPlayerNode
+          ) : isWriting ? (
             <TextAnnotator 
               key={JSON.stringify(corrections)}
               text={submission.textContent || ''} 
@@ -132,13 +130,7 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
               onUpdateAnnotation={handleUpdateAnnotation}
               onRemoveAnnotation={handleRemoveAnnotation}
             />
-          ) : isWriting && renderAudioPlayer(submission.textContent || '') ? (
-             // Si es audio, mostramos el texto (link) pequeño y discreto por si acaso, o nada.
-             <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-400 font-mono break-all">
-                Link original: {submission.textContent}
-             </div>
           ) : (
-            // Si es Quiz (respuestas)
             <div className="space-y-4">
                 {submission.answers?.map((ans:any, i:number) => (
                     <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
