@@ -285,128 +285,113 @@ export default function App() {
     document.title = "LuinGo | Campus Virtual";
   }, []);
 
-  // ✅ FIX QUIRÚRGICO: Restaurar sesión para evitar logout repentino
+  // ✅ FIX: Restaurar sesión (Más rápido y sin parpadeos)
   useEffect(() => {
     const restoreSession = async () => {
-      const savedToken = localStorage.getItem(
-        "moodle_user_token",
-      );
+      const savedToken = localStorage.getItem("moodle_user_token");
       if (savedToken) {
         setLoading(true);
         try {
           // 1. Validar token
           const meData = await getMe(savedToken);
-          if (meData && meData.userid) {
-            setUserToken(savedToken);
-            // 2. Recuperar preferencias (incluyendo la bandera del test)
-            const userPrefs = await getUserPreferences(
-              meData.userid,
-            );
-
-            // 3. ✅ [DETECCIÓN INTELIGENTE DE ROL EN RESTAURACIÓN] 🚀
-            let finalRole: "teacher" | "student" = "student";
-            
-            if (meData.userissiteadmin) {
-              finalRole = "teacher";
-            } else {
-              // Escanear cursos para detectar rol de profesor
-              try {
-                const myCourses = await getUserCourses(meData.userid);
-                if (myCourses && myCourses.length > 0) {
+          if (!meData || !meData.userid) {
+             clearUserToken(); 
+             setLoading(false);
+             return;
+          }
+          setUserToken(savedToken);
+          
+          // 2. DETECCIÓN DE ROL INTELIGENTE
+          let finalRole: "teacher" | "student" = meData.userissiteadmin ? "teacher" : "student";
+          if (!meData.userissiteadmin) {
+              const myCourses = await getUserCourses(meData.userid).catch(() => []);
+              if (myCourses && myCourses.length > 0) {
+                  // Escaneo rápido de los primeros 3 cursos
                   const coursesToCheck = myCourses.slice(0, 3);
-                  
-                  for (const course of coursesToCheck) {
-                    try {
-                      const profile = await getMyCourseProfile(meData.userid, course.id);
-                      if (profile?.roles?.some((r: any) => 
-                        ["editingteacher", "teacher", "manager"].includes(r.shortname)
-                      )) {
-                        finalRole = "teacher";
-                        break;
-                      }
-                    } catch (e) {
-                      console.warn(`⚠️ No se pudo verificar rol en curso ${course.id} (restauración)`);
-                    }
+                  const profiles = await Promise.all(
+                      coursesToCheck.map(c => getMyCourseProfile(meData.userid, c.id).catch(() => null))
+                  );
+                  if (profiles.some(p => p?.roles?.some((r: any) => ["editingteacher", "teacher", "manager"].includes(r.shortname)))) {
+                      finalRole = "teacher";
                   }
-                }
-              } catch (e) {
-                console.warn("⚠️ No se pudieron cargar cursos para verificar rol (restauración)");
               }
-            }
+          }
 
-            // 4. Reconstruir usuario
-            const restoredUser: any = {
+          // 3. CARGA SIMULTÁNEA (Promise.all) - Esto acelera la carga
+          // 🚨 FIX: Solo si es SUPER ADMIN pedimos todos los cursos.
+          const coursesPromise = meData.userissiteadmin 
+              ? getCourses() 
+              : getUserCourses(meData.userid);
+          
+          const [rawCourses, tasksData, subsData, userPrefs] = await Promise.all([
+              coursesPromise.catch((err) => {
+                  console.warn("Error cargando cursos:", err);
+                  return [];
+              }),
+              getMoodleTasks().catch(() => []),
+              getMoodleSubmissions().catch(() => []),
+              getUserPreferences(meData.userid).catch(() => null),
+          ]);
+          
+          // 4. FILTRADO ESTRICTO Y SEGURO (Esto elimina el parpadeo del Campus)
+          const safeCourses = Array.isArray(rawCourses) ? rawCourses : [];
+          
+          const cleanCourses = safeCourses.filter((c: any) => 
+              c.id !== 1 && 
+              c.shortname !== "LuinGo" && 
+              c.format !== "site" && 
+              !c.fullname.toUpperCase().includes("CAMPUS VIRTUAL") &&
+              !c.fullname.toUpperCase().includes("CAMPOS VIRTUAL") &&
+              c.shortname !== "campus_global"
+          );
+
+          // 5. ACTUALIZAR ESTADO (Todo listo)
+          setCurrentUser({
               id: String(meData.userid),
-              username: meData.username, // ✅ FIX: Guardar Username Real en la sesión
+              username: meData.username,
               name: meData.fullname,
               email: meData.email,
-              role: finalRole, // ✅ Rol inteligentemente detectado
-              avatar_url:
-                userPrefs?.avatar_url || meData.userpictureurl,
+              role: finalRole,
+              avatar_url: userPrefs?.avatar_url || meData.userpictureurl,
               current_level_code: userPrefs?.level_code || "A1",
-              pending_level_test:
-                userPrefs?.pending_level_test || false, // 🚩 Bandera crítica
+              pending_level_test: userPrefs?.pending_level_test || false,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
-            };
-            setCurrentUser(restoredUser);
+          });
 
-            // 5. Cargar datos según el rol detectado
-            if (finalRole === "student") {
-              // Lógica de estudiante
-              const courses = await getUserCourses(
-                meData.userid,
-              );
-              setCourses(courses || []);
-              if (courses && courses.length > 0) {
-                // Buscar al profesor en el primer curso
-                getEnrolledUsers(courses[0].id)
-                  .then((users) => {
-                    const teacher = users.find((u: any) =>
-                      u.roles?.some(
-                        (r: any) =>
-                          r.shortname === "editingteacher" ||
-                          r.shortname === "teacher",
-                      ),
-                    );
-                    if (teacher?.email) {
-                      console.log(
-                        "✅ Email del profesor encontrado (restauración):",
-                        teacher.email,
-                      );
-                      setTeacherEmail(teacher.email);
-                    }
-                  })
-                  .catch(() => {});
-              }
-              const [t, s] = await Promise.all([
-                getMoodleTasks(),
-                getMoodleSubmissions(),
-              ]);
-              setTasks(t);
-              const mySubs = s.filter(
-                (sub: any) =>
-                  String(sub.student_id) ===
-                  String(meData.userid),
-              );
-              setRealSubmissions(mySubs);
-            } else {
-              // Lógica profesor (obtener cursos según permisos)
-              const courses = meData.userissiteadmin 
-                ? await getCourses() 
-                : await getUserCourses(meData.userid);
-              setCourses(courses || []);
-              const [t, s] = await Promise.all([
-                getMoodleTasks(),
-                getMoodleSubmissions(),
-              ]);
-              setTasks(t);
-              setRealSubmissions(s);
-            }
-            toast.success("Sesión restaurada ✨");
+          setCourses(cleanCourses); // ✅ Cursos ya limpios
+          setTasks(tasksData || []);
+          
+          if (finalRole === "teacher") {
+             setRealSubmissions(subsData || []);
           } else {
-            clearUserToken();
+             const mySubs = (subsData || []).filter((s: any) => String(s.student_id) === String(meData.userid));
+             setRealSubmissions(mySubs);
           }
+
+          // Buscar email del profesor en background (solo estudiantes)
+          if (cleanCourses.length > 0 && finalRole === 'student') {
+            getEnrolledUsers(cleanCourses[0].id)
+              .then((users) => {
+                const teacher = users.find((u: any) =>
+                  u.roles?.some(
+                    (r: any) =>
+                      r.shortname === "editingteacher" ||
+                      r.shortname === "teacher",
+                  ),
+                );
+                if (teacher?.email) {
+                  console.log(
+                    "✅ Email del profesor encontrado (restauración):",
+                    teacher.email,
+                  );
+                  setTeacherEmail(teacher.email);
+                }
+              })
+              .catch(() => {});
+          }
+
+          toast.success("Sesión restaurada ✨");
         } catch (e) {
           console.error("Error restaurando sesión:", e);
           clearUserToken();
@@ -574,22 +559,72 @@ export default function App() {
           }
       }
 
-      // ⚡ 7. LA CLAVE DE LA VELOCIDAD: CARGA EN SEGUNDO PLANO ⚡
-      // Ya te dejamos entrar (setCurrentUser arriba), ahora cargamos "el peso" sin bloquearte.
-      Promise.all([
-          getMoodleTasks(),
-          getMoodleSubmissions()
-      ]).then(([tasksData, subsData]) => {
-          console.log("📦 Contenido cargado en segundo plano");
-          setTasks(tasksData || []);
-          if (finalRole === "teacher") {
-            setRealSubmissions(subsData || []);
-          } else {
-            const mySubs = (subsData || []).filter((s: any) => String(s.student_id) === String(userProfile.id));
-            setRealSubmissions(mySubs);
-            setStudents(prev => prev.length > 0 ? [{...prev[0], completed_tasks: mySubs.length, total_tasks: tasksData?.length || 0}] : []);
-          }
-      }).catch(e => console.warn("Background load info:", e));
+      // 7. CARGA DE DATOS OPTIMIZADA (Paralela)
+      console.log("📚 Cargando contenido...");
+      
+      // 🚨 FIX: Solo si es SUPER ADMIN pedimos todos los cursos. 
+      // Si es profesor normal o alumno, pedimos SOLO sus cursos asignados.
+      const coursesPromise = meData.userissiteadmin 
+          ? getCourses() 
+          : getUserCourses(meData.userid);
+
+      const [rawCourses, tasksData, subsData] = await Promise.all([
+          coursesPromise.catch((err) => {
+              console.warn("Error cargando cursos:", err);
+              return []; // Fallback a array vacío si falla
+          }),
+          getMoodleTasks().catch(() => []),
+          getMoodleSubmissions().catch(() => []),
+      ]);
+      
+      // 8. FILTRADO ESTRICTO Y SEGURO (Fix del Glitch y TypeError)
+      // Verificamos que sea array antes de filtrar para evitar crash
+      const safeCourses = Array.isArray(rawCourses) ? rawCourses : [];
+      
+      const cleanCourses = safeCourses.filter((c: any) => 
+          c.id !== 1 && 
+          c.shortname !== "LuinGo" && 
+          c.format !== "site" && 
+          !c.fullname.toUpperCase().includes("CAMPUS VIRTUAL") &&
+          !c.fullname.toUpperCase().includes("CAMPOS VIRTUAL") &&
+          c.shortname !== "campus_global"
+      );
+      
+      setCourses(cleanCourses);
+
+      // Buscar Email del Profesor (usando el primer curso limpio)
+      if (cleanCourses.length > 0 && finalRole === 'student') {
+          getEnrolledUsers(cleanCourses[0].id)
+              .then((users) => {
+                  const teacher = users.find((u: any) => 
+                      u.roles?.some((r: any) => r.shortname === "editingteacher" || r.shortname === "teacher")
+                  );
+                  if (teacher?.email) setTeacherEmail(teacher.email);
+              })
+              .catch(() => {});
+      }
+
+      // 9. SETTEAR CONTENIDO
+      setTasks(tasksData || []);
+
+      if (finalRole === "teacher") {
+        setRealSubmissions(subsData || []);
+      } else {
+        const mySubs = (subsData || []).filter(
+          (s: any) => String(s.student_id) === String(userProfile.id),
+        );
+        setRealSubmissions(mySubs);
+        
+        // Inicializar estudiante
+        setStudents([{
+            ...userProfile,
+            level: 1, // Se recalculará en el dashboard
+            xp_points: 0,
+            completed_tasks: mySubs.length,
+            total_tasks: tasksData?.length || 0,
+            materials_viewed: [],
+        } as Student]);
+      }
 
       // 🎉 ¡ADENTRO!
       toast.success(`¡Hola ${meData.firstname}!`, { 
