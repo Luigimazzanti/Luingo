@@ -11,6 +11,16 @@ import { createClient } from '@supabase/supabase-js';
 import { Student } from '../types'; // ✅ NUEVO: Import de Student
 import { sendNotification, emailTemplates } from '../lib/notifications'; // ✅ AGREGADO: Sistema de notificaciones
 
+// ✅ CONFIGURACIÓN DE ETIQUETAS (Colores y Iconos)
+const TASK_TAGS = [
+  { id: 'grammar', label: 'Gramática', icon: '🧩', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+  { id: 'vocabulary', label: 'Vocabulario', icon: '🗣️', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  { id: 'listening', label: 'Comprensión Oral', icon: '🎧', color: 'bg-rose-100 text-rose-700 border-rose-200' },
+  { id: 'reading', label: 'Comprensión Lectora', icon: '📖', color: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+  { id: 'speaking', label: 'Expresión Oral', icon: '🎙️', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+  { id: 'culture', label: 'Cultura', icon: '🌍', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+];
+
 // ========== TIPOS ==========
 type QuestionType = 'choice' | 'true_false' | 'fill_blank' | 'open';
 
@@ -95,6 +105,18 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   const [pdfUrl, setPdfUrl] = useState(initialData?.content_data?.pdf_url || '');
   const [pdfInstructions, setPdfInstructions] = useState(initialData?.content_data?.instructions || '');
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+
+  // ✅ NUEVO ESTADO PARA ETIQUETAS (Array de strings)
+  const [selectedTags, setSelectedTags] = useState<string[]>(initialData?.content_data?.tags || []);
+
+  // Función para manejar la selección (Máximo 3)
+  const toggleTag = (tagId: string) => {
+    setSelectedTags(prev => {
+      if (prev.includes(tagId)) return prev.filter(t => t !== tagId); // Desmarcar
+      if (prev.length >= 3) return prev; // Límite alcanzado
+      return [...prev, tagId]; // Marcar
+    });
+  };
 
   const [questions, setQuestions] = useState<QuestionDraft[]>(
     initialData?.content_data?.questions || [
@@ -249,6 +271,12 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
       return;
     }
 
+    // ✅ AUTO-GENERAR DESCRIPCIÓN PARA MOODLE (Ya que borramos el input)
+    // Esto es lo que Moodle guardará como "mensaje" del post.
+    const autoDescription = selectedTags.length > 0 
+      ? `Etiquetas: ${selectedTags.map(t => TASK_TAGS.find(x => x.id === t)?.label).join(', ')}`
+      : "Actividad General";
+
     // 1. Lógica de Destinatarios
     let finalAssignees = ['all'];
     let finalScopeType = 'level';
@@ -277,7 +305,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
     const taskData = {
       ...initialData,
       title,
-      description,
+      description: autoDescription, // 👈 Enviamos el texto generado
       level_tag: selectedLevel, // Nivel externo
       category: taskType === 'writing' ? 'writing' : taskType === 'document' ? 'document' : category,
       content_data: {
@@ -300,7 +328,8 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
           type: finalScopeType,
           targetId: finalTargetId
         },
-        assignees: finalAssignees
+        assignees: finalAssignees,
+        tags: selectedTags
       },
       color_tag: '#A8D8FF',
       due_date: dueDate
@@ -672,7 +701,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Título</label>
+              <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Título de la Misión</label>
               <Input
                 value={title}
                 onChange={e => setTitle(e.target.value)}
@@ -680,14 +709,36 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                 placeholder="Ej: Verbos en Presente"
               />
             </div>
+
+            {/* ✅ NUEVO SELECTOR DE ETIQUETAS (Reemplaza a Descripción) */}
             <div>
-              <label className="text-xs font-black text-slate-600 uppercase mb-2 block">Descripción</label>
-              <Textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                className="bg-slate-50 border-2 border-slate-200 h-16 sm:h-20 resize-none text-sm sm:text-base"
-                placeholder="Instrucciones claras para el alumno..."
-              />
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-xs font-black text-slate-500 uppercase">Tipo de Actividad</label>
+                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                  {selectedTags.length}/3 Seleccionados
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {TASK_TAGS.map((tag) => {
+                  const isSelected = selectedTags.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      onClick={() => toggleTag(tag.id)}
+                      className={cn(
+                        "flex items-center gap-2 p-2 rounded-xl border-2 transition-all text-left",
+                        isSelected 
+                          ? `${tag.color} border-current shadow-sm scale-[1.02]` 
+                          : "bg-white border-slate-100 text-slate-400 hover:border-indigo-100 grayscale hover:grayscale-0"
+                      )}
+                    >
+                      <span className="text-xl">{tag.icon}</span>
+                      <span className="text-[11px] font-bold leading-tight">{tag.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             
             {/* ✅ LAYOUT RESPONSIVE: Columna en mobile, fila en desktop */}

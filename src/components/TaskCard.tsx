@@ -4,6 +4,16 @@ import { Button } from './ui/button';
 import { Clock, PlayCircle, CheckCircle2, RotateCcw, Eye, Award } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+// ✅ CONFIGURACIÓN DE ETIQUETAS (Colores e Iconos)
+const TAG_CONFIG: Record<string, { label: string, color: string, icon: string }> = {
+  grammar: { label: 'Gramática', color: 'bg-indigo-100 text-indigo-700', icon: '🧩' },
+  vocabulary: { label: 'Vocabulario', color: 'bg-emerald-100 text-emerald-700', icon: '🗣️' },
+  listening: { label: 'Listening', color: 'bg-rose-100 text-rose-700', icon: '🎧' },
+  reading: { label: 'Reading', color: 'bg-cyan-100 text-cyan-700', icon: '📖' },
+  speaking: { label: 'Speaking', color: 'bg-amber-100 text-amber-700', icon: '🎙️' },
+  culture: { label: 'Cultura', color: 'bg-purple-100 text-purple-700', icon: '🌍' },
+};
+
 interface TaskCardProps {
   task: Task;
   status: 'assigned' | 'in_progress' | 'submitted' | 'graded' | 'completed' | 'draft';
@@ -123,9 +133,24 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <h3 className="font-bold text-slate-800 text-lg leading-tight mb-1 group-hover:text-indigo-600 transition-colors line-clamp-2">
           {task.title}
         </h3>
-        <p className="text-slate-500 text-sm line-clamp-2 font-medium min-h-[2.5em]">
-          {task.description}
-        </p>
+        
+        {/* ✅ RENDERIZADO DE ETIQUETAS EN LA CARD */}
+        <div className="mb-3 flex flex-wrap gap-1.5 min-h-[24px]">
+          {task.content_data?.tags && task.content_data.tags.length > 0 ? (
+            task.content_data.tags.map((tagId: string) => {
+              const config = TAG_CONFIG[tagId];
+              if (!config) return null;
+              return (
+                <span key={tagId} className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wide", config.color)}>
+                  <span>{config.icon}</span> {config.label}
+                </span>
+              );
+            })
+          ) : (
+            // Fallback para tareas muy viejas (aunque dijiste que borraste todo)
+            <p className="text-xs text-slate-400 line-clamp-2 italic">{task.description}</p>
+          )}
+        </div>
       </div>
 
       {/* ✅ MOSTRAR MEJOR NOTA SI EXISTE */}

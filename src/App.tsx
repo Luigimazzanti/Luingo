@@ -1016,17 +1016,22 @@ export default function App() {
             <>
               <TeacherDashboard
                 classroom={classroom}
-                // 👇 NUEVA PROP: Pasamos el código del curso
-                courseCode={courses.find(c => String(c.id) === selectedClassId)?.shortname || 'GLOBAL'}
                 students={students}
+                // ✅ FILTRO 1: Solo pasar tareas de ESTE curso (Prefijo CE1-, ING-, etc)
                 tasks={tasks.filter(t => {
                     const currentCourse = courses.find(c => String(c.id) === selectedClassId);
                     const prefix = currentCourse ? currentCourse.shortname : 'GLOBAL';
-                    // Filtramos todo lo que no empiece por "CE1-"
-                    return !t.level_tag || t.level_tag.startsWith(prefix + '-');
+                    return t.level_tag && t.level_tag.startsWith(prefix + '-');
                 })}
                 currentUser={currentUser}
-                submissions={realSubmissions}
+                // ✅ FILTRO 2: Solo pasar entregas de tareas de ESTE curso
+                submissions={realSubmissions.filter(s => {
+                    const currentCourse = courses.find(c => String(c.id) === selectedClassId);
+                    const prefix = currentCourse ? currentCourse.shortname : 'GLOBAL';
+                    // Buscamos la tarea original para ver su etiqueta
+                    const task = tasks.find(t => t.id === s.task_id);
+                    return task && task.level_tag && task.level_tag.startsWith(prefix + '-');
+                })}
                 onSelectStudent={handleSelectStudent}
                 onGenerateTask={() => {
                   setStartBuilderWithAI(true);
@@ -1046,6 +1051,7 @@ export default function App() {
                 }}
                 onLogout={handleLogout}
               />
+              
               <Sheet
                 open={!!selectedStudentId}
                 onOpenChange={(o) =>
@@ -1069,17 +1075,29 @@ export default function App() {
                           (s) => s.id === selectedStudentId,
                         )!
                       }
-                      tasks={tasks}
-                      submissions={realSubmissions.filter(
-                        (s) =>
-                          String(s.student_id) ===
+                      // ✅ FILTRO 3 (PASAPORTE): Solo tareas de este curso
+                      tasks={tasks.filter(t => {
+                          const currentCourse = courses.find(c => String(c.id) === selectedClassId);
+                          const prefix = currentCourse ? currentCourse.shortname : 'GLOBAL';
+                          return t.level_tag && t.level_tag.startsWith(prefix + '-');
+                      })}
+                      // ✅ FILTRO 4 (PASAPORTE): Solo entregas de este curso Y de este estudiante
+                      submissions={realSubmissions.filter((s) => {
+                          const currentCourse = courses.find(c => String(c.id) === selectedClassId);
+                          const prefix = currentCourse ? currentCourse.shortname : 'GLOBAL';
+                          const task = tasks.find(t => t.id === s.task_id);
+                          
+                          const isCourse = task && task.level_tag && task.level_tag.startsWith(prefix + '-');
+                          const isStudent = String(s.student_id) ===
                             String(selectedStudentId) ||
                           s.student_name ===
                             students.find(
                               (st) =>
                                 st.id === selectedStudentId,
-                            )?.name,
-                      )}
+                            )?.name;
+                          
+                          return isCourse && isStudent;
+                      })}
                       onBack={() => setSelectedStudentId(null)}
                       onAssignTask={() => {
                         setSelectedStudentId(null);
@@ -1105,14 +1123,19 @@ export default function App() {
                   xp_points: 0,
                 } as any)
               }
-              // 👇 NUEVA PROP
-              courseCode={courses.find(c => String(c.id) === selectedClassId)?.shortname || 'GLOBAL'}
+              // ✅ FILTRO 5 (ESTUDIANTE): Solo tareas de este curso
               tasks={tasks.filter(t => {
                   const currentCourse = courses.find(c => String(c.id) === selectedClassId);
                   const prefix = currentCourse ? currentCourse.shortname : 'GLOBAL';
-                  return !t.level_tag || t.level_tag.startsWith(prefix + '-');
+                  return t.level_tag && t.level_tag.startsWith(prefix + '-');
               })}
-              submissions={realSubmissions}
+              // ✅ FILTRO 6 (ESTUDIANTE): Solo entregas de este curso
+              submissions={realSubmissions.filter(s => {
+                  const currentCourse = courses.find(c => String(c.id) === selectedClassId);
+                  const prefix = currentCourse ? currentCourse.shortname : 'GLOBAL';
+                  const task = tasks.find(t => t.id === s.task_id);
+                  return task && task.level_tag && task.level_tag.startsWith(prefix + '-');
+              })}
               teacherEmail={teacherEmail} // 👈 [INYECCIÓN 3] Pasamos el email del profesor aquí
               onLogout={handleLogout}
               onSelectTask={(task) => {
@@ -1135,7 +1158,7 @@ export default function App() {
                 } else {
                   const exercise: Exercise = {
                     title: task.title,
-                    level: task.level_tag || "A1",
+                    level: task.tag || "A1",
                     banana_reward_total: 100,
                     questions:
                       task.content_data.questions || [],
