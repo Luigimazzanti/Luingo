@@ -85,6 +85,9 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
   // Detectamos si hay audio ANTES de renderizar para decidir qué mostrar
   const audioPlayerNode = renderAudioPlayer(submission.textContent || '');
 
+  // ✅ 1. DETECTAR AUDIO ANTES DE RENDERIZAR (Para decidir qué mostrar)
+  const audioPlayerElement = renderAudioPlayer(submission.textContent || '');
+
   return (
     <div className="min-h-screen bg-white flex flex-col pb-20">
       {/* HEADER COMPACTO */}
@@ -100,28 +103,44 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
 
       <div className="flex-1 w-full max-w-5xl mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8">
         
-        {/* SECCIÓN 1: CONTENIDO INTELIGENTE */}
+        {/* SECCIÓN 1: CONTENIDO DINÁMICO (Aquí está el arreglo) */}
         <div className="flex-1 lg:order-1">
           <div className="flex items-center justify-between mb-4">
-            {/* ✅ TÍTULO DINÁMICO: Si es audio dice "Grabación", si no "Redacción" */}
+            
+            {/* ✅ TÍTULO CAMBIANTE: Si hay audio dice "Grabación", si no "Redacción" */}
             <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
-              {audioPlayerNode ? (
-                 <>🎙️ Grabación de Audio</>
-              ) : (
+              {audioPlayerElement ? (
+                 <><Mic className="w-5 h-5 text-rose-500" /> Grabación de Audio</>
+              ) : isWriting ? (
                  <>📄 Redacción</>
+              ) : (
+                 <>✅ Respuestas</>
               )}
             </h3>
-            {isWriting && !audioPlayerNode && (
+            
+            {/* Solo mostrar contador de palabras si es texto REAL */}
+            {isWriting && !audioPlayerElement && (
                 <span className="bg-slate-100 text-slate-500 text-xs font-bold px-2 py-1 rounded">
                   {submission.textContent?.split(/\s+/).length || 0} palabras
                 </span>
             )}
           </div>
 
-          {/* ✅ LÓGICA EXCLUSIVA: O MUESTRA AUDIO, O MUESTRA TEXTO (Nunca ambos) */}
-          {audioPlayerNode ? (
-             audioPlayerNode
+          {/* ✅ RENDERIZADO EXCLUSIVO: (Player O Texto, NUNCA LOS DOS) */}
+          {audioPlayerElement ? (
+             <div className="space-y-4">
+                {/* 1. MUESTRA EL PLAYER ROSA */}
+                {audioPlayerElement}
+                
+                {/* 2. (Opcional) Muestra el link en chiquito por si acaso falla el embed */}
+                <div className="text-right">
+                   <a href={submission.textContent} target="_blank" rel="noreferrer" className="text-[10px] text-slate-300 hover:text-indigo-500 font-mono">
+                      Ver enlace original
+                   </a>
+                </div>
+             </div>
           ) : isWriting ? (
+            // Si NO es audio, mostramos el editor de texto
             <TextAnnotator 
               key={JSON.stringify(corrections)}
               text={submission.textContent || ''} 
@@ -131,6 +150,7 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
               onRemoveAnnotation={handleRemoveAnnotation}
             />
           ) : (
+            // Si es un Cuestionario
             <div className="space-y-4">
                 {submission.answers?.map((ans:any, i:number) => (
                     <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
@@ -142,7 +162,7 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
           )}
         </div>
 
-        {/* SECCIÓN 2: EVALUACIÓN */}
+        {/* SECCIÓN 2: EVALUACIÓN (Columna Derecha) */}
         <div className="w-full lg:w-80 shrink-0 lg:order-2 space-y-6">
           <div className="bg-indigo-50 p-5 rounded-2xl border-2 border-indigo-100 space-y-4 sticky top-20">
             <h3 className="font-black text-indigo-900 flex items-center gap-2">

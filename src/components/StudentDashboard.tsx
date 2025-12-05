@@ -16,8 +16,12 @@ import {
   XCircle,
   Clock,
   FileText,
-  Mic
-} from 'lucide-react';
+  Mic,
+  Filter,
+  ChevronDown,
+  Sparkles,
+  Eye
+} from 'lucide-react'; // 👈 AÑADIDOS Filter, ChevronDown, Sparkles, Eye
 import { cn } from '../lib/utils';
 import { CommunityFeed } from './community/CommunityFeed';
 import { TextAnnotator } from './TextAnnotator';
@@ -26,6 +30,16 @@ import { LevelTestCard } from './LevelTestCard'; // ✅ NUEVO
 import { LevelTestPlayer } from './LevelTestPlayer'; // ✅ NUEVO
 import { ImageWithFallback } from './figma/ImageWithFallback'; // 👈 NUEVO IMPORT PARA IMÁGENES
 import { sendTrophyEmailNotification } from '../lib/notifications'; // 👈 [NUEVO] IMPORT DEL SISTEMA DE EMAILS
+
+// ✅ CONFIGURACIÓN DE FILTROS
+const FILTER_OPTIONS = [
+  { id: 'all', label: 'Todo', icon: null },
+  { id: 'grammar', label: 'Gramática', icon: '🧩' },
+  { id: 'vocabulary', label: 'Vocabulario', icon: '🗣️' },
+  { id: 'listening', label: 'Listening', icon: '🎧' },
+  { id: 'speaking', label: 'Speaking', icon: '🎙️' },
+  { id: 'reading', label: 'Reading', icon: '📖' },
+];
 
 interface StudentDashboardProps {
   courseCode: string; // 👈 NUEVO
@@ -47,6 +61,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   
   // ✅ NUEVO: Estado para el Level Test Player
   const [activeLevelTest, setActiveLevelTest] = useState<Task | null>(null);
+
+  // ✅ ESTADOS DE UI (Filtros y Portafolio)
+  const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [showAllPortfolio, setShowAllPortfolio] = useState(false);
 
   // ✅ CÁLCULO DE XP INTELIGENTE (POR CURSO Y CON REGLAS)
   const courseXP = useMemo(() => {
@@ -133,15 +151,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   });
 
   const pendingTasks = visibleTasks.filter(t => {
+    // 1. FILTRO DE ETIQUETAS (NUEVO)
+    if (activeFilter !== 'all') {
+       const tags = t.content_data?.tags || [];
+       if (!tags.includes(activeFilter)) return false;
+    }
+
     const status = getTaskStatus(t.id);
     
-    // 1. DOCUMENTOS PDF (Se queda igual: Borrador=Visible, Enviado=Oculto)
+    // 2. DOCUMENTOS PDF (Se queda igual: Borrador=Visible, Enviado=Oculto)
     if (t.content_data?.type === 'document') {
       if (status === 'draft' || status === 'assigned' || !status) return true;
       return false; 
     }
 
-    // 2. CUESTIONARIOS Y AUDIOS (Lógica de intentos)
+    // 3. CUESTIONARIOS Y AUDIOS (Lógica de intentos)
     if (['form', 'quiz', 'audio'].includes(t.content_data?.type || '')) {
        const attempts = getAttemptsCount(t.id);
        const max = t.content_data?.max_attempts ?? (t.content_data?.type === 'audio' ? 2 : 3);
@@ -150,7 +174,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
        return true;
     }
     
-    // 3. OTRAS TAREAS (Writing) (Se queda igual)
+    // 4. OTRAS TAREAS (Writing) (Se queda igual)
     // Si ya se envió o calificó, se oculta.
     if (status === 'submitted' || status === 'graded') return false;
     
@@ -340,6 +364,25 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </h2>
               </div>
               
+              {/* ✅ BARRA DE FILTROS */}
+              <div className="flex flex-wrap gap-2 pb-2">
+                {FILTER_OPTIONS.map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setActiveFilter(opt.id)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1.5",
+                      activeFilter === opt.id
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-md transform scale-105"
+                        : "bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"
+                    )}
+                  >
+                    {opt.icon && <span>{opt.icon}</span>}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              
               {pendingTasks.length > 0 || (student as any).pending_level_test ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   
@@ -398,7 +441,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 📚 Tu Portafolio
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {completedTasks.map(task => (
+                {/* Mostramos solo 8 si está colapsado, o todos si está expandido */}
+                {(showAllPortfolio ? completedTasks : completedTasks.slice(0, 8)).map(task => (
                   <TaskCard 
                     key={task.id} 
                     task={task} 
@@ -407,6 +451,31 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     onClick={() => openSummary(task)} 
                   />
                 ))}
+
+                {/* ✅ CARD "VER MÁS" (Solo si hay más de 8 y está colapsado) */}
+                {!showAllPortfolio && completedTasks.length > 8 && (
+                  <button 
+                    onClick={() => setShowAllPortfolio(true)}
+                    className="group relative flex flex-col items-center justify-center p-6 rounded-3xl border-2 border-dashed border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 hover:border-indigo-400 transition-all min-h-[180px]"
+                  >
+                    <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                       <Sparkles className="w-5 h-5 text-indigo-500" />
+                    </div>
+                    <span className="font-black text-indigo-700 text-sm">Ver {completedTasks.length - 8} más</span>
+                    <span className="text-xs text-indigo-400 font-medium mt-1">Explorar historial completo</span>
+                  </button>
+                )}
+
+                {/* Botón para colapsar (Opcional, al final de la lista si está expandido) */}
+                {showAllPortfolio && completedTasks.length > 8 && (
+                   <button 
+                    onClick={() => setShowAllPortfolio(false)}
+                    className="col-span-full py-4 text-xs font-bold text-slate-400 hover:text-indigo-600 flex items-center justify-center gap-2"
+                  >
+                    Ver menos <ChevronDown className="w-4 h-4 rotate-180" />
+                  </button>
+                )}
+
                 {completedTasks.length === 0 && (
                   <p className="col-span-full text-center text-slate-400 italic py-10">Tu historial de aprendizaje aparecerá aquí.</p>
                 )}

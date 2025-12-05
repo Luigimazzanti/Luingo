@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Task, Classroom, Submission, User, PDFAnnotation } from '../types';
 import { StudentCard } from './StudentCard';
-import { Users, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText, Target } from 'lucide-react';
+import { Users, Sparkles, Trash2, Edit2, List, GraduationCap, Eye, Globe, CheckCircle, Clock, FileText, Target, Mic } from 'lucide-react'; // 👈 AÑADIDO Mic
 import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from './ui/dialog'; // 👈 AÑADIDO DialogDescription
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -193,6 +193,31 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     } finally {
       setIsGrading(false);
     }
+  };
+
+  // ✅ DETECTOR DE AUDIO (Helper interno para el modal)
+  const renderAudioPlayer = (text: string) => {
+    if (!text) return null;
+    const vocarooMatch = text.match(/https?:\/\/(?:www\.)?(?:vocaroo\.com|voca\.ro)\/([\w-]+)/);
+    if (vocarooMatch) {
+      const id = vocarooMatch[1];
+      return (
+        <div className="mb-6 bg-rose-50 p-4 rounded-2xl border-2 border-rose-100 shadow-sm animate-in fade-in slide-in-from-top-2">
+           <div className="flex items-center gap-2 mb-3 text-rose-800 font-bold text-xs uppercase tracking-wider">
+              <Mic className="w-4 h-4" /> Grabación del Alumno
+           </div>
+           <iframe 
+             width="100%" height="60" 
+             src={`https://vocaroo.com/embed/${id}?autoplay=0`}
+             frameBorder="0" className="rounded-lg shadow-sm bg-white" title="Vocaroo Audio"
+           />
+           <a href={text} target="_blank" rel="noreferrer" className="text-[10px] text-rose-400 font-bold mt-2 block hover:underline text-right">
+              Enlace original: {text}
+           </a>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -458,9 +483,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               <DialogTitle className="text-2xl font-black text-slate-800">
                 Calificar: {selectedGroup?.student_name}
               </DialogTitle>
-              <p className="text-sm text-slate-500 mt-1">
+              {/* ✅ SOLUCIÓN: Usar el componente correcto */}
+              <DialogDescription className="text-sm text-slate-500 mt-1">
                 {selectedGroup?.task_title}
-              </p>
+              </DialogDescription>
             </DialogHeader>
 
           {selectedGroup && (
@@ -577,47 +603,48 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     return null;
                   })()}
 
-                  {/* VISOR REDACCIÓN */}
+                  {/* ✅ CONTENIDO DINÁMICO: AUDIO O REDACCIÓN */}
                   {att.textContent && att.textContent.length > 0 ? (
-                    <div className="mb-6">
-                      <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-3">
-                        <Eye className="w-4 h-4" />
-                        Texto de Redacción con Correcciones
-                      </h4>
-                      <TextAnnotator 
-                        text={att.textContent}
-                        annotations={att.corrections || []}
-                        onAddAnnotation={(annotation) => {
-                          const updatedCorrections = [...(att.corrections || []), annotation];
-                          att.corrections = updatedCorrections;
-                          setAnnotations(updatedCorrections);
-                          toast.success('✅ Corrección añadida');
-                        }}
-                        onUpdateAnnotation={(annotation) => {
-                          const updatedCorrections = (att.corrections || []).map((a: Annotation) => 
-                            a.id === annotation.id ? annotation : a
-                          );
-                          att.corrections = updatedCorrections;
-                          setAnnotations(updatedCorrections);
-                          toast.success('✏️ Corrección actualizada');
-                        }}
-                        onRemoveAnnotation={(id) => {
-                          const updatedCorrections = (att.corrections || []).filter((a: Annotation) => a.id !== id);
-                          att.corrections = updatedCorrections;
-                          setAnnotations(updatedCorrections);
-                          toast.success('🗑️ Corrección eliminada');
-                        }}
-                        readOnly={false}
-                      />
-                      <div className="mt-3 flex items-center justify-between text-xs px-2">
-                        <span className="text-slate-500 font-bold">
-                          Palabras: {att.textContent.split(/\s+/).filter((w: string) => w.length > 0).length}
-                        </span>
-                        <span className="text-slate-500 font-bold">
-                          Caracteres: {att.textContent.length}
-                        </span>
+                    // 1. Intentamos renderizar como AUDIO
+                    renderAudioPlayer(att.textContent) || (
+                      // 2. Si no es audio, mostramos REDACCIÓN
+                      <div className="mb-6">
+                        <h4 className="font-bold text-slate-700 flex items-center gap-2 mb-3">
+                          <Eye className="w-4 h-4" />
+                          Texto de Redacción con Correcciones
+                        </h4>
+                        <TextAnnotator 
+                          text={att.textContent}
+                          annotations={att.corrections || []}
+                          onAddAnnotation={(annotation) => {
+                            const updatedCorrections = [...(att.corrections || []), annotation];
+                            att.corrections = updatedCorrections;
+                            setAnnotations(updatedCorrections);
+                            toast.success('✅ Corrección añadida');
+                          }}
+                          onUpdateAnnotation={(annotation) => {
+                            const updatedCorrections = (att.corrections || []).map((a: Annotation) => 
+                              a.id === annotation.id ? annotation : a
+                            );
+                            att.corrections = updatedCorrections;
+                            setAnnotations(updatedCorrections);
+                            toast.success('✏️ Corrección actualizada');
+                          }}
+                          onRemoveAnnotation={(id) => {
+                            const updatedCorrections = (att.corrections || []).filter((a: Annotation) => a.id !== id);
+                            att.corrections = updatedCorrections;
+                            setAnnotations(updatedCorrections);
+                            toast.success('🗑️ Corrección eliminada');
+                          }}
+                          readOnly={false}
+                        />
+                        <div className="mt-3 flex items-center justify-between text-xs px-2">
+                          <span className="text-slate-500 font-bold">
+                            Palabras: {att.textContent.split(/\s+/).filter((w: string) => w.length > 0).length}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    )
                   ) : !isDocumentTask ? (
                     <>
                       {/* ✅ FIX: VISOR PREGUNTAS solo se muestra si NO es tarea de documento */}

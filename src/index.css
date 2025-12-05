@@ -1218,6 +1218,10 @@
     min-height: 120px;
   }
 
+  .min-h-\[180px\] {
+    min-height: 180px;
+  }
+
   .min-h-\[200px\] {
     min-height: 200px;
   }
@@ -2258,6 +2262,16 @@
   @supports (color: color-mix(in lab, red, red)) {
     .bg-indigo-50\/40 {
       background-color: color-mix(in oklab, var(--color-indigo-50) 40%, transparent);
+    }
+  }
+
+  .bg-indigo-50\/50 {
+    background-color: color-mix(in srgb, oklch(.962 .018 272.314) 50%, transparent);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-indigo-50\/50 {
+      background-color: color-mix(in oklab, var(--color-indigo-50) 50%, transparent);
     }
   }
 
@@ -3761,6 +3775,10 @@
     --tw-enter-translate-y: calc(1 * var(--spacing) * -1);
   }
 
+  .slide-in-from-top-2 {
+    --tw-enter-translate-y: calc(2 * var(--spacing) * -1);
+  }
+
   .zoom-in {
     --tw-enter-scale: 0;
   }
@@ -4009,6 +4027,12 @@
   @media (hover: hover) {
     .hover\:border-indigo-300:hover {
       border-color: var(--color-indigo-300);
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:border-indigo-400:hover {
+      border-color: var(--color-indigo-400);
     }
   }
 
