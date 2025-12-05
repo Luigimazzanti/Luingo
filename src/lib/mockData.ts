@@ -11,14 +11,14 @@ export const currentUser: User = {
   updated_at: new Date().toISOString(),
 };
 
-// Mock classroom
+// Mock classroom (Datos fijos del Campus)
 export const mockClassroom: Classroom = {
   id: 'classroom-1',
   teacher_id: 'teacher-1',
-  name: 'Español Intensivo 2024',
-  description: 'Comunidad de aprendizaje activo 🚀',
-  invite_code: 'HOLA-2024',
-  color_theme: '#A8D8FF',
+  name: '¡Bienvenido a tu campus virtual!', // 👈 TEXTO FIJO
+  description: 'Tu espacio de aprendizaje global 🌍', // 👈 SUBTÍTULO FIJO
+  invite_code: 'LUINGO-2024',
+  color_theme: '#6344A6',
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
