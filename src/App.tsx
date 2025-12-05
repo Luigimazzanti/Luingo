@@ -335,6 +335,7 @@ export default function App() {
             // 4. Reconstruir usuario
             const restoredUser: any = {
               id: String(meData.userid),
+              username: meData.username, // ✅ FIX: Guardar Username Real en la sesión
               name: meData.fullname,
               email: meData.email,
               role: finalRole, // ✅ Rol inteligentemente detectado
@@ -530,6 +531,7 @@ export default function App() {
       // 5. CREAR USUARIO (CON ROL CONFIRMADO)
       const userProfile: any = {
         id: String(meData.userid),
+        username: realUsername, // ✅ FIX: Guardar Username Real al loguearse
         email: realEmail || `${realUsername}@sin-email.com`,
         name: meData.fullname,
         role: finalRole, // 👈 ROL CORRECTO

@@ -20,7 +20,10 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ user, isOpen, onCl
   const nameParts = user.name.split(' ');
   const [firstname, setFirstname] = useState(nameParts[0] || '');
   const [lastname, setLastname] = useState(nameParts.slice(1).join(' ') || '');
-  const [username, setUsername] = useState(user.email.split('@')[0]); // Fallback visual si no tenemos el username real en el objeto user aun
+  
+  // ✅ FIX: Usamos el username REAL del objeto user. Si no existe, fallback al email completo.
+  const [username] = useState((user as any).username || user.email); 
+  
   const [email] = useState(user.email); // Solo estado, sin setter expuesto al UI
   
   // Lógica de Avatar
@@ -37,15 +40,14 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ user, isOpen, onCl
   const previewAvatar = `https://api.dicebear.com/7.x/${avatarStyle}/svg?seed=${avatarSeed}`;
 
   const handleSave = async () => {
-    if(!firstname.trim() || !lastname.trim() || !username.trim()) return toast.error("Todos los campos son requeridos");
+    if(!firstname.trim() || !lastname.trim()) return toast.error("Nombre y apellido son requeridos");
     
     setIsLoading(true);
     try {
-      // 1. Actualizar Moodle (Nombre/Username)
+      // 1. Actualizar Moodle (Solo Nombre - Username es de solo lectura)
       await updateMoodleUser(user.id, { 
         firstname, 
-        lastname, 
-        username: username.trim().toLowerCase() 
+        lastname
       });
 
       // 2. 🔥 GUARDAR PREFERENCIA EN SUPABASE (Avatar)
@@ -144,17 +146,23 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ user, isOpen, onCl
                 </div>
              </div>
 
-             {/* ✅ NUEVO: Username Editable */}
-             <div className="space-y-1.5">
-                <Label className="text-[10px] font-black text-slate-400 uppercase">Usuario (Login)</Label>
+             {/* ✅ FIX: Username Real de Moodle (Solo Lectura) */}
+             <div className="space-y-1.5 opacity-80">
+                <Label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-2">
+                   Usuario Moodle <span className="bg-amber-100 text-amber-700 px-1.5 rounded text-[9px] font-bold">Oficial</span>
+                </Label>
                 <div className="relative">
                   <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input 
                     value={username} 
-                    onChange={e => setUsername(e.target.value.trim().toLowerCase())} 
-                    className="h-10 pl-9 border-slate-200 bg-slate-50 focus:bg-white font-mono text-sm text-indigo-600" 
+                    readOnly
+                    disabled
+                    className="h-10 pl-9 border-slate-100 bg-slate-100 text-slate-600 font-mono text-sm font-bold cursor-not-allowed focus-visible:ring-0" 
                   />
                 </div>
+                <p className="text-[10px] text-slate-400 pl-1">
+                  Este es tu usuario para acceder a la plataforma.
+                </p>
              </div>
 
              {/* ✅ FIX: Email Read-Only */}

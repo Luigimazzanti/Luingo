@@ -191,18 +191,6 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ courses, onSelec
         )}
       </div>
 
-      {role === 'teacher' && (
-          <button
-            onClick={() => setShowCreateDialog(true)}
-            className="fixed bottom-8 right-8 w-16 h-16 bg-slate-800 hover:bg-indigo-600 text-white rounded-full shadow-2xl hover:shadow-3xl hover:scale-110 transition-all duration-300 flex items-center justify-center group z-50"
-            title="Nueva Clase"
-          >
-            <Plus className="w-7 h-7" />
-            <span className="absolute right-20 bg-slate-800 text-white px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              Nueva Clase
-            </span>
-          </button>
-      )}
     </div>
   );
 };
