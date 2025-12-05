@@ -212,6 +212,7 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   // ✅ NUEVO: Estados para Audio Task
   const [teacherAudioUrl, setTeacherAudioUrl] = useState(initialData?.content_data?.audio_url || '');
   const [studentAudioRequired, setStudentAudioRequired] = useState(initialData?.content_data?.student_audio_required || false);
+  const [includeQuestions, setIncludeQuestions] = useState(false); // 👈 NUEVO: Por defecto apagado en Audio
 
   // Estado para upload de PDF
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
@@ -262,6 +263,10 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
   useEffect(() => {
     if (autoOpenAI && !initialData) {
       setShowAiModal(true);
+    }
+    // ✅ Si hay preguntas reales guardadas, activamos el switch
+    if (initialData?.content_data?.questions?.length > 0) {
+      setIncludeQuestions(true);
     }
   }, [autoOpenAI, initialData]);
 
@@ -476,7 +481,8 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
         resource_type: resourceType,
         pdf_url: pdfUrl,
         instructions: pdfInstructions,
-        questions: questions,
+        // ✅ LÓGICA DE LIMPIEZA: Si es audio y NO incluimos preguntas, mandamos array vacío
+        questions: (taskType === "quiz" || (taskType === "audio" && includeQuestions)) ? questions : [],
         max_attempts: maxAttempts,
 
         // Scope de asignación correcto
@@ -1344,7 +1350,27 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
                 />
               </div>
 
-              {/* 5. Fecha Límite */}
+              {/* 5. Interruptor de Cuestionario */}
+              <div className="flex items-center gap-3 bg-white p-4 rounded-xl border border-rose-100">
+                <div 
+                  className={cn(
+                    "w-10 h-6 rounded-full p-1 transition-colors cursor-pointer",
+                    includeQuestions ? 'bg-indigo-500' : 'bg-slate-200'
+                  )}
+                  onClick={() => setIncludeQuestions(!includeQuestions)}
+                >
+                  <div className={cn(
+                    "bg-white w-4 h-4 rounded-full shadow-sm transition-transform",
+                    includeQuestions ? 'translate-x-4' : ''
+                  )} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-rose-900">Incluir Cuestionario de Comprensión</p>
+                  <p className="text-xs text-rose-500">Activa esto si quieres añadir preguntas Verdadero/Falso, etc.</p>
+                </div>
+              </div>
+
+              {/* 6. Fecha Límite */}
               <div>
                 <label className="text-xs font-black text-rose-800 uppercase mb-2 block">
                   Fecha Límite (Opcional)
@@ -1359,8 +1385,8 @@ export const TaskBuilder: React.FC<TaskBuilderProps> = ({
             </div>
           )}
 
-          {/* PREGUNTAS (PARA QUIZ Y AUDIO) */}
-          {(taskType === "quiz" || taskType === "audio") && (
+          {/* ✅ MOSTRAR PREGUNTAS: Si es Quiz SIEMPRE, si es Audio SOLO SI ESTÁ ACTIVADO */}
+          {(taskType === "quiz" || (taskType === "audio" && includeQuestions)) && (
             <div className="space-y-4">
               {questions.map((q, idx) => (
                 <div

@@ -28,11 +28,13 @@ export const AudioTaskPlayer: React.FC<AudioTaskPlayerProps> = ({ task, onExit, 
       return;
     }
     
-    // Validar que todas las preguntas estén respondidas (si hay)
-    const unanswered = questions.filter((q: any) => !answers[q.id]);
-    if (unanswered.length > 0) {
-      toast.error(`⚠️ Faltan ${unanswered.length} preguntas por responder`);
-      return;
+    // Validar preguntas SOLO SI existen
+    if (questions && questions.length > 0) {
+        const unanswered = questions.filter((q: any) => !answers[q.id]);
+        if (unanswered.length > 0) {
+          toast.error(`⚠️ Faltan ${unanswered.length} preguntas por responder`);
+          return;
+        }
     }
 
     setIsSubmitting(true);

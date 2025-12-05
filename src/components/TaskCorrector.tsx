@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Submission } from '../types';
 import { Button } from './ui/button';
-import { ArrowLeft, Save, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Save, GraduationCap, Mic } from 'lucide-react'; // 👈 AÑADIDO Mic
 import { TextAnnotator, Annotation } from './TextAnnotator';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -56,6 +56,38 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
     onSaveCorrection(numGrade, feedback, corrections);
   };
 
+  // ✅ DETECTOR DE AUDIO (Vocaroo Embedder)
+  const renderAudioPlayer = (text: string) => {
+    if (!text) return null;
+    
+    // ✅ FIX: Detectar tanto 'vocaroo.com' como el corto 'voca.ro'
+    const vocarooMatch = text.match(/https?:\/\/(?:www\.)?(?:vocaroo\.com|voca\.ro)\/([\w-]+)/);
+    
+    if (vocarooMatch) {
+      const id = vocarooMatch[1];
+      return (
+        <div className="mb-6 bg-rose-50 p-4 rounded-2xl border-2 border-rose-100 shadow-sm animate-in fade-in slide-in-from-top-2">
+           <div className="flex items-center gap-2 mb-3 text-rose-800 font-bold text-xs uppercase tracking-wider">
+              <Mic className="w-4 h-4" /> Grabación del Alumno
+           </div>
+           {/* Embed oficial de Vocaroo */}
+           <iframe 
+             width="100%" 
+             height="60" 
+             src={`https://vocaroo.com/embed/${id}?autoplay=0`}
+             frameBorder="0"
+             className="rounded-lg shadow-sm bg-white"
+             title="Vocaroo Audio"
+           />
+           <a href={text} target="_blank" rel="noreferrer" className="text-[10px] text-rose-400 font-bold mt-2 block hover:underline text-right">
+              Abrir enlace original ↗
+           </a>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col pb-20">
       {/* HEADER COMPACTO */}
@@ -78,19 +110,12 @@ export const TaskCorrector: React.FC<TaskCorrectorProps> = ({ submission, onBack
               📄 Redacción
             </h3>
             <span className="bg-slate-100 text-slate-500 text-xs font-bold px-2 py-1 rounded">
-              {submission.textContent?.split(/\s+/).length || 0} palabras
+              {submission.textContent?.split(/\\s+/).length || 0} palabras
             </span>
           </div>
 
-          {/* Si es una tarea de audio, mostrar el link como reproductor o enlace */}
-          {submission.textContent && submission.textContent.includes('http') && (
-            <div className="bg-rose-50 p-4 rounded-xl border border-rose-200 mb-4">
-              <p className="text-xs font-black text-rose-800 uppercase mb-2">🎙️ Grabación del Alumno</p>
-              <a href={submission.textContent} target="_blank" rel="noreferrer" className="text-indigo-600 font-bold underline break-all text-sm hover:text-indigo-800">
-                {submission.textContent}
-              </a>
-            </div>
-          )}
+          {/* 👇 REPRODUCTOR DE AUDIO CON EMBED DE VOCAROO */}
+          {renderAudioPlayer(submission.textContent || '')}
 
           {isWriting ? (
             <TextAnnotator 
