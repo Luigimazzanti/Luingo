@@ -3489,6 +3489,10 @@
     font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );
   }
 
+  .no-underline {
+    text-decoration-line: none;
+  }
+
   .underline {
     text-decoration-line: underline;
   }

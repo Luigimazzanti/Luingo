@@ -525,57 +525,42 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                         </div>
                     </div>
                     <div className="flex-1 min-w-0 pt-1">
-                        {/* ✅ ETIQUETA DEL NIVEL */}
+                        {/* ✅ ETIQUETA DEL NIVEL + SELECTOR */}
                         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wide mb-1">
                             <Medal className="w-3 h-3 text-amber-500" /> {currentLevelData.label}
+                            
+                            {/* ✅ SELECTOR DE NIVEL AL LADO */}
+                            {isTeacher && (
+                              <div className="relative group ml-2">
+                                <select
+                                  value={student.current_level_code}
+                                  onChange={async (e) => {
+                                    const newLvl = e.target.value;
+                                    student.current_level_code = newLvl as any;
+                                    await saveUserPreferences(student.id, { level_code: newLvl });
+                                    toast.success(`Nivel de ${student.name} cambiado a ${newLvl}`);
+                                    if(onRefresh) onRefresh();
+                                  }}
+                                  className="bg-indigo-50 border-none text-indigo-700 text-xs font-black uppercase py-1 px-2 pr-6 rounded-md cursor-pointer hover:bg-indigo-100 transition-colors appearance-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                  {['A1','A2','B1','B2','C1','C2'].map(l => <option key={l} value={l}>{l}</option>)}
+                                </select>
+                                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-400">
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                </div>
+                              </div>
+                            )}
                         </div>
                         <h1 className="text-lg md:text-2xl font-black text-slate-800 truncate leading-tight mb-0.5">{student.name}</h1>
                         
-                        {/* ✅ EMAIL + SELECTOR DE NIVEL INTEGRADO */}
+                        {/* ✅ EMAIL */}
                         <div className="flex items-center gap-2 mb-3">
                           <span className="text-slate-500 text-xs font-medium">{student.email}</span>
-                          
-                          {/* SEPARADOR */}
-                          <span className="text-slate-300">•</span>
-
-                          {/* ✅ SELECTOR DE NIVEL INTEGRADO */}
-                          <div className="relative group">
-                            {isTeacher ? (
-                              // MODO PROFESOR: Selector Discreto
-                              <select
-                                value={student.current_level_code}
-                                onChange={async (e) => {
-                                  const newLvl = e.target.value;
-                                  // Actualizar estado local visualmente
-                                  student.current_level_code = newLvl as any;
-                                  // Guardar en BD
-                                  await saveUserPreferences(student.id, { level_code: newLvl });
-                                  toast.success(`Nivel de ${student.name} cambiado a ${newLvl}`);
-                                  if(onRefresh) onRefresh(); // Recargar para asegurar consistencia
-                                }}
-                                className="bg-indigo-50 border-none text-indigo-700 text-xs font-black uppercase py-1 px-2 pr-6 rounded-md cursor-pointer hover:bg-indigo-100 transition-colors appearance-none focus:ring-2 focus:ring-indigo-500"
-                              >
-                                {['A1','A2','B1','B2','C1','C2'].map(l => <option key={l} value={l}>{l}</option>)}
-                              </select>
-                            ) : (
-                              // MODO ESTUDIANTE: Solo Badge
-                              <span className="bg-indigo-50 text-indigo-700 text-xs font-black uppercase py-1 px-2 rounded-md border border-indigo-100">
-                                Nivel {student.current_level_code}
-                              </span>
-                            )}
-                            
-                            {/* Icono de flechita para el select del profe */}
-                            {isTeacher && (
-                              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-400">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                              </div>
-                            )}
-                          </div>
                         </div>
                         
                         <div className="flex gap-1 md:gap-2">
                             <Button onClick={onAssignTask} className="flex-1 bg-[rgb(91,44,111)] hover:bg-indigo-700 text-white font-bold h-9 rounded-lg text-[10px] md:text-xs shadow-sm min-w-0">✨ Nueva Misión</Button>
-                            <Button variant="outline" onClick={onBack} className="px-2 md:px-4 border-slate-200 text-slate-500 font-bold h-9 rounded-lg text-[10px] md:text-xs hover:bg-slate-50 shrink-0">Cerrar</Button>
+                            <Button variant="outline" onClick={onBack} className="px-2 md:px-4 border-slate-200 text-slate-500 font-bold h-9 rounded-lg text-[10px] md:text-xs hover:bg-slate-50 shrink-0 no-underline">Cerrar</Button>
                         </div>
                     </div>
                 </div>
