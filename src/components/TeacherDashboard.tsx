@@ -313,11 +313,32 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           {viewMode === 'students' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {students.map(s => {
-                // ✅ CÁLCULO DE PROMEDIO REAL
-                const studentSubmissions = submissions.filter(sub => String(sub.student_id) === String(s.id));
+                // 1. OBTENER EL CÓDIGO DEL CURSO (ej: "CE1")
+                // Asumimos que el nombre del aula es el código o empieza con él
+                const coursePrefix = classroom.name.trim().split(' ')[0].toUpperCase(); 
+
+                // 2. FILTRAR TAREAS RELEVANTES PARA ESTE ALUMNO EN ESTE CURSO
+                const relevantTasks = tasks.filter(t => {
+                    const tag = (t.level_tag || '').toUpperCase().trim();
+                    const currentLevel = (s.current_level_code || 'A1').toUpperCase();
+                    
+                    // Lógica de Coincidencia Estricta: "CE1-A1" o "CE1-123"
+                    const matchLevel = tag === `${coursePrefix}-${currentLevel}`; // Ej: CE1-A1
+                    const matchIndividual = tag === `${coursePrefix}-${s.id}`;    // Ej: CE1-USER_ID
+                    
+                    // (Opcional) Fallback: Si la tarea es solo "A1" pero queremos ser estrictos con el curso,
+                    // solo retornamos true si coincide con el formato compuesto.
+                    return matchLevel || matchIndividual;
+                });
+
+                // 3. FILTRAR ENTREGAS DE ESTAS TAREAS ESPECÍFICAS
+                const relevantSubmissions = submissions.filter(sub => 
+                    String(sub.student_id) === String(s.id) &&
+                    relevantTasks.some(t => t.id === sub.task_id)
+                );
                 
-                // Filtramos solo notas válidas (> 0 o calificadas)
-                const validGrades = studentSubmissions
+                // 4. CÁLCULO DE PROMEDIO (Solo de este curso)
+                const validGrades = relevantSubmissions
                     .map(sub => (sub.grade && sub.grade > 0) ? sub.grade : 0)
                     .filter(g => g > 0);
 
@@ -325,17 +346,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     ? validGrades.reduce((a, b) => a + b, 0) / validGrades.length 
                     : 0;
 
-                // Inyectamos el promedio real en el objeto visual
+                // 5. INYECTAR ESTADÍSTICAS FILTRADAS
                 const studentWithRealStats = { 
                     ...s, 
                     average_grade: realAverage,
-                    completed_tasks: studentSubmissions.length // También actualizamos tareas completadas
+                    completed_tasks: relevantSubmissions.length, // Completadas en este curso
+                    total_tasks: relevantTasks.length // Total asignadas en este curso
                 };
 
                 return (
                   <StudentCard
                     key={s.id}
-                    student={studentWithRealStats} // Pasamos el objeto enriquecido
+                    student={studentWithRealStats}
                     onClick={() => onSelectStudent(s.id)}
                   />
                 );

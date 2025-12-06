@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'; // 👈 Añadir useEffect
+import React, { useState, useMemo, useEffect } from 'react';
 import { Student, Task, Submission } from '../types';
 import { TaskCard } from './TaskCard';
 import { Button } from './ui/button';
@@ -29,7 +29,8 @@ import { PDFAnnotator } from './PDFAnnotator';
 import { LevelTestCard } from './LevelTestCard'; // ✅ NUEVO
 import { LevelTestPlayer } from './LevelTestPlayer'; // ✅ NUEVO
 import { ImageWithFallback } from './figma/ImageWithFallback'; // 👈 NUEVO IMPORT PARA IMÁGENES
-import { sendTrophyEmailNotification } from '../lib/notifications'; // 👈 [NUEVO] IMPORT DEL SISTEMA DE EMAILS
+import { LUINGO_LEVELS } from '../lib/mockData'; // ✅ AÑADIDO: Import de niveles
+import { sendTrophyEmailNotification } from '../lib/notifications'; // ✅ AÑADIDO: Import de función de email
 
 // ✅ CONFIGURACIÓN DE FILTROS
 const FILTER_OPTIONS = [

@@ -683,6 +683,37 @@ export default function App() {
 
   const handleSelectClass = async (courseId: string) => {
     toast.loading("Entrando al aula...");
+    
+    // ✅ CORRECCIÓN PRO: Resetear y buscar el profesor específico de ESTE curso
+    setTeacherEmail(""); // Limpiamos para evitar enviar al profe anterior por error
+
+    if (currentUser?.role === 'student') {
+      // Usamos 'true' para forzar el token maestro y poder leer el email (dato sensible)
+      getEnrolledUsers(Number(courseId), true)
+        .then((users) => {
+          if (Array.isArray(users)) {
+            // Buscamos roles de autoridad: editingteacher, teacher o manager
+            const teacher = users.find((u: any) =>
+              u.roles?.some(
+                (r: any) =>
+                  r.shortname === "editingteacher" ||
+                  r.shortname === "teacher" ||
+                  r.shortname === "manager",
+              ),
+            );
+
+            if (teacher?.email) {
+              console.log(`✅ Profesor detectado para curso ${courseId}: ${teacher.email}`);
+              setTeacherEmail(teacher.email);
+            } else {
+              console.warn(`⚠️ Este curso (${courseId}) no tiene profesor con email visible.`);
+            }
+          }
+        })
+        .catch((err) => console.error("Error buscando profesor:", err));
+    }
+
+    // --- LÓGICA ORIGINAL (INTACTA) ---
     try {
       const enrolled = await getEnrolledUsers(Number(courseId));
       if (Array.isArray(enrolled)) {

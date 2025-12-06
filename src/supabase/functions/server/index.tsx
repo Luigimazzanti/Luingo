@@ -127,17 +127,40 @@ app.post("/make-server-ebbb5c67/user-prefs", async (c) => {
   }
 });
 
+// ✅ BLOQUE CORREGIDO: Usamos notificaciones@ para evitar bloqueo por self-spoofing
 app.post("/make-server-ebbb5c67/send-email", async (c) => {
   try {
-    const { to, subject, html } = await c.req.json();
+    const body = await c.req.json();
+    const { to, subject, html, text } = body;
+    
+    // Normalizamos 'to' a array por seguridad
+    const recipients = Array.isArray(to) ? to : [to];
+
     const RESEND_KEY = "re_d6oDB5rh_6EHLuWjQxqzWiXtJxmjcM2kB"; 
+    
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${RESEND_KEY}` },
-      body: JSON.stringify({ from: "LuinGo <hola@luingo.es>", to, subject, html }),
+      body: JSON.stringify({ 
+        // 🚨 CAMBIO CLAVE: Usamos un subdominio o alias diferente al de recepción
+        from: "LuinGo <notificaciones@luingo.es>", 
+        to: recipients, 
+        subject, 
+        html,
+        text: text || "" // Añadimos versión texto plano para mejorar entregabilidad
+      }),
     });
-    return c.json(await res.json());
+    
+    // Captura de errores específica de Resend para ver en logs
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("Resend API Error:", data);
+      return c.json({ error: data }, res.status);
+    }
+    
+    return c.json(data);
   } catch (e) {
+    console.error("Server Error:", e);
     return c.json({ error: String(e) }, 500);
   }
 });

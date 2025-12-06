@@ -5,13 +5,15 @@ import { TrendingUp, CheckCircle, Clock, Trophy } from 'lucide-react';
 interface StudentCardProps { student: Student; onClick: () => void; }
 
 export const StudentCard: React.FC<StudentCardProps> = ({ student, onClick }) => {
-  // LÓGICA SEGURA PARA EVITAR NEGATIVOS
-  const total = student.total_tasks || 1;
-  // Completadas no puede ser mayor que total para la barra visual
+  // ✅ CORRECCIÓN: Si es 0, usamos 0. Evitamos el "1" falso.
+  const total = student.total_tasks || 0;
+  
+  // Lógica segura para la barra de progreso (evitar división por cero)
   const completed = Math.min(student.completed_tasks || 0, total);
-  // Pendientes nunca puede ser negativo
   const pending = Math.max(0, total - student.completed_tasks);
-  const percent = Math.round((completed / total) * 100);
+  
+  // Si el total es 0, el porcentaje es 0 (evita NaN)
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
   
   const getLevelColor = (l: string) => {
       if(l.includes('A')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -49,6 +51,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({ student, onClick }) =>
               <p className="text-[9px] font-bold text-slate-400 uppercase">Hechas</p>
           </div>
           <div className="text-center border-l border-slate-100">
+              {/* ✅ AHORA MUESTRA EL PENDIENTE REAL */}
               <p className="text-xl font-black text-rose-500">{pending}</p>
               <p className="text-[9px] font-bold text-slate-400 uppercase">Faltan</p>
           </div>
