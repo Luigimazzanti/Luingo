@@ -5,14 +5,15 @@ import { TrendingUp, CheckCircle, Clock, Trophy } from 'lucide-react';
 interface StudentCardProps { student: Student; onClick: () => void; }
 
 export const StudentCard: React.FC<StudentCardProps> = ({ student, onClick }) => {
-  // ✅ CORRECCIÓN: Si es 0, usamos 0. Evitamos el "1" falso.
-  const total = student.total_tasks || 0;
+  // Datos recibidos directamente del cálculo del Dashboard
+  const total = student.total_tasks || 0;     // Tareas disponibles para este alumno
+  const completed = student.completed_tasks || 0; // Tareas ya entregadas
   
-  // Lógica segura para la barra de progreso (evitar división por cero)
-  const completed = Math.min(student.completed_tasks || 0, total);
-  const pending = Math.max(0, total - student.completed_tasks);
+  // Lógica de "Faltan": Simplemente las disponibles menos las hechas.
+  // Usamos Math.max para que nunca muestre negativos si hay algún desajuste de datos.
+  const pending = Math.max(0, total - completed);
   
-  // Si el total es 0, el porcentaje es 0 (evita NaN)
+  // Porcentaje real
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
   
   const getLevelColor = (l: string) => {
@@ -47,11 +48,11 @@ export const StudentCard: React.FC<StudentCardProps> = ({ student, onClick }) =>
       {/* STATS */}
       <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
           <div className="text-center">
-              <p className="text-xl font-black text-indigo-600">{student.completed_tasks}</p>
+              <p className="text-xl font-black text-indigo-600">{completed}</p>
               <p className="text-[9px] font-bold text-slate-400 uppercase">Hechas</p>
           </div>
           <div className="text-center border-l border-slate-100">
-              {/* ✅ AHORA MUESTRA EL PENDIENTE REAL */}
+              {/* Aquí mostramos la variable 'pending' calculada arriba */}
               <p className="text-xl font-black text-rose-500">{pending}</p>
               <p className="text-[9px] font-bold text-slate-400 uppercase">Faltan</p>
           </div>

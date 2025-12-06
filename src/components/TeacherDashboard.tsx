@@ -313,31 +313,31 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           {viewMode === 'students' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {students.map(s => {
-                // 1. OBTENER EL CÓDIGO DEL CURSO (ej: "CE1")
-                // Asumimos que el nombre del aula es el código o empieza con él
-                const coursePrefix = classroom.name.trim().split(' ')[0].toUpperCase(); 
+                // ✅ FIX: Usar courseCode prop en lugar de extraerlo del nombre
+                const coursePrefix = courseCode.toUpperCase();
 
-                // 2. FILTRAR TAREAS RELEVANTES PARA ESTE ALUMNO EN ESTE CURSO
+                // 2. FILTRAR TAREAS ACTIVAS PARA ESTE ALUMNO EN ESTE CURSO
                 const relevantTasks = tasks.filter(t => {
                     const tag = (t.level_tag || '').toUpperCase().trim();
                     const currentLevel = (s.current_level_code || 'A1').toUpperCase();
                     
-                    // Lógica de Coincidencia Estricta: "CE1-A1" o "CE1-123"
-                    const matchLevel = tag === `${coursePrefix}-${currentLevel}`; // Ej: CE1-A1
-                    const matchIndividual = tag === `${coursePrefix}-${s.id}`;    // Ej: CE1-USER_ID
+                    // Si no hay etiqueta, incluir la tarea (modo fallback)
+                    if (!tag) return true;
                     
-                    // (Opcional) Fallback: Si la tarea es solo "A1" pero queremos ser estrictos con el curso,
-                    // solo retornamos true si coincide con el formato compuesto.
-                    return matchLevel || matchIndividual;
+                    // Lógica: La tarea pertenece al curso si su etiqueta empieza con el prefijo del curso (CE1-...)
+                    const belongsToCourse = tag.startsWith(coursePrefix + '-');
+                    const isForStudent = tag.includes(currentLevel) || tag.includes(s.id.toUpperCase());
+                    
+                    return belongsToCourse && isForStudent;
                 });
 
-                // 3. FILTRAR ENTREGAS DE ESTAS TAREAS ESPECÍFICAS
+                // 3. FILTRAR ENTREGAS REALIZADAS (Solo de las tareas relevantes)
                 const relevantSubmissions = submissions.filter(sub => 
                     String(sub.student_id) === String(s.id) &&
                     relevantTasks.some(t => t.id === sub.task_id)
                 );
                 
-                // 4. CÁLCULO DE PROMEDIO (Solo de este curso)
+                // 4. CÁLCULO DE PROMEDIO
                 const validGrades = relevantSubmissions
                     .map(sub => (sub.grade && sub.grade > 0) ? sub.grade : 0)
                     .filter(g => g > 0);
@@ -346,12 +346,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     ? validGrades.reduce((a, b) => a + b, 0) / validGrades.length 
                     : 0;
 
-                // 5. INYECTAR ESTADÍSTICAS FILTRADAS
+                // 5. INYECTAR DATOS CALCULADOS
                 const studentWithRealStats = { 
                     ...s, 
                     average_grade: realAverage,
-                    completed_tasks: relevantSubmissions.length, // Completadas en este curso
-                    total_tasks: relevantTasks.length // Total asignadas en este curso
+                    // Total de tareas que el alumno DEBERÍA haber hecho
+                    total_tasks: relevantTasks.length, 
+                    // Total de tareas que YA hizo
+                    completed_tasks: relevantSubmissions.length 
                 };
 
                 return (

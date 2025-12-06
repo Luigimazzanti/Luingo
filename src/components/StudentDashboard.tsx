@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react'; // 👈 Añadir useEffect
 import { Student, Task, Submission } from '../types';
 import { TaskCard } from './TaskCard';
 import { Button } from './ui/button';
@@ -29,8 +29,7 @@ import { PDFAnnotator } from './PDFAnnotator';
 import { LevelTestCard } from './LevelTestCard'; // ✅ NUEVO
 import { LevelTestPlayer } from './LevelTestPlayer'; // ✅ NUEVO
 import { ImageWithFallback } from './figma/ImageWithFallback'; // 👈 NUEVO IMPORT PARA IMÁGENES
-import { LUINGO_LEVELS } from '../lib/mockData'; // ✅ AÑADIDO: Import de niveles
-import { sendTrophyEmailNotification } from '../lib/notifications'; // ✅ AÑADIDO: Import de función de email
+import { sendTrophyEmailNotification } from '../lib/notifications'; // 👈 [NUEVO] IMPORT DEL SISTEMA DE EMAILS
 
 // ✅ CONFIGURACIÓN DE FILTROS
 const FILTER_OPTIONS = [
@@ -237,31 +236,49 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
   }, [courseXP, student.id, student.email, student.name, courseCode]); // Se ejecuta cuando cambia el XP
 
-  // ✅ CÁLCULO DE LAS 6 HABILIDADES (VERSIÓN PRO)
+  // ✅ CÁLCULO DE LAS 6 HABILIDADES (VERSIÓN PRO) - IDÉNTICA A STUDENT PASSPORT
   const skillsStats = useMemo(() => {
-    // 1. Calcular nota promedio real (0-10)
-    const validGrades = submissions
-      .map(s => (s.grade && s.grade > 0) ? s.grade : 0)
-      .filter(g => g > 0);
-
-    const avg = validGrades.length > 0 
-      ? validGrades.reduce((acc, curr) => acc + curr, 0) / validGrades.length 
-      : 0;
-
-    // 2. Calcular porcentaje base (0-100%)
-    // Fórmula: (Nota Promedio * 10) + (Bonus por cantidad de misiones)
-    const basePercent = Math.min(100, Math.round((avg * 10) + (submissions.length * 1.5)));
-
-    // 3. Retornar las 6 Habilidades sincronizadas
-    return [
-      { label: 'Gramática', icon: '🧩', percent: basePercent },
-      { label: 'Vocabulario', icon: '🗣️', percent: basePercent },
-      { label: 'Comprensión Oral', icon: '🎧', percent: basePercent },
-      { label: 'Comprensión Lectora', icon: '📖', percent: basePercent },
-      { label: 'Expresión Oral', icon: '🎙️', percent: basePercent },
-      { label: 'Cultura', icon: '🌍', percent: basePercent },
+    // Configuración de las 6 habilidades
+    const metrics = [
+      { id: 'grammar', label: 'Gramática', icon: '🧩' },
+      { id: 'vocabulary', label: 'Vocabulario', icon: '🗣️' },
+      { id: 'listening', label: 'Comprensión Oral', icon: '🎧' },
+      { id: 'reading', label: 'Comprensión Lectora', icon: '📖' },
+      { id: 'speaking', label: 'Expresión Oral', icon: '🎙️' },
+      { id: 'culture', label: 'Cultura', icon: '🌍' },
     ];
-  }, [submissions]);
+
+    // Inicializar contadores a 0
+    const stats: Record<string, number> = {};
+    metrics.forEach(m => stats[m.id] = 0);
+
+    // Procesar cada intento aprobado (SOLO >= 5)
+    submissions.forEach(sub => {
+       // 1. Obtener nota (0-10)
+       const grade = sub.grade || (sub.score ? (sub.score / (sub.total || 1)) * 10 : 0);
+       
+       // 2. SOLO SUMA SI APRUEBA (>= 5)
+       if (grade >= 5) {
+         const task = tasks.find(t => t.id === sub.task_id);
+         // 3. Leer las etiquetas de la tarea (tags)
+         const tags = task?.content_data?.tags || [];
+         
+         // 4. Sumar +1% a cada habilidad etiquetada
+         tags.forEach((tagId: string) => {
+           if (stats[tagId] !== undefined) {
+             stats[tagId] = Math.min(100, stats[tagId] + 1);
+           }
+         });
+       }
+    });
+
+    // 5. Retornar el array con el formato correcto
+    return metrics.map(m => ({
+      label: m.label,
+      icon: m.icon,
+      percent: stats[m.id]
+    }));
+  }, [submissions, tasks]);
 
   // ✅ NUEVA FUNCIÓN: Obtener todos los intentos para el resumen
   const openSummary = (task: Task) => {
