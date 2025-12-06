@@ -6,6 +6,7 @@ import { Textarea } from '../ui/textarea';
 import { addCommunityComment, getPostComments, toggleCommunityLike, deleteMoodlePost, editCommunityComment } from '../../lib/moodle';
 import { toast } from 'sonner@2.0.3';
 import { cn } from '../../lib/utils';
+import { sendNotification, emailTemplates } from '../../lib/notifications';
 
 // --- COMPONENTE RECURSIVO PARA CADA COMENTARIO ---
 const CommentItem: React.FC<{
@@ -119,8 +120,9 @@ export const ArticleReader: React.FC<{
   material: any, 
   currentUser: any, 
   onClose: () => void,
-  onLikeUpdate?: () => void
-}> = ({ material, currentUser, onClose, onLikeUpdate }) => {
+  onLikeUpdate?: () => void,
+  teacherEmail?: string // ✅ NUEVO
+}> = ({ material, currentUser, onClose, onLikeUpdate, teacherEmail }) => {
   const [comment, setComment] = useState('');
   const [commentsList, setCommentsList] = useState<any[]>([]);
   const [likesCount, setLikesCount] = useState(0);
@@ -168,6 +170,20 @@ export const ArticleReader: React.FC<{
 
     if (success) {
       toast.success(parentId ? "Respuesta enviada" : "Comentario publicado");
+      
+      // ✅ NOTIFICAR AL PROFESOR SI ES UN ALUMNO QUIEN ESCRIBE
+      if (currentUser.role === 'student' && teacherEmail) {
+        sendNotification({
+          to: teacherEmail,
+          subject: `💬 Nuevo comentario de ${currentUser.name}`,
+          html: emailTemplates.newCommentAlert(
+            currentUser.name, 
+            material.title, 
+            msg.substring(0, 100) + (msg.length > 100 ? '...' : '') // Preview del texto
+          )
+        });
+      }
+      
       if (!parentId) setComment('');
       loadComments();
     } else {

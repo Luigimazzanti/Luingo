@@ -27,6 +27,7 @@ interface CommunityFeedProps {
   student: any;
   isTeacher?: boolean;
   students?: any[]; // ✅ NUEVO: Lista de estudiantes para ResourceComposer
+  teacherEmail?: string; // ✅ NUEVO: Email del profesor
 }
 
 export const CommunityFeed: React.FC<CommunityFeedProps> = ({
@@ -34,6 +35,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
   student,
   isTeacher = false,
   students = [], // ✅ NUEVO
+  teacherEmail, // ✅ NUEVO
 }) => {
   const [posts, setPosts] = useState<any[]>([]);
   const [filterMode, setFilterMode] = useState<
@@ -331,6 +333,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
           currentUser={student} // ✅ Pasamos el objeto completo con id, name, avatar_url
           onClose={() => setSelectedPost(null)}
           onLikeUpdate={loadPosts}
+          teacherEmail={teacherEmail} // ✅ NUEVO: Pasar email del profesor
         />
       )}
     </div>

@@ -285,6 +285,60 @@ export const emailTemplates = {
       </div>
     </div>
   `),
+
+  // ✅ [NUEVO] ALERTA PARA PROFESOR: Nueva Entrega
+  newSubmission: (studentName: string, taskTitle: string, type: string) =>
+    baseTemplate(`
+    <div style="background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%); padding: 30px 0; text-align: center;">
+      <div style="font-size: 48px; margin-bottom: 5px;">📬</div>
+      <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 800;">Nueva Entrega Recibida</h1>
+    </div>
+    <div style="padding: 30px;">
+      <p style="font-size: 16px; color: #1e293b; margin-top: 0;">¡Hola Profe!</p>
+      <p style="color: #475569; line-height: 1.6;">
+        <strong>${studentName}</strong> acaba de enviar una solución para la tarea:
+      </p>
+      
+      <div style="background: #EEF2FF; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0; border-radius: 8px;">
+        <p style="margin: 0; font-size: 11px; color: #4F46E5; font-weight: bold; text-transform: uppercase;">Tarea</p>
+        <p style="margin: 4px 0 0; color: #1e293b; font-weight: bold; font-size: 15px;">${taskTitle}</p>
+        <span style="display: inline-block; background: white; border: 1px solid #C7D2FE; color: #4338CA; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-top: 8px; font-weight: bold; text-transform: uppercase;">${type}</span>
+      </div>
+
+      <div style="text-align: center; margin-top: 30px;">
+        <a href="https://luingo.es" style="background-color: #1e293b; color: white; text-decoration: none; padding: 14px 28px; border-radius: 50px; font-weight: bold; font-size: 14px; display: inline-block;">
+          IR A CALIFICAR ⚡
+        </a>
+      </div>
+    </div>
+  `),
+
+  // ✅ [NUEVO] ALERTA PARA PROFESOR: Nuevo Comentario
+  newCommentAlert: (studentName: string, postTitle: string, commentPreview: string) =>
+    baseTemplate(`
+    <div style="background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%); padding: 30px 0; text-align: center;">
+      <div style="font-size: 48px; margin-bottom: 5px;">💬</div>
+      <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 800;">Nuevo Comentario</h1>
+    </div>
+    <div style="padding: 30px;">
+      <p style="font-size: 16px; color: #1e293b;">Hola Profe,</p>
+      <p style="color: #475569;"><strong>${studentName}</strong> ha comentado en el post:</p>
+      
+      <p style="background: #FFFBEB; padding: 10px 15px; border-radius: 8px; color: #92400E; font-weight: bold; font-size: 14px; margin: 10px 0;">
+        "${postTitle}"
+      </p>
+
+      <div style="margin-top: 20px; border-left: 3px solid #D1D5DB; padding-left: 15px;">
+        <p style="color: #6B7280; font-style: italic; margin: 0; font-size: 14px;">"${commentPreview}"</p>
+      </div>
+
+      <div style="text-align: center; margin-top: 30px;">
+        <a href="https://luingo.es" style="color: #F59E0B; text-decoration: none; font-weight: bold; font-size: 14px;">
+          Ver conversación &rarr;
+        </a>
+      </div>
+    </div>
+  `),
 };
 
 // ✅ [NUEVO] FUNCIÓN DE ENVÍO DE NOTIFICACIÓN DE TROFEO

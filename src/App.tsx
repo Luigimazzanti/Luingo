@@ -37,6 +37,7 @@ import {
   clearUserToken,
 } from "./lib/moodle";
 import { mockClassroom, LUINGO_LEVELS } from "./lib/mockData";
+import { sendNotification, emailTemplates } from "./lib/notifications";
 import {
   Comment,
   Correction,
@@ -1300,6 +1301,16 @@ export default function App() {
                   [],
                 );
                 await loadSubmissions();
+                
+                // ✅ NOTIFICAR AL PROFESOR (WRITING)
+                if (teacherEmail) {
+                  sendNotification({
+                    to: teacherEmail,
+                    subject: `📄 Nueva redacción: ${currentUser.name}`,
+                    html: emailTemplates.newSubmission(currentUser.name, activeWritingTask.title, "Redacción")
+                  });
+                }
+                
                 setActiveWritingTask(null);
                 setActiveWritingSubmission(null);
                 setView("dashboard");
@@ -1333,6 +1344,15 @@ export default function App() {
                 await loadSubmissions(); // Recargar XP y todo
                 toast.dismiss();
                 toast.success("🎙️ ¡Misión completada!");
+                
+                // ✅ NOTIFICAR AL PROFESOR (AUDIO)
+                if (teacherEmail) {
+                  sendNotification({
+                    to: teacherEmail,
+                    subject: `🎙️ Nueva entrega de audio: ${currentUser.name}`,
+                    html: emailTemplates.newSubmission(currentUser.name, selectedTask.title, "Audio / Oral")
+                  });
+                }
               }
               setSelectedTask(null);
               setView("dashboard");
@@ -1378,6 +1398,15 @@ export default function App() {
                   xp_points: xp,
                   level: level,
                 });
+                
+                // ✅ NOTIFICAR AL PROFESOR (QUIZ)
+                if (teacherEmail && currentUser) {
+                  sendNotification({
+                    to: teacherEmail,
+                    subject: `📝 Nueva entrega de cuestionario: ${currentUser.name}`,
+                    html: emailTemplates.newSubmission(currentUser.name, activeExercise.title, "Cuestionario")
+                  });
+                }
               }
               setActiveExercise(null);
               setView("dashboard");
@@ -1502,6 +1531,16 @@ export default function App() {
                           annotations as any,
                         );
                         await loadSubmissions();
+                        
+                        // ✅ NOTIFICAR AL PROFESOR (PDF)
+                        if (teacherEmail) {
+                          sendNotification({
+                            to: teacherEmail,
+                            subject: `📑 Nueva entrega PDF: ${currentUser.name}`,
+                            html: emailTemplates.newSubmission(currentUser.name, selectedTask.title, "Documento PDF")
+                          });
+                        }
+                        
                         setSelectedTask(null);
                         setView("dashboard");
                         toast.success("🚀 Tarea entregada");

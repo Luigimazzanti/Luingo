@@ -619,7 +619,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
           {activeTab === 'community' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <CommunityFeed student={student} courseCode={courseCode} />
+              <CommunityFeed student={student} courseCode={courseCode} teacherEmail={teacherEmail} />
             </div>
           )}
         </div>
