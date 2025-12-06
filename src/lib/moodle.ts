@@ -160,10 +160,10 @@ export const getSiteInfo = async () =>
   callMoodle("core_webservice_get_site_info");
 export const getCourses = async () =>
   callMoodle("core_course_get_courses");
-export const getEnrolledUsers = async (courseId: number) =>
+export const getEnrolledUsers = async (courseId: number, useMaster: boolean = false) =>
   callMoodle("core_enrol_get_enrolled_users", {
     courseid: courseId,
-  });
+  }, useMaster); // 👈 Pasamos el true/false aquí
 export const getUserByUsername = async (username: string) => {
   const data = await callMoodle(
     "core_user_get_users_by_field",

@@ -23,9 +23,9 @@ export const sendNotification = async (params: {
     .replace(/<script[^>]*>.*?<\/script>/gi, '') // Eliminar scripts
     .replace(/<[^>]+>/g, '') // Eliminar todas las etiquetas HTML
     .replace(/&nbsp;/g, ' ') // Reemplazar espacios no rompibles
-    .replace(/&amp;/g, '&') // Reemplazar entidades HTML
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+    .replace(/&/g, '&') // Reemplazar entidades HTML
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, ' ') // Normalizar espacios múltiples
@@ -285,7 +285,7 @@ export const emailTemplates = {
       </div>
     </div>
   `),
-
+  
   // ✅ [NUEVO] ALERTA PARA PROFESOR: Nueva Entrega
   newSubmission: (studentName: string, taskTitle: string, type: string) =>
     baseTemplate(`

@@ -401,7 +401,8 @@ export default function App() {
 
           // Buscar email del profesor en background (solo estudiantes)
           if (cleanCourses.length > 0 && finalRole === 'student') {
-            getEnrolledUsers(cleanCourses[0].id)
+            // 👇 AÑADIMOS 'true' PARA QUE MOODLE NOS DE EL EMAIL REAL
+            getEnrolledUsers(cleanCourses[0].id, true)
               .then((users) => {
                 const teacher = users.find((u: any) =>
                   u.roles?.some(
@@ -577,7 +578,8 @@ export default function App() {
 
           // Si resulta ser estudiante, buscamos el email de su profesor en background
           if (displayCourses.length > 0 && finalRole === 'student') {
-            getEnrolledUsers(displayCourses[0].id)
+            // 👇 AÑADIMOS 'true' AQUÍ TAMBIÉN
+            getEnrolledUsers(displayCourses[0].id, true)
               .then((users) => {
                 if (Array.isArray(users)) {
                   const teacher = users.find((u: any) =>
@@ -624,7 +626,8 @@ export default function App() {
 
       // Buscar Email del Profesor (usando el primer curso limpio)
       if (cleanCourses.length > 0 && finalRole === 'student') {
-          getEnrolledUsers(cleanCourses[0].id)
+          // 👇 AÑADIMOS 'true' AQUÍ TAMBIÉN
+          getEnrolledUsers(cleanCourses[0].id, true)
               .then((users) => {
                   const teacher = users.find((u: any) => 
                       u.roles?.some((r: any) => r.shortname === "editingteacher" || r.shortname === "teacher")
