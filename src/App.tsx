@@ -63,6 +63,7 @@ import {
   EyeOff,
   KeyRound,
   Loader2,
+  Download,
 } from "lucide-react";
 import {
   Sheet,
@@ -207,6 +208,34 @@ export default function App() {
 
   // ✅ [LEAD MAGNET] Estado para el test público
   const [showPublicTest, setShowPublicTest] = useState(false);
+
+  // ✅ ESTADO PARA PWA INSTALL
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      // Prevenir que Chrome muestre el prompt automáticamente (para controlarlo nosotros)
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallApp = () => {
+    if (installPrompt) {
+      // ANDROID / PC: Lanzar prompt nativo
+      installPrompt.prompt();
+      installPrompt.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          setInstallPrompt(null);
+        }
+      });
+    } else {
+      // IOS / YA INSTALADO: Mostrar instrucciones
+      alert("📲 Para instalar en iPhone/iPad:\n1. Pulsa el botón 'Compartir' (cuadrado con flecha abajo)\n2. Busca y pulsa 'Añadir a pantalla de inicio'");
+    }
+  };
 
   const loadSubmissions = async () => {
     try {
@@ -853,8 +882,8 @@ export default function App() {
         {/* ✅ FIX: Usar el Toaster local con estilos */}
         <Toaster position="top-center" />
 
-        <div className="bg-white p-8 rounded-3xl shadow-xl border-b-4 border-indigo-300 max-w-md w-full">
-          <div className="text-center mb-8">
+        <div className="bg-white p-7 rounded-3xl shadow-xl border-b-4 border-indigo-300 max-w-md w-full">
+          <div className="text-center mb-6">
             <div className="w-24 h-24 rounded-2xl flex items-center justify-center mx-auto mb-4 overflow-hidden">
               <img
                 src={luingoLogo}
@@ -929,7 +958,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className="mt-6 pt-6 border-t border-slate-100">
+          <div className="mt-6 pt-4 border-t border-slate-100">
             <p className="text-xs text-slate-400 text-center">
               Conectado a Moodle • Sistema de Gamificación
               Activo 🎮
@@ -941,6 +970,17 @@ export default function App() {
                 className="text-xs font-bold text-indigo-500 hover:text-indigo-700 hover:underline transition-all uppercase tracking-widest"
               >
                 ¿No tienes cuenta? Haz un Test de Nivel
+              </button>
+            </div>
+            
+            {/* ✅ BOTÓN DE DESCARGA APP */}
+            <div className="mt-4 pt-3 border-t border-slate-100 flex justify-center">
+              <button
+                onClick={handleInstallApp}
+                className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm hover:shadow-md"
+              >
+                <Download className="w-4 h-4" />
+                Descargar App
               </button>
             </div>
           </div>
