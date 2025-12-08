@@ -529,7 +529,7 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wide mb-1">
                             <Medal className="w-3 h-3 text-amber-500" /> {currentLevelData.label}
                             
-                            {/* ✅ SELECTOR DE NIVEL AL LADO */}
+                            {/* ✅ SELECTOR DE NIVEL ALADO */}
                             {isTeacher && (
                               <div className="relative group ml-2">
                                 <select
@@ -702,7 +702,6 @@ export const StudentPassport: React.FC<StudentPassportProps> = ({
                                                 </div>
                                                 
                                                 <div className="text-right px-2 flex flex-col items-end gap-1">
-                                                    <span className="text-xs font-black text-slate-500">{latest.score || 0}/{latest.total || 10}</span>
                                                     
                                                     {/* ✅ BOTÓN DE BORRAR GRUPO (Solo Profesor) */}
                                                     {isTeacher && (

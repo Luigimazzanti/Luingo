@@ -288,7 +288,7 @@ export const PDFAnnotator: React.FC<PDFAnnotatorProps> = ({
     <div className="flex flex-col h-full bg-slate-50">
       {/* Toolbar */}
       {!readOnly && (
-        <div className="bg-white border-b border-slate-200 p-3 flex items-center justify-between flex-wrap gap-2">
+        <div className="bg-white border-b border-slate-200 p-3 flex items-center justify-between flex-wrap gap-2 sticky top-0 z-50 shadow-sm">
           <div className="flex items-center gap-2 flex-wrap">
             {/* Herramientas básicas */}
             <Button
